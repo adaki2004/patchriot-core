@@ -151,3 +151,20 @@ test('website reports keep model claims as text and do not label completion a sa
   await expect(detail).not.toContainText('Original flaw reproduced');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('recorded website timeouts show what stopped instead of implying a completed assessment', async ({ page }) => {
+  await setup(page);
+  const result = { kind: 'website_agent_v1', snapshot_sha256: '1'.repeat(64), inspected_snapshot_sha256: null, raw_summary: '', assessment: null, execution: { state: 'timed_out', model: 'local-test-model', declared_model: 'local-test-model', model_digest: '2'.repeat(64), image_digest: `sha256:${'3'.repeat(64)}`, duration_ms: 51000, inference_calls: 1, terminal_calls: 0, cleanup_confirmed: true } };
+  const review = { id, mode: 'website_agent', state: 'needs_review', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result: { ...result, execution: { ...result.execution, duration_ms: i === 0 ? 51000 : 0, inference_calls: i === 0 ? 1 : 0 } }, fixture_matches: null, evidence_complete: false })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
+  await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({ json: review }));
+  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await page.getByRole('button', { name: 'Website snapshot review', exact: false }).click();
+  const detail = page.getByRole('region', { name: 'Review report' });
+  await expect(detail.getByRole('heading', { name: 'Needs review' })).toBeVisible();
+  await expect(detail.getByText('Timed out', { exact: true })).toHaveCount(3);
+  await expect(detail).toContainText('This role reached its time limit. Its assessment is incomplete.');
+  await expect(detail.getByText('The time limit was reached before a model call started. No security assessment was made.')).toHaveCount(2);
+  await expect(detail.getByText('Reported', { exact: true })).toHaveCount(0);
+  await expect(detail).not.toContainText('No supported finding was reported.');
+});

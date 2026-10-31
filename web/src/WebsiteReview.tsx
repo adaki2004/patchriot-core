@@ -57,8 +57,13 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onClose }: { siteI
 export function WebsiteEvidence({ result, complete }: { result: WebsiteResult; complete: boolean | null | undefined }) {
   const run = result.execution;
   const support = { observed_in_snapshot: 'Observed in saved text', needs_live_test: 'Needs a live test', not_supported: 'Claim not supported' };
+  const status = run.state === 'timed_out'
+    ? run.inference_calls === 0 ? 'The time limit was reached before a model call started. No security assessment was made.' : 'This role reached its time limit. Its assessment is incomplete.'
+    : run.state === 'failed' || run.state === 'cancelled'
+      ? 'This agent run did not finish. Any text below is an unverified partial result.'
+      : complete ? 'Report received with matching snapshot and citations. Reasoning is unverified.' : 'Missing or inconsistent evidence. Inspect the report before acting.';
   return <>
-    <p className={`result-line ${complete ? '' : 'mismatch'}`}>{complete ? 'Report received with matching snapshot and citations. Reasoning is unverified.' : 'Missing or inconsistent evidence. Inspect the report before acting.'}</p>
+    <p className={`result-line ${complete ? '' : 'mismatch'}`}>{status}</p>
     <p className="model-name"><strong>{run.model}</strong><small>{Math.round(run.duration_ms / 1000)} seconds · {run.inference_calls} model calls · {run.terminal_calls} completed terminal calls</small></p>
     {result.assessment && <div className="website-assessment"><p>{result.assessment.summary}</p>
       {result.assessment.findings.map((finding, index) => <article className="website-finding" key={index}><h4>{finding.title}</h4><span className="badge pending">{support[finding.support]}</span><p>{finding.explanation}</p><p><strong>Suggested next step:</strong> {finding.suggested_action}</p><details><summary>Quoted evidence</summary>{finding.citations.map((citation, i) => <div key={i}><blockquote>{citation.quote}</blockquote><p className="fine">Resource SHA-256: <code>{citation.resource_sha256}</code></p></div>)}</details></article>)}

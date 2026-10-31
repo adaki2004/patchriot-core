@@ -26,6 +26,12 @@ const states: Record<string, string> = {
 };
 const label = (value: string) => states[value] ?? value.replaceAll('_', ' ');
 const reviewLabel = (review: Review) => review.mode === 'website_agent' && review.state === 'completed' ? 'Reports received' : label(review.state);
+function stepLabel(step: Step) {
+  if (step.state !== 'completed') return label(step.state);
+  const result = step.result;
+  const outcome = result && !('runs' in result) ? result.kind === 'website_agent_v1' ? result.execution.state : result.outcome : null;
+  return outcome === 'timed_out' ? 'Timed out' : outcome === 'failed' ? 'Run failed' : outcome === 'cancelled' ? 'Run cancelled' : 'Reported';
+}
 
 function NewReview({ csrf, onCreated, onClose }: { csrf: string; onCreated: (review: Review) => void; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -105,7 +111,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange }: { id: string; csrf
       <div className="notice">{devices.size} {devices.size === 1 ? 'device' : 'devices'} · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. {review.mode === 'website_agent' ? 'These agents review saved text. No browser execution or live exploit reproduction was performed.' : 'These are operator-reported checks of our owned example.'} Shared machines and models are not independent reviewers.</div>
       {review.website && <details className="execution-details"><summary>Who received permission?</summary><ol>{review.website.reviewers.map((device, i) => <li key={device.device_id}><strong>{['Investigator', 'Reproducer', 'Challenger'][i]}:</strong> {device.device_name} · {device.operator_name}<br /><span className="fine">{device.declared_model} · {device.compute_group} · {device.device_id}</span></li>)}</ol><p className="fine">Consent applies to this snapshot: <code>{review.website.snapshot_sha256}</code></p></details>}
       <div className="review-steps">{review.steps.map(step => <article key={step.role} className="review-step">
-        <div className="step-title"><h3>{step.role}</h3><span className={`badge ${step.state === 'completed' && step.fixture_matches ? 'approved' : step.state === 'failed' ? 'revoked' : 'pending'}`}>{step.state === 'completed' ? 'Reported' : label(step.state)}</span></div>
+        <div className="step-title"><h3>{step.role}</h3><span className={`badge ${step.state === 'completed' && step.fixture_matches ? 'approved' : step.state === 'failed' ? 'revoked' : 'pending'}`}>{stepLabel(step)}</span></div>
         <p className="fine">Attempt {step.attempts} / 3{step.compute_group ? ` · ${step.compute_group}` : ' · awaiting capacity'}</p>
         <Evidence step={step} />
       </article>)}</div>
