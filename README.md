@@ -8,7 +8,7 @@ Patchriot is an AI defense swarm pooling agents, inference and compute to help p
 
 A compromised script, a vulnerable dependency or a misconfigured endpoint can put a whole product and its users at risk. Patchriot brings agents together to investigate those weaknesses, reproduce what they find and check proposed fixes. The result is a private report with evidence people can inspect and act on.
 
-**Development status:** the local relay runner and signed device onboarding API are implemented. The capabilities below describe the product being built; the website and paid review service are not live yet. See the [implementation plan and status](#implementation-plan-and-status).
+**Development status:** the local prototype has a browser dashboard, invitation sessions, signed relay pairing, manual approval, heartbeat presence and revocation. Customer assessments and paid reviews are not enabled. The capabilities below describe the product being built; see the [implementation plan and status](#implementation-plan-and-status).
 
 ## What you can bring to Patchriot
 
@@ -110,7 +110,7 @@ Owned backend and relay components use Rust; the website uses React/TypeScript. 
 
 ## Implementation plan and status
 
-The relay has a runnable owned-fixture demo and device commands for pairing, heartbeat presence, pause and resume. The dispatcher persists pairing claims, manual approval and revocation in PostgreSQL. Neither accepts arbitrary customer commands or makes model calls. Website assessment, browser login, work dispatch and payments remain planned. Each milestone adds tested behavior and reproducible setup instructions.
+The browser dashboard connects to the Rust core API and private dispatcher. The relay has a runnable owned-fixture demo and device commands for pairing, heartbeat presence, pause and resume. PostgreSQL persists invitation sessions, claims, manual approval and revocation. No component accepts arbitrary customer commands or makes model calls yet. Each milestone adds tested behavior and reproducible setup instructions.
 
 | Milestone | What completion means | Status |
 | --- | --- | --- |
@@ -118,20 +118,57 @@ The relay has a runnable owned-fixture demo and device commands for pairing, hea
 | Local process runner | Owned-code regression and clean control; cancellation, deadlines, output bounds and cleanup | Implemented in relay |
 | Linux sandbox | Enforced filesystem/network/resource limits, host-canary and escape checks | Next |
 | Hermes and CPU inference | A real agent run with measured resource use and reproducible output | Planned; VPS access needed |
-| Device onboarding | Signed pairing, separate manual approval, heartbeat presence, pause and revocation | API and relay implemented; dashboard next |
+| Device onboarding | Signed pairing, separate manual approval, heartbeat presence, pause and revocation | Implemented across dashboard, API and relay |
 | Work dispatch | Leases, retries, resource limits and accepted results | Planned |
 | Review and verification | Investigator, reproducer and challenger roles with checked evidence and patch regressions | Planned |
-| Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Planned |
+| Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Invitation sessions and account isolation implemented; federation, MFA and reports follow |
 | Website assessments | Owned-site fixtures, script/request inspection, DNS/TLS observations and scoped active checks | Planned |
 | Recurring checks | Authorized schedules, approved baselines, private alerts, spending caps and missed-run handling | After one-off website reviews |
 | NEAR Intents payments | Reconciliation and ledger tests, then a bounded live payment test | Planned |
-| Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Planned |
+| Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Patcher/admin dashboard implemented; review UI and incident feed follow |
 | GPU demonstration | Three review roles on stronger models with measured results and honest operator/compute counts | After local and CPU checks |
 
 The first test targets are owned fixtures. Run `cargo run --locked -- demo` inside `patchriot-relay`; its README explains the results and current execution boundary. Reproduction, patch behavior, account isolation, payment retries and sandbox boundaries need evidence before a capability is marked complete. Broader model support, optional contributor collateral and confidential execution are later decisions.
 
+## Run the local prototype
+
+Keep the three repositories in sibling directories. Use Rust 1.94.1, Node 24 and a dedicated PostgreSQL 17 database. Start the dispatcher using its README, then build core and the website:
+
+```sh
+cargo build --locked -p patchriot-core
+cd web
+npm ci --ignore-scripts
+npm run build
+cd ..
+```
+
+Set `DATABASE_URL`, `PATCHRIOT_INTERNAL_KEY` (the same generated service key as the dispatcher), `PATCHRIOT_PUBLIC_ORIGIN=http://127.0.0.1:7410`, `PATCHRIOT_DISPATCHER_URL=http://127.0.0.1:7411` and `PATCHRIOT_WEB_ROOT=web/dist` in your private environment. Run `target/debug/patchriot-core serve`, then open **http://127.0.0.1:7410**. Core uses its own `patchriot_core` database schema; the dispatcher uses the dedicated database's public schema. Separate database roles are required before a public deployment.
+
+Create a prototype account from a terminal with database access:
+
+```sh
+target/debug/patchriot-core invite admin "Your name"
+target/debug/patchriot-core invite member "A contributor"
+```
+
+Each command prints a private, one-use invitation for a new account, valid for 24 hours. Enter it through **Sign in**. The session lasts 12 hours. This is invitation access, not verified Google identity; Google sign-in and additional patcher/admin authentication follow before private beta. To disable an account and invalidate its sessions, use `target/debug/patchriot-core disable-account <account-uuid>`.
+
+In the website, **Relay setup** shows the CLI steps. A contributor pairs their machine; an administrator uses **Fleet & approvals** to approve it. The contributor can pause locally or revoke their device. Members see their own machines; administrators see the fleet. Live counts distinguish devices, operators and declared compute groups. Connection failures remain visible with the last successful response.
+
+Browser sessions use HttpOnly cookies, an origin check and a CSRF token. The service key stays on the server; core derives dispatcher identity headers from the session. HTTPS is required except for explicit loopback development. Invitation and session bearer values are hashed in storage. The static site loads no analytics, third-party scripts or fonts.
+
+For UI development, use `npm run dev` in `web`, set core's public origin to `http://127.0.0.1:5173`, and keep core on port 7410. Vite proxies `/api` to core. Do not use the development server as a public deployment.
+
+## Checks
+
+Set `PATCHRIOT_TEST_DATABASE_URL` to a local test PostgreSQL database whose role can create schemas. `cargo test --locked --all-targets` exercises the shared protocol, concurrent invitation redemption, session expiry, CSRF, role forgery and account isolation. Tests create isolated schemas; they never use a production database by default. Also run `cargo fmt --all --check` and `cargo clippy --locked --all-targets -- -D warnings`.
+
+In `web`, run `npx --no-install playwright install chromium` once, then `npm test`. These desktop/mobile tests use explicit API fixtures to check the UI, including outages and safe rendering of operator names. `npm run build` checks TypeScript and produces the static site. CI repeats these checks on Linux.
+
+For a real browser-to-database check, run both Rust services, build the relay, install the browser as above and run `node scripts/smoke-browser.mjs` from core with `DATABASE_URL` and `PATCHRIOT_AUDIENCE` in the environment. It only targets localhost, creates three test accounts, pairs a real relay through the UI, checks account isolation, approves it, tests presence/pause/resume, then revokes the relay and disables the test accounts. It does not make model calls or assess a website.
+
+With the dispatcher on port 7411 and its internal key/audience in your environment, `python3 scripts/smoke-relays.py` tests three real relay instances. It reports one operator and one shared compute group, then revokes its devices.
+
 ## License
 
 Original material is [AGPL-3.0-only](LICENSE), except [crates/protocol](crates/protocol), which is separately licensed under [Apache-2.0](crates/protocol/LICENSE) for use by the relay and private dispatcher. See [NOTICE](NOTICE) for attribution. Credentials, customer code and production data are excluded from source control.
-
-The protocol crate defines signed request DTOs and their checks; `cargo test --locked` runs its tests. Keep the three repositories in sibling directories for local builds. With a local dispatcher on port 7411, both binaries built and the internal key/audience in your environment, `python3 scripts/smoke-relays.py` verifies pairing through revocation using three temporary relays. It reports one operator and one shared compute group, then revokes its devices. It does not invoke models or perform website checks.
