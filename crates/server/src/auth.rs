@@ -51,6 +51,18 @@ pub async fn create_invite(pool: &PgPool, name: &str, role: &str) -> Result<Stri
     Ok(invite)
 }
 
+/// Issue fresh login access without creating a second operator identity. A
+/// disabled account cannot be recovered through this command.
+pub async fn invite_account(pool: &PgPool, id: Uuid) -> Result<String, String> {
+    let invite = token().map_err(|_| "random source unavailable")?;
+    let result = sqlx::query("INSERT INTO invites (token_hash, account_id, expires_at) SELECT $1, id, now() + interval '1 day' FROM accounts WHERE id = $2 AND NOT disabled")
+        .bind(hash(&invite)).bind(id).execute(pool).await.map_err(|_| "invite creation failed")?;
+    if result.rows_affected() != 1 {
+        return Err("account not found or disabled".into());
+    }
+    Ok(invite)
+}
+
 /// Disable login and invalidate all sessions. This operator-only CLI operation
 /// also provides cleanup for local browser smoke-test accounts.
 pub async fn disable_account(pool: &PgPool, id: Uuid) -> Result<bool, sqlx::Error> {

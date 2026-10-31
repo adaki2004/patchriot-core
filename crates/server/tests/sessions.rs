@@ -5,7 +5,7 @@ use axum::{
     routing::get,
 };
 use http_body_util::BodyExt;
-use patchriot_core::{AppState, Config, create_invite, disable_account, router};
+use patchriot_core::{AppState, Config, create_invite, disable_account, invite_account, router};
 use serde_json::{Value, json};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use std::sync::{Arc, Mutex};
@@ -402,4 +402,53 @@ fn service_configuration_rejects_insecure_or_credentialed_destinations() {
         )
         .is_err()
     );
+}
+
+#[tokio::test]
+async fn renewed_invites_keep_the_same_account_and_cannot_enable_disabled_accounts() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (_, previous) = test.login("member").await;
+    let id: Uuid = previous["account"]["id"].as_str().unwrap().parse().unwrap();
+    sqlx::query("UPDATE sessions SET expires_at = now() - interval '1 second'")
+        .execute(&test.pool)
+        .await
+        .unwrap();
+    let code = invite_account(&test.pool, id).await.unwrap();
+    let response = test
+        .request(
+            "POST",
+            "/api/auth/redeem",
+            json!({"code":code}),
+            &[("origin", ORIGIN)],
+        )
+        .await;
+    assert_eq!(response.0, StatusCode::OK);
+    let cookie = response.1["set-cookie"]
+        .to_str()
+        .unwrap()
+        .split(';')
+        .next()
+        .unwrap();
+    let renewed = test
+        .request("GET", "/api/session", Value::Null, &[("cookie", cookie)])
+        .await;
+    assert_eq!(renewed.2["account"], previous["account"]);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM accounts")
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    let unused = invite_account(&test.pool, id).await.unwrap();
+    assert!(disable_account(&test.pool, id).await.unwrap());
+    assert!(invite_account(&test.pool, id).await.is_err());
+    let response = test
+        .request(
+            "POST",
+            "/api/auth/redeem",
+            json!({"code":unused}),
+            &[("origin", ORIGIN)],
+        )
+        .await;
+    assert_eq!(response.0, StatusCode::BAD_REQUEST);
+    test.finish().await;
 }

@@ -151,7 +151,7 @@ target/debug/patchriot-core invite admin "Your name"
 target/debug/patchriot-core invite member "A contributor"
 ```
 
-Each command prints a private, one-use invitation for a new account, valid for 24 hours. Enter it through **Sign in**. The session lasts 12 hours. This is invitation access, not verified Google identity; Google sign-in and additional patcher/admin authentication follow before private beta. To disable an account and invalidate its sessions, use `target/debug/patchriot-core disable-account <account-uuid>`.
+Each command prints a private, one-use invitation for a new account, valid for 24 hours. Enter it through **Sign in**. The session lasts 12 hours. For a returning user, `target/debug/patchriot-core invite-account <account-uuid>` issues a fresh invitation for their existing account; it preserves their device ownership and does not create another operator. This is invitation access, not verified Google identity; Google sign-in and additional patcher/admin authentication follow before private beta. To disable an account and invalidate its sessions, use `target/debug/patchriot-core disable-account <account-uuid>`. Disabled accounts cannot receive or redeem invitations.
 
 In the website, **Relay setup** shows the CLI steps. A contributor pairs their machine; an administrator uses **Fleet & approvals** to approve it. The contributor can pause locally or revoke their device. Members see their own machines; administrators see the fleet. Live counts distinguish devices, operators and declared compute groups. Connection failures remain visible with the last successful response.
 

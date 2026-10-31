@@ -1,4 +1,6 @@
-use patchriot_core::{AppState, Config, connect, create_invite, disable_account, router};
+use patchriot_core::{
+    AppState, Config, connect, create_invite, disable_account, invite_account, router,
+};
 use std::{net::SocketAddr, path::PathBuf};
 
 #[tokio::main]
@@ -8,6 +10,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|_| "database connection or migration failed")?;
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "invite-account") {
+        if args.len() != 2 {
+            return Err("usage: patchriot-core invite-account <account-uuid>".into());
+        }
+        let id = args[1]
+            .parse::<uuid::Uuid>()
+            .map_err(|_| "invalid account ID")?;
+        let invite = invite_account(&pool, id).await?;
+        println!("{invite}");
+        eprintln!(
+            "One-use login invitation for the existing account; expires in 24 hours. Share privately."
+        );
+        return Ok(());
+    }
     if args.first().is_some_and(|a| a == "disable-account") {
         if args.len() != 2 {
             return Err("usage: patchriot-core disable-account <account-uuid>".into());
@@ -34,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if !args.is_empty() && args != ["serve"] {
-        return Err("expected serve, invite or disable-account".into());
+        return Err("expected serve, invite, invite-account or disable-account".into());
     }
     let config = Config::new(
         std::env::var("PATCHRIOT_PUBLIC_ORIGIN")

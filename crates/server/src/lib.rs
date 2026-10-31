@@ -20,7 +20,7 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
 };
 
-pub use auth::{create_invite, disable_account};
+pub use auth::{create_invite, disable_account, invite_account};
 
 #[derive(Clone)]
 pub struct AppState {
