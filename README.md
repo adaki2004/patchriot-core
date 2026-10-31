@@ -1,144 +1,59 @@
 # Patchriot
-
 **A swarm of rebels. A safer internet.**
 
-**The internet needs more defenders.**
+The internet needs more defenders. Patchriot brings together agents with security-review and penetration-testing skills to investigate weaknesses, reproduce findings and check fixes. Teams get private evidence they can inspect and act on.
 
-Patchriot is an AI defense swarm pooling agents, inference and compute to help people build and use a safer internet. Contribute a working agent, or put the swarm to work reviewing a codebase or website you are authorized to assess.
+> **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-A compromised script, a vulnerable dependency or a misconfigured endpoint can put a whole product and its users at risk. Patchriot brings agents together to investigate those weaknesses, reproduce what they find and check proposed fixes. The result is a private report with evidence people can inspect and act on.
+**Prototype:** pairing, approval, a browser dashboard and a three-role fixture review work today. The fixture is a known example; real agent assessments and checkout are not enabled.
 
-**Development status:** the local prototype has a browser dashboard, invitation sessions, signed relay pairing, manual approval, presence/revocation and a three-role owned-fixture review with private evidence downloads. The payment foundation records quotes and reconciles settlement into a private ledger; its tests use a local provider fixture. Customer assessments and checkout are not enabled. The capabilities below describe the product being built; see the [implementation plan and status](#implementation-plan-and-status).
+## What we're building
 
-## What you can bring to Patchriot
+| Bring an authorized target | Get useful evidence |
+| --- | --- |
+| A repository | Findings tied to a commit, reproductions and proposed fixes |
+| A website or API | Script, request, access-control and configuration checks |
+| A proposed patch | Tests that fail before the fix and pass afterward |
+| A site to monitor | Recurring comparisons against an approved baseline |
 
-| Review | What agents investigate | What you get back |
-| --- | --- | --- |
-| Code and dependencies | Security-sensitive code paths, access controls, exposed secrets and risky dependencies | Findings tied to a specific commit, reproduction steps and proposed patches |
-| Websites and their dependencies | Loaded scripts, unexpected external requests, security headers, TLS and DNS configuration | Evidence of suspicious behavior or configuration weaknesses, with recommended changes |
-| Authorized red-team checks | Whether suspected input-handling or access-control weaknesses can be reproduced within an agreed scope | A bounded proof of the issue, its conditions and impact |
-| Fix verification | Whether a proposed change closes the reported issue without breaking relevant behavior | Before/after results, regression tests and remaining concerns |
-| Recurring website checks | Changes since an approved baseline, including scripts, external requests and domain configuration | A dated comparison and alerts when something needs attention |
+Start with: **“Has a third-party script changed what my visitors' browsers are doing?”** A change is a reason to investigate, not an automatic verdict.
 
-A website review could start with a simple question: **“Has a third-party script changed what my visitors' browsers are doing?”** Agents could inspect the page and its requests, trace the unexpected behavior, then check a proposed fix. Another review might focus on a misconfigured domain, an exposed endpoint or an authorization mistake in the code.
-
-Website access reveals what a browser or permitted network check can observe; supplying source code enables deeper review. Reports distinguish confirmed findings from suspicious signals and explain what could not be checked.
-
-## Keep watch after the first review
-
-Planned recurring checks turn **“check my site”** into **“check it every day at noon and tell me what changed.”** Choose an authorized site, time zone, frequency, permitted checks and spending limit. Each run compares evidence with an approved baseline; agents investigate meaningful changes and send a private alert with the evidence and suggested next step.
-
-A changed script is not automatically malicious, and an unchanged page is not proof that it is safe. The dashboard will distinguish no material change, changed, needs review, confirmed finding and failed/skipped checks, with the last successful check time. Baseline updates require approval so a suspicious change cannot silently become the new normal.
-
-Recurring runs use the same scoped review and prepaid balance as one-off jobs. Show the per-run price and monthly cap before enabling a schedule; pause on insufficient funds or revoked authorization. Alerts do not authorize automatic production changes. This feature follows the first working one-off website review.
-
-## How it works
-
-1. **Choose the target.** Sign in with Google and submit a repository at a specific commit, a website, or both. Verify your authority to request the review.
-2. **Agree on the checks.** Set the target boundaries, permitted actions and test accounts where needed. Active checks are explicit, bounded and non-destructive; staging environments are preferred. Linked third-party services are outside scope unless separately authorized.
-3. **Fund the review.** See the price, review profile, participating operators/providers and queue terms before paying through a supported NEAR Intents route. Unsupported work is refused before payment.
-4. **Follow the investigation.** Agents investigate, reproduce and challenge findings. Uncertainty and disagreements remain visible.
-5. **Review the evidence.** Download your private report and any proposed patches. You decide what to apply; production changes require your approval.
-
-For private repositories during the pilot, invite GitHub user `adaki2004` with minimum required access. Requester authority is checked separately, and patchers do not receive personal GitHub tokens. Selected-repository GitHub App access is the planned automated path.
-
-## Why a swarm?
-
-People contribute agents and compute; teams bring the systems they need help defending. The swarm coordinates that capacity into investigation, reproduction and fix verification. Contributors can take part from their own PC or VPS without everyone having to build a security service themselves.
-
-One agent can spot an issue and still misunderstand it. Patchriot's default review uses three roles:
-
-- **Investigator:** identifies a concrete weakness and supplies evidence.
-- **Reproducer:** attempts to reproduce it against the same target and conditions.
-- **Challenger:** questions the assumptions and impact, then checks the proposed fix.
-
-Prefer different models and approved operators. Reviewers record their assessments before seeing each other's verdicts. A fresh sandbox reruns feasible reproductions; a proposed patch needs meaningful before/after checks. Agreement alone cannot establish correctness. A two-agent review may be offered explicitly, with its scope and price agreed in advance.
-
-**DON'T TRUST! VERIFY!** Inspect this README, the code and the evidence yourself, or have your own agent review them. Findings are scoped observations; no review guarantees that a system is free of vulnerabilities.
-
-## Contribute an agent
-
-Patchers contribute running agents and their inference capacity. Connect a PC or VPS through `patchriot-relay`, choose the resources you want to make available and pause whenever needed. Hermes is the first planned agent adapter.
-
-Sign in, choose **Become a patcher**, and complete a short profile during pairing. The relay detects supported runtime and host capabilities where possible. Review the details, set limits and follow the capability checks. The dashboard shows **awaiting approval**, **approved** or what needs changing. Pending patchers can run owned-fixture checks; private customer work requires manual approval.
-
-Track machine status, accepted assignments, validation results and pending/earned amounts. Three devices belonging to one person remain one operator. Patcher/admin access requires an additional authentication factor before the private beta; sensitive device and payout changes require fresh authentication.
-
-The pilot starts on CPU machines and aims for three approved contributors. A shared GPU can later run the three review roles sequentially. Display the actual operator count and shared infrastructure; three agent sessions on one host are not three independent operators. No on-chain identity, token ownership or stake is required for the pilot.
-
-## Private work, clear access
-
-Reports, source snapshots and job progress are private to the requester and authorized reviewers. Assigned operators, service operators and permitted model providers can see the data they process; those participants are disclosed before the review. Private work starts on approved machines.
-
-Every report, progress stream and download requires authorization. Customer findings are not automatically published. Proposed patches are delivered for your review, with limitations and unresolved objections included.
-
-## Payments through NEAR Intents
-
-The planned checkout lets a requester fund an admitted review through NEAR Intents / 1Click. Core records the payment, then tracks the review charge, contributor payables, refunds and payouts. A transaction hash submitted by a browser is not payment confirmation.
-
-The dispatcher accepts work under the agreed terms; it cannot invent credits or choose rewards. Treasury signing stays outside the browser, agents and reconciliation worker. Supported routes and fees are shown in the quote.
-
-The implemented foundation stores exact-output quotes from trusted core code. A bounded poller checks the [1Click status API](https://docs.near-intents.org/api-reference/oneclick/check-swap-execution-status), including the deposit memo when present. It binds the reply to the saved quote and checks the destination, integer amount, timestamp and settlement evidence before recording funds. Ledger entries and funding events commit together; duplicate polls cannot credit twice. Late or mismatched amounts go into held funds without a funding event. Pending transfers, partial deposits, refunds, failures and provider outages do not count as payment. The poller trusts 1Click's settlement report; it does not independently verify blockchain finality.
-
-With `DATABASE_URL` and `PATCHRIOT_1CLICK_API_KEY` supplied through runtime secrets, `cargo run --locked -p patchriot-core -- payments-reconcile-once` checks up to ten due invoices. Polling is not started by the web server. Quotes remain under observation for seven days after their deadline, then unresolved cases require review. `GET /api/payments` shows only the signed-in account's recorded funds, in smallest-unit integer strings, and reports `checkout_enabled: false`.
-
-This slice has no public invoice writer, live quote creation, spending, payout or held-fund release. The order adapter must first admit a supported service, pin its price and treasury recipient, request a quote directly and save it before displaying deposit instructions. Funding-event consumption must be idempotent. The owned fixture remains free; no live payment or customer workload is exercised by the tests.
-
-## Learn from recent incidents
-
-A separate public feed explains security incidents from the rolling last 72 hours, with sources, dates, corrections and uncertainty labels. Browse the terminal-style list with the keyboard or visible touch controls. Research is reviewed before publication and kept separate from private customer work.
-
-## Repositories and architecture
-
-| Repository | Responsibility | Source policy |
-| --- | --- | --- |
-| `patchriot-core` | Website, accounts, orders, NEAR Intents reconciliation, ledger and incident feed | Public target; AGPL-3.0-only |
-| `patchriot-relay` | Rust application for pairing, isolated agent execution and result delivery | Public target; AGPL-3.0-only |
-| `patchriot-dispatcher` | Work admission, operator approval, scheduling, review coordination and private artifacts | Private initially |
-
-The dispatcher coordinates admission, screening and review policy. Its source is private during development; access checks and sandboxing remain the security boundaries.
+## How the swarm works
 
 ```mermaid
 flowchart LR
-  U[Requester / patcher] --> W[Website]
-  W --> C[Core Rust API]
-  C <--> B[(Accounts, orders and ledger)]
-  P[Core payment worker] <--> B
-  P <--> N[NEAR Intents / 1Click]
-  C -->|Authenticated API and durable events| D[Dispatcher]
-  D <--> J[(Private jobs and artifacts)]
-  R[Rust relay] -->|Outbound authenticated connection| D
-  R --> S[Sandboxed agent and permitted tools]
-  S --> M[Permitted inference endpoint]
+  U[Requester] --> C[Core: accounts and payments]
+  C --> D[Dispatcher: approved scope and assignments]
+  D --> I[Investigator]
+  I --> R[Reproducer]
+  R --> V[Challenger / patch review]
+  V --> P[Private report and evidence]
 ```
 
-Owned backend and relay components use Rust; the website uses React/TypeScript. Hermes and inference runtimes are external dependencies. Start with one Postgres installation, restricted database roles and private artifact storage. The relay enforces each assignment's filesystem, network and resource limits.
+The investigator makes a specific claim. The reproducer checks it. The challenger questions the assumptions and tests the fix. Prefer different models and approved operators; report shared infrastructure honestly. Three devices on one VPS are still one shared machine.
+
+**Private means access-controlled.** Assigned operators, service staff and permitted model providers can see the data they process. Findings are not published automatically, and production changes need your approval.
+
+## Contribute an agent
+
+Bring an agent capable of source review, web/API assessment, **authorized penetration testing**, reproductions and patch checks. Connect through the [relay](https://github.com/adaki2004/patchriot-relay), set local limits and pause whenever needed. Manual approval comes before private customer work. Hermes is the first planned adapter; the current relay executes only the owned fixture.
 
 ## Implementation plan and status
 
-The browser dashboard connects to the Rust core API and private dispatcher. PostgreSQL persists invitation sessions, onboarding and a bounded three-role fixture queue. Relays execute the built-in original/patch/control example; a saved result survives a lost reply, and stale attempts cannot replace current work. Reports distinguish the actual devices, operators and shared machines. No component accepts arbitrary customer commands or makes model calls yet.
+| Area | Working now / next |
+| --- | --- |
+| Accounts and dashboard | Invitation login, private sessions, patcher/admin views; Google login and stronger authentication follow |
+| Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
+| Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
+| Isolation and agents | Owned process controls; Linux sandbox and a real CPU agent are next |
+| NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
+| Website checks | One-off owned-site checks, then approved baselines and recurring checks |
+| Incident feed | Planned sourced summaries, separate from customer findings |
+| Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
-| Milestone | What completion means | Status |
-| --- | --- | --- |
-| Repository foundations | Three separate repositories, component boundaries, licenses and product documentation | Complete locally |
-| Local process runner | Owned-code regression and clean control; cancellation, deadlines, output bounds and cleanup | Implemented in relay |
-| Linux sandbox | Enforced filesystem/network/resource limits, host-canary and escape checks | Next |
-| Hermes and CPU inference | A real agent run with measured resource use and reproducible output | Planned; VPS access needed |
-| Device onboarding | Signed pairing, separate manual approval, heartbeat presence, pause and revocation | Implemented across dashboard, API and relay |
-| Work dispatch | Leases, retries, resource limits and accepted results | Implemented for the fixed owned example |
-| Review and verification | Investigator, reproducer and challenger roles with checked evidence and patch regressions | Three-role fixture workflow implemented; models and independent validation follow |
-| Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Invitation sessions, account isolation and fixture report downloads implemented; federation and MFA follow |
-| Website assessments | Owned-site fixtures, script/request inspection, DNS/TLS observations and scoped active checks | Planned |
-| Recurring checks | Authorized schedules, approved baselines, private alerts, spending caps and missed-run handling | After one-off website reviews |
-| NEAR Intents payments | Reconciliation and ledger tests, then a bounded live payment test | Quote persistence, bounded status polling and ledger implemented with local provider fixtures; checkout and live test follow |
-| Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Fixture-review and patcher/admin interfaces implemented; incident feed follows |
-| GPU demonstration | Three review roles on stronger models with measured results and honest operator/compute counts | After local and CPU checks |
+## Run locally
 
-The first test targets are owned fixtures. Run `cargo run --locked -- demo` inside `patchriot-relay`; its README explains the results and current execution boundary. Reproduction, patch behavior, account isolation, payment retries and sandbox boundaries need evidence before a capability is marked complete. Broader model support, optional contributor collateral and confidential execution are later decisions.
-
-## Run the local prototype
-
-Keep the three repositories in sibling directories. Use Rust 1.94.1, Node 24 and a dedicated PostgreSQL 17 database. Start the dispatcher using its README, then build core and the website:
+Keep `patchriot-core`, `patchriot-relay` and `patchriot-dispatcher` as sibling directories. Use **Rust 1.94.1, Node 24 and a dedicated PostgreSQL 17 database**. Start the [dispatcher](https://github.com/adaki2004/patchriot-dispatcher) first.
 
 ```sh
 cargo build --locked -p patchriot-core
@@ -148,37 +63,75 @@ npm run build
 cd ..
 ```
 
-Set `DATABASE_URL`, `PATCHRIOT_INTERNAL_KEY` (the same generated service key as the dispatcher), `PATCHRIOT_PUBLIC_ORIGIN=http://127.0.0.1:7410`, `PATCHRIOT_DISPATCHER_URL=http://127.0.0.1:7411` and `PATCHRIOT_WEB_ROOT=web/dist` in your private environment. Run `target/debug/patchriot-core serve`, then open **http://127.0.0.1:7410**. Core uses its own `patchriot_core` database schema; the dispatcher uses the dedicated database's public schema. Separate database roles are required before a public deployment.
+Set these through your **private environment**:
 
-Create a prototype account from a terminal with database access:
+| Variable | Local value |
+| --- | --- |
+| `DATABASE_URL` | Your dedicated PostgreSQL connection |
+| `PATCHRIOT_INTERNAL_KEY` | The same generated service secret as dispatcher |
+| `PATCHRIOT_PUBLIC_ORIGIN` | `http://127.0.0.1:7410` |
+| `PATCHRIOT_DISPATCHER_URL` | `http://127.0.0.1:7411` |
+| `PATCHRIOT_WEB_ROOT` | `web/dist` |
 
 ```sh
+target/debug/patchriot-core serve
+# In another configured terminal:
 target/debug/patchriot-core invite admin "Your name"
 target/debug/patchriot-core invite member "A contributor"
 ```
 
-Each command prints a private, one-use invitation for a new account, valid for 24 hours. Enter it through **Sign in**. The session lasts 12 hours. For a returning user, `target/debug/patchriot-core invite-account <account-uuid>` issues a fresh invitation for their existing account; it preserves their device ownership and does not create another operator. This is invitation access, not verified Google identity; Google sign-in and additional patcher/admin authentication follow before private beta. To disable an account and invalidate its sessions, use `target/debug/patchriot-core disable-account <account-uuid>`. Disabled accounts cannot receive or redeem invitations.
+Open **http://127.0.0.1:7410** and enter the private invitation. Invitations are single-use and valid for 24 hours; sessions last 12 hours. `invite-account <account-uuid>` renews access to an existing account. `disable-account <account-uuid>` revokes its sessions.
 
-In the website, **Relay setup** shows the CLI steps. A contributor pairs their machine; an administrator uses **Fleet & approvals** to approve it. The contributor can pause locally or revoke their device. Members see their own machines; administrators see the fleet. Live counts distinguish devices, operators and declared compute groups. Connection failures remain visible with the last successful response.
+In **Relay setup**, pair three distinct devices and approve them under **Fleet & approvals**. Keep them connected with `--fixtures`, then choose **Reviews → New fixture review**. Inspect the original failure, patched result and clean control; download the private JSON report. This example is free and makes no model calls.
 
-To run the queued example, keep three distinct approved relays connected with `--fixtures`, then choose **Reviews → New fixture review → Run the owned example**. The dispatcher assigns the roles sequentially and permits one assignment per declared compute group. Reports and JSON downloads require the requester's session (or admin access). The example is free, accepts no customer target and labels all evidence as device-reported fixture output. A known original failure plus passing patch/control is a regression demonstration, not proof of AI quality or independent execution. Contradictory results remain **Needs review**; missing reviewers eventually produce an incomplete report. You can cancel queued/running reviews.
+Core uses the `patchriot_core` schema; dispatcher uses the dedicated database's public schema. Configure separate database roles before public deployment. For UI development, `npm run dev` in `web` uses port 5173; set core's public origin to match.
 
-Browser sessions use HttpOnly cookies, an origin check and a CSRF token. The service key stays on the server; core derives dispatcher identity headers from the session. HTTPS is required except for explicit loopback development. Invitation and session bearer values are hashed in storage. The static site loads no analytics, third-party scripts or fonts.
+## Payments: record funds before starting work
 
-For UI development, use `npm run dev` in `web`, set core's public origin to `http://127.0.0.1:5173`, and keep core on port 7410. Vite proxies `/api` to core. Do not use the development server as a public deployment.
+The planned checkout uses **NEAR Intents / 1Click** to fund an admitted review. The implemented [payment module](crates/server/src/payments.rs) checks the saved quote against the provider's settlement response. It records funds and a funding event together; retries cannot credit twice. Late or mismatched amounts stay held for review.
 
-## Checks
+A deposit hint is not confirmation. The poller trusts [1Click's settlement report](https://docs.near-intents.org/api-reference/oneclick/check-swap-execution-status), without independently verifying blockchain finality. It has no treasury signing key.
 
-Set `PATCHRIOT_TEST_DATABASE_URL` to a local test PostgreSQL database whose role can create schemas. `cargo test --locked --all-targets` exercises the shared protocol, concurrent invitation redemption, session expiry, CSRF, role forgery and account isolation. Tests create isolated schemas; they never use a production database by default. Also run `cargo fmt --all --check` and `cargo clippy --locked --all-targets -- -D warnings`.
+With `DATABASE_URL` and `PATCHRIOT_1CLICK_API_KEY` in runtime secrets:
 
-In `web`, run `npx --no-install playwright install chromium` once, then `npm test`. These desktop/mobile tests use explicit API fixtures to check the UI, including outages and safe rendering of operator names. `npm run build` checks TypeScript and produces the static site. CI repeats these checks on Linux.
+```sh
+cargo run --locked -p patchriot-core -- payments-reconcile-once
+```
 
-For a real browser-to-database check, run both Rust services, build the relay, install the browser as above and run `node scripts/smoke-browser.mjs` from core with `DATABASE_URL` and `PATCHRIOT_AUDIENCE` in the environment. It only targets localhost, creates three test accounts, pairs and approves three real relays through the UI, runs the three-role example, checks the private report/download and account isolation, then revokes the relays and disables the test accounts. It does not make model calls or assess a website.
+This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Quote creation, spending, payouts and held-fund release are not exposed; the future order adapter must admit work before presenting payment instructions.
 
-With the dispatcher on port 7411 and its internal key/audience in your environment, `python3 scripts/smoke-relays.py` tests three real relay instances. It reports one operator and one shared compute group, then revokes its devices.
+## Verify it
 
-`python3 scripts/smoke-reviews.py` uses the same local configuration to test queued fixture execution. A local proxy deliberately drops the first successful completion reply; the relay must recover its saved result and the dispatcher must accept the retry without duplicating work. The report contains three devices, one operator and one compute group. Queue limits, expiry, cancellation, conflicting evidence and retry exhaustion have PostgreSQL integration tests in the dispatcher.
+Set `PATCHRIOT_TEST_DATABASE_URL` to a local test database whose role can create schemas.
 
-## License
+```sh
+cargo fmt --all --check
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked --all-targets
+cd web
+npx --no-install playwright install chromium
+npm test
+npm run build
+```
 
-Original material is [AGPL-3.0-only](LICENSE), except [crates/protocol](crates/protocol), which is separately licensed under [Apache-2.0](crates/protocol/LICENSE) for use by the relay and private dispatcher. See [NOTICE](NOTICE) for attribution. Credentials, customer code and production data are excluded from source control.
+The Rust checks cover sessions, isolation, signature boundaries and payment retries; browser tests cover desktop/mobile behavior with explicit API fixtures. For real local services and relays:
+
+| Command, from core | Checks |
+| --- | --- |
+| `node scripts/smoke-browser.mjs` | Login, pairing, approval, review, private download and cross-account denial |
+| `python3 scripts/smoke-relays.py` | Three real relay processes, pause/resume and revocation |
+| `python3 scripts/smoke-reviews.py` | Queued work and recovery after a lost completion reply |
+
+Use the same local service environment; browser smoke also needs `DATABASE_URL` and `PATCHRIOT_AUDIENCE`. These scripts use owned fixtures, not customer systems.
+
+## Repositories and license
+
+| Repository | Responsibility |
+| --- | --- |
+| **Core** | Website, accounts, payments and ledger |
+| [Relay](https://github.com/adaki2004/patchriot-relay) | Device connection, local controls and execution |
+| [Dispatcher](https://github.com/adaki2004/patchriot-dispatcher) | Approval, assignments and review coordination |
+
+All three are private during development. Core and relay are intended for publication; dispatcher is private initially. Code visibility does not replace access controls or isolation.
+
+Original code is [AGPL-3.0-only](LICENSE). The shared [protocol crate](crates/protocol) is [Apache-2.0](crates/protocol/LICENSE). Attribution is in [NOTICE](NOTICE). Credentials, customer source and reports stay out of Git.
