@@ -177,3 +177,15 @@ nav > button, .nav-note { flex-shrink: 0; white-space: nowrap; }
 .research-format { margin: 18px 0; font-size: 12px; }.research-format pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f0f2eb; padding: 12px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; }
 @media (max-width: 850px) { .incident-desk-layout { grid-template-columns: 1fr; }.draft-list { max-height: 280px; overflow-y: auto; }.incident-grid { grid-template-columns: minmax(200px, .8fr) minmax(0, 1.2fr); }.incident-detail { padding: 25px; } }
 @media (max-width: 600px) { .incident-grid { grid-template-columns: 1fr; }.incident-tabs { max-height: 250px; border-right: 0; border-bottom: 1px solid #35422e; }.incident-tabs button { padding: 13px 32px 13px 14px; }.incident-tabs small { margin-bottom: 5px; }.incident-tabs button > span { top: 34px; }.incident-detail { padding: 24px 20px; }.incident-bar { padding: 15px 18px; font-size: 10px; }.key-hint { display: none; }.incident-editor { padding: 22px 18px; }.incident-fields, .source-fields { grid-template-columns: 1fr; gap: 0; }.source-fields { padding: 10px 0; border-bottom: 1px solid var(--line); }.source-fields label { margin: 9px 0; }.incident-editor .section-heading { flex-wrap: wrap; }.incident-preview { padding: 20px; }.incident-prose { font-size: 13px; } }
+/* Admin payment inspection reuses the private workspace's cards and disclosure controls. */
+.payment-desk { padding-bottom: 0; }
+.payment-record { border-top: 1px solid var(--line); }
+.payment-record > summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px; cursor: pointer; }
+.payment-record > summary small { display: block; margin-top: 5px; }
+.payment-record > summary::before { content: '+'; font-family: monospace; }
+.payment-record[open] > summary::before { content: '−'; }
+.payment-record > summary > span:first-of-type { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.payment-record-body { padding: 0 20px 20px; }
+.payment-record-body dd { margin: 0 0 14px; overflow-wrap: anywhere; }
+.payment-record-body dt { margin-bottom: 4px; font-size: 12px; opacity: .75; }
+.payment-record-body code { overflow-wrap: anywhere; }

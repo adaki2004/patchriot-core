@@ -196,6 +196,20 @@ Quote replies include `request_id`, the original consent's retry key, and a sepa
 
 The web server does not start payment workers. Schedule reconciliation, funding and cancellation delivery before enabling checkout. `GET /api/payments` exposes the signed-in account's recorded totals; `checkout_enabled` reflects paid mode. **Before accepting live funds, establish a refund procedure and test the complete flow with synthetic payments.** Payouts and held-fund release remain unexposed; none of these services has a treasury signing key.
 
+Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It reads the newest 50 invoices, exact integer amounts, ledger credits, delivery errors and cancellation facts from the database, including disabled customer accounts. It does not contact the provider or reveal deposit instructions. It is recent history, not a complete reconciliation report; an attention flag does not authorize a refund.
+
+<details>
+<summary><strong>Before making a refund decision</strong></summary>
+
+1. Identify the invoice, customer and exact asset. Check recorded settlement and ledger credit against the saved provider evidence; stop if they disagree.
+2. Check the actual review and any in-flight funding/cancellation attempt. A stop request or missing reply does not prove that work stopped.
+3. Distinguish a provider refund of an unfinished swap from a refund of funds already received by the service. Check for earlier transfers and refund records before sending anything.
+4. Verify the recipient separately and record the approved amount, network, transaction and confirmation. Keep the treasury signer outside core, dispatcher and agents.
+
+The current ledger records receipts only. Add durable refund accounting and a tested execution procedure before enabling live checkout; an external transfer must not be hidden by deleting or editing a receipt.
+
+</details>
+
 ## Verify it
 
 Set `PATCHRIOT_TEST_DATABASE_URL` to a dedicated local test database. Its test administrator needs permission to create schemas, temporary databases and roles; the startup test checks a separate, restricted service role and removes its generated database and role afterward. Do not use these test-administrator permissions for the running service.

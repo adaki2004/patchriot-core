@@ -5,6 +5,8 @@ use patchriot_core::payments::{
 };
 use patchriot_protocol::website_reviews::CreateWebsiteReview;
 
+mod desk;
+
 const AMOUNT: i64 = 9_007_199_254_740_993;
 
 async fn seed(test: &TestApp, account: Uuid) -> (Uuid, Uuid, Uuid) {

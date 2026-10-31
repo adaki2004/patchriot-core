@@ -19,6 +19,7 @@ pub mod access;
 pub(crate) mod browser_checkout;
 pub mod cancellation;
 pub mod checkout;
+pub(crate) mod desk;
 pub mod funding;
 pub(crate) mod orders;
 

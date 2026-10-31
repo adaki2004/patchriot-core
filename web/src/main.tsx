@@ -7,6 +7,7 @@ import './style.css';
 import { useLive } from './useLive';
 import { Reviews } from './Reviews';
 import { Orders } from './Orders';
+import { PaymentDesk } from './PaymentDesk';
 import { Sites } from './Sites';
 import type { Deposit } from './Checkout';
 import { IncidentDesk, IncidentLog } from './Incidents';
@@ -134,7 +135,7 @@ function App() {
   const [login, setLogin] = useState(false);
   const [pairing, setPairing] = useState(false);
   const [checkout, setCheckout] = useState<Deposit | null>(null);
-  const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'orders' | 'sites' | 'guide' | 'incidents' | 'incident-desk'>('overview');
+  const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'orders' | 'sites' | 'guide' | 'incidents' | 'incident-desk' | 'payment-desk'>('overview');
   const [decision, setDecision] = useState<{ device: Device; action: DecisionAction } | null>(null);
   const [notice, setNotice] = useState('');
   const fleet = useLive<Fleet>('/fleet');
@@ -168,7 +169,7 @@ function App() {
       <div className="header-right"><span className="version">v0.0.1 / PRIVATE ALPHA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button>}</div>
     </header>
     <main id="main">
-      <nav aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button>}{account && <button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button>{isAdmin && <button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
+      <nav aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button>}{account && <button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button>{isAdmin && <button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button>}{isAdmin && <button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
       {sessionError && <Notice error>{sessionError} <button className="inline" onClick={() => void loadSession().catch(() => {})}>Retry</button></Notice>}
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
       {view === 'overview' && <>
@@ -197,6 +198,7 @@ function App() {
       {view === 'guide' && <Guide />}
       {view === 'incidents' && <IncidentLog />}
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}
+      {view === 'payment-desk' && isAdmin && <PaymentDesk />}
     </main>
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>
     {login && <Login onLogin={loadSession} onClose={() => setLogin(false)} />}
