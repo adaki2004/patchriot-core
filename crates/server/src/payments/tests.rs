@@ -1,10 +1,19 @@
 use super::*;
-use axum::{Router, extract::Query, http::StatusCode, response::IntoResponse, routing::get};
+use axum::{
+    Router,
+    extract::Query,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{any, get, post},
+};
 use serde_json::json;
 use sqlx::postgres::PgPoolOptions;
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 struct TestDb {
@@ -134,6 +143,8 @@ struct MockProvider {
     client: OneClick,
     body: Arc<Mutex<(StatusCode, String)>>,
     calls: Arc<Mutex<Vec<ObservedRequest>>>,
+    quote_calls: Arc<Mutex<Vec<(Value, bool)>>>,
+    redirected_calls: Arc<AtomicUsize>,
     task: tokio::task::JoinHandle<()>,
 }
 impl MockProvider {
@@ -142,15 +153,47 @@ impl MockProvider {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let output = body.clone();
         let requests = calls.clone();
-        let app = Router::new().route(
-            "/v0/status",
-            get(
-                move |Query(query): Query<HashMap<String, String>>, headers: HeaderMap| {
-                    let output = output.clone();
-                    let requests = requests.clone();
+        let quote_calls = Arc::new(Mutex::new(Vec::new()));
+        let quote_requests = quote_calls.clone();
+        let quote_output = body.clone();
+        let redirected_calls = Arc::new(AtomicUsize::new(0));
+        let unexpected = redirected_calls.clone();
+        let app = Router::new()
+            .route(
+                "/v0/status",
+                get(
+                    move |Query(query): Query<HashMap<String, String>>, headers: HeaderMap| {
+                        let output = output.clone();
+                        let requests = requests.clone();
+                        async move {
+                            requests.lock().unwrap().push((
+                                query,
+                                headers
+                                    .get("x-api-key")
+                                    .is_some_and(|h| h == "fixture-only"),
+                            ));
+                            let (code, body) = output.lock().unwrap().clone();
+                            (
+                                code,
+                                [
+                                    ("content-type", "application/json"),
+                                    ("location", "/unexpected"),
+                                ],
+                                body,
+                            )
+                                .into_response()
+                        }
+                    },
+                ),
+            )
+            .route(
+                "/v0/quote",
+                post(move |headers: HeaderMap, Json(input): Json<Value>| {
+                    let output = quote_output.clone();
+                    let requests = quote_requests.clone();
                     async move {
                         requests.lock().unwrap().push((
-                            query,
+                            input,
                             headers
                                 .get("x-api-key")
                                 .is_some_and(|h| h == "fixture-only"),
@@ -160,15 +203,20 @@ impl MockProvider {
                             code,
                             [
                                 ("content-type", "application/json"),
-                                ("location", "http://127.0.0.1:1/should-not-follow"),
+                                ("location", "/unexpected"),
                             ],
                             body,
                         )
-                            .into_response()
                     }
-                },
-            ),
-        );
+                }),
+            )
+            .route(
+                "/unexpected",
+                any(move || {
+                    unexpected.fetch_add(1, Ordering::SeqCst);
+                    async { StatusCode::OK }
+                }),
+            );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let client = OneClick::with_origin(
             &format!("http://{}", listener.local_addr().unwrap()),
@@ -180,6 +228,8 @@ impl MockProvider {
             client,
             body,
             calls,
+            quote_calls,
+            redirected_calls,
             task,
         }
     }
@@ -191,6 +241,137 @@ impl Drop for MockProvider {
     fn drop(&mut self) {
         self.task.abort();
     }
+}
+
+#[tokio::test]
+async fn fetched_quote_is_bound_saved_and_reconciled_without_double_credit() {
+    let db = TestDb::new().await;
+    let (terms, expected) = db.quote();
+    let provider = MockProvider::new(json!(expected)).await;
+    let quote = provider.client.quote(&terms).await.unwrap();
+    assert_eq!(
+        provider.quote_calls.lock().unwrap().as_slice(),
+        &[(terms.quote_request.clone(), true)]
+    );
+    let id = record_quote(&db.pool, &terms, &quote).await.unwrap();
+    assert_eq!(record_quote(&db.pool, &terms, &quote).await.unwrap(), id);
+    assert_eq!(db.counts().await, (0, 0), "a quote is not a payment");
+    provider.set(status(&quote, "SUCCESS"));
+    reconcile_once(&db.pool, &provider.client).await.unwrap();
+    assert_eq!(db.state(id).await.0, "settled");
+    assert_eq!(db.counts().await, (1, 1));
+    db.due(id).await;
+    assert_eq!(
+        reconcile_once(&db.pool, &provider.client)
+            .await
+            .unwrap()
+            .checked,
+        0
+    );
+    assert_eq!(db.counts().await, (1, 1));
+    assert_eq!(provider.redirected_calls.load(Ordering::SeqCst), 0);
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn invalid_quote_terms_never_reach_the_provider() {
+    let db = TestDb::new().await;
+    let provider = MockProvider::new(json!({})).await;
+    for (field, value) in [
+        ("dry", json!(true)),
+        ("swapType", json!("EXACT_INPUT")),
+        ("recipient", json!("other.fixture.near")),
+        ("destinationAsset", json!("nep141:other.fixture.near")),
+        ("amount", json!("1")),
+        ("originAsset", json!("")),
+        ("refundTo", json!("")),
+        ("deadline", json!(Utc::now() - Duration::seconds(1))),
+        ("deadline", json!(Utc::now() + Duration::hours(2))),
+        ("customRecipientMsg", json!("unsupported call")),
+        ("sessionId", json!("x".repeat(16 * 1024))),
+    ] {
+        let (mut terms, _) = db.quote();
+        terms.quote_request[field] = value;
+        assert!(
+            matches!(
+                provider.client.quote(&terms).await,
+                Err(PaymentError::InvalidQuote)
+            ),
+            "accepted changed {field}"
+        );
+    }
+    assert!(provider.quote_calls.lock().unwrap().is_empty());
+    assert_eq!(db.counts().await, (0, 0));
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn quote_response_cannot_change_payment_or_refund_terms() {
+    let db = TestDb::new().await;
+    let (terms, expected) = db.quote();
+    let provider = MockProvider::new(json!(expected)).await;
+    for (pointer, value) in [
+        ("/quoteRequest/recipient", json!("other.fixture.near")),
+        ("/quoteRequest/refundTo", json!("other.fixture.near")),
+        (
+            "/quoteRequest/originAsset",
+            json!("nep141:other.fixture.near"),
+        ),
+        ("/quoteRequest/amount", json!("1")),
+        ("/quote/amountOut", json!("999999")),
+        ("/quote/amountIn", json!("0")),
+        ("/quote/depositAddress", json!("")),
+        ("/quote/deadline", json!(Utc::now() - Duration::seconds(1))),
+        ("/quote/deadline", json!(Utc::now() + Duration::minutes(10))),
+        ("/correlationId", json!("")),
+    ] {
+        let mut response = json!(expected);
+        *response.pointer_mut(pointer).unwrap() = value;
+        provider.set(response);
+        assert!(
+            matches!(
+                provider.client.quote(&terms).await,
+                Err(PaymentError::InvalidQuote)
+            ),
+            "accepted changed {pointer}"
+        );
+    }
+    assert_eq!(db.counts().await, (0, 0));
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn quote_http_errors_and_redirects_do_not_retry_or_forward_credentials() {
+    let db = TestDb::new().await;
+    let (terms, quote) = db.quote();
+    let provider = MockProvider::new(json!(quote)).await;
+    for code in [
+        StatusCode::TEMPORARY_REDIRECT,
+        StatusCode::TOO_MANY_REQUESTS,
+        StatusCode::INTERNAL_SERVER_ERROR,
+    ] {
+        *provider.body.lock().unwrap() = (code, json!(quote).to_string());
+        let before = provider.quote_calls.lock().unwrap().len();
+        assert!(matches!(
+            provider.client.quote(&terms).await,
+            Err(PaymentError::ProviderUnavailable)
+        ));
+        assert_eq!(provider.quote_calls.lock().unwrap().len(), before + 1);
+        assert_eq!(provider.redirected_calls.load(Ordering::SeqCst), 0);
+    }
+    for body in [
+        "private provider error".into(),
+        "x".repeat(RESPONSE_LIMIT + 1),
+        "{}".into(),
+    ] {
+        *provider.body.lock().unwrap() = (StatusCode::OK, body);
+        assert!(matches!(
+            provider.client.quote(&terms).await,
+            Err(PaymentError::InvalidResponse)
+        ));
+    }
+    assert_eq!(db.counts().await, (0, 0));
+    db.finish().await;
 }
 
 #[test]

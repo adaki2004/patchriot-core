@@ -46,7 +46,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
+| NEAR Intents | Provider quote client, quote storage, settlement poller and ledger; admitted checkout and payouts follow |
 | Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
 | Incident feed | Admin drafts, research JSON import, reviewed publication, source links and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
@@ -130,7 +130,9 @@ Saving an edit keeps the previous public version unchanged. Publish the correcti
 
 ## Payments: record funds before starting work
 
-The planned checkout uses **NEAR Intents / 1Click** to fund an admitted review. The implemented [payment module](crates/server/src/payments.rs) checks the saved quote against the provider's settlement response. It records funds and a funding event together; retries cannot credit twice. Late or mismatched amounts stay held for review.
+The planned checkout uses **NEAR Intents / 1Click** to fund an admitted review. The [payment module](crates/server/src/payments.rs) can request an [exact-output quote](https://docs.near-intents.org/api-reference/oneclick/request-a-swap-quote) using server-approved payment and refund terms. It rejects changed terms, expired quotes and missing deposit instructions. The caller must admit the review and save the quote before showing an address to pay.
+
+Reconciliation checks the saved quote against the provider's settlement response. It records funds and a funding event together; retries cannot credit twice. Late or mismatched amounts stay held for review. The client uses a fixed provider origin, bounded replies and timeouts; redirects and automatic quote retries are disabled.
 
 A deposit hint is not confirmation. The poller trusts [1Click's settlement report](https://docs.near-intents.org/api-reference/oneclick/check-swap-execution-status), without independently verifying blockchain finality. It has no treasury signing key.
 
@@ -140,7 +142,7 @@ With `DATABASE_URL` and `PATCHRIOT_1CLICK_API_KEY` in runtime secrets:
 cargo run --locked -p patchriot-core -- payments-reconcile-once
 ```
 
-This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Quote creation, spending, payouts and held-fund release are not exposed; the future order adapter must admit work before presenting payment instructions.
+This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Quote creation is an internal library operation; the browser cannot request one yet. Order admission, checkout, spending, payouts and held-fund release remain unexposed.
 
 ## Verify it
 

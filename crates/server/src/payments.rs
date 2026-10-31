@@ -1,6 +1,6 @@
-//! Exact-output 1Click settlement accounting. There is no browser-facing write
-//! endpoint. `record_quote` is for a future admitted-order adapter, never for
-//! JSON supplied by a requester, relay, webhook or agent.
+//! Exact-output 1Click quotes and settlement accounting. There is no
+//! browser-facing write endpoint. Quote requests use server-approved terms,
+//! never JSON supplied by a requester, relay, webhook or agent.
 //!
 //! A provider SUCCESS is trusted only after binding it to the saved quote. It is
 //! not an independent blockchain proof. The poller has an API key, no treasury
@@ -132,24 +132,13 @@ fn date(value: &Value) -> Option<DateTime<Utc>> {
         .map(|v| v.with_timezone(&Utc))
 }
 
-/// Store a non-dry, exact-output quote received directly from 1Click. The first
-/// MVP adapter supports SIMPLE deposits and normal destination-chain or Intents
-/// recipients only; arbitrary recipient messages and virtual-chain routing are
-/// excluded. An identical retry while the quote is valid returns its saved ID.
-/// The destination asset must fit positive i64 smallest units; origin amounts
-/// remain decimal strings so higher-decimal input assets are supported.
-pub async fn record_quote(
-    pool: &PgPool,
+fn validate_quote_request(
     terms: &InvoiceTerms,
-    response: &QuoteResponse,
-) -> Result<Uuid, PaymentError> {
-    let now = Utc::now();
-    let request = &response.quote_request;
-    let quote = &response.quote;
-    let deadline = date(&quote["deadline"]).ok_or(PaymentError::InvalidQuote)?;
+    now: DateTime<Utc>,
+) -> Result<DateTime<Utc>, PaymentError> {
+    let request = &terms.quote_request;
     let requested_deadline = date(&request["deadline"]).ok_or(PaymentError::InvalidQuote)?;
     if terms.required_amount <= 0
-        || request != &terms.quote_request
         || request["dry"] != false
         || request["swapType"] != "EXACT_OUTPUT"
         || request["depositType"] != "ORIGIN_CHAIN"
@@ -164,6 +153,31 @@ pub async fn record_quote(
         || text(&request["originAsset"]).is_none()
         || text(&request["refundTo"]).is_none()
         || atom_amount(&request["amount"]) != Some(terms.required_amount)
+        || request.to_string().len() > 16 * 1024
+        || requested_deadline <= now
+        || requested_deadline > now + Duration::hours(1)
+        || [
+            "virtualChainRecipient",
+            "virtualChainRefundRecipient",
+            "customRecipientMsg",
+        ]
+        .iter()
+        .any(|field| !request[*field].is_null())
+    {
+        return Err(PaymentError::InvalidQuote);
+    }
+    Ok(requested_deadline)
+}
+
+fn validate_quote<'a>(
+    terms: &InvoiceTerms,
+    response: &'a QuoteResponse,
+) -> Result<(DateTime<Utc>, &'a str, &'a str), PaymentError> {
+    let now = Utc::now();
+    let requested_deadline = validate_quote_request(terms, now)?;
+    let quote = &response.quote;
+    let deadline = date(&quote["deadline"]).ok_or(PaymentError::InvalidQuote)?;
+    if response.quote_request != terms.quote_request
         || atom_amount(&quote["amountOut"]) != Some(terms.required_amount)
         || !positive_input_amount(&quote["amountIn"])
         || deadline <= now
@@ -176,7 +190,7 @@ pub async fn record_quote(
             "customRecipientMsg",
         ]
         .iter()
-        .any(|field| !request[*field].is_null() || !quote[*field].is_null())
+        .any(|field| !quote[*field].is_null())
     {
         return Err(PaymentError::InvalidQuote);
     }
@@ -185,6 +199,23 @@ pub async fn record_quote(
         None | Some(Value::Null) => "",
         Some(value) => text(value).ok_or(PaymentError::InvalidQuote)?,
     };
+    Ok((deadline, address, memo))
+}
+
+/// Store a non-dry, exact-output quote received directly from 1Click. The first
+/// MVP adapter supports SIMPLE deposits and normal destination-chain or Intents
+/// recipients only; arbitrary recipient messages and virtual-chain routing are
+/// excluded. An identical retry while the quote is valid returns its saved ID.
+/// The destination asset must fit positive i64 smallest units; origin amounts
+/// remain decimal strings so higher-decimal input assets are supported.
+pub async fn record_quote(
+    pool: &PgPool,
+    terms: &InvoiceTerms,
+    response: &QuoteResponse,
+) -> Result<Uuid, PaymentError> {
+    let (deadline, address, memo) = validate_quote(terms, response)?;
+    let request = &response.quote_request;
+    let quote = &response.quote;
     let id = Uuid::new_v4();
     let mut tx = pool.begin().await?;
     let enabled: Option<bool> =
@@ -226,9 +257,9 @@ pub async fn record_quote(
     Ok(result)
 }
 
-/// Read-only 1Click client. The production origin is fixed so an operator typo
-/// cannot forward its API credential to an arbitrary server. No signing key is
-/// accepted. Tests inject a loopback server through the private constructor.
+/// 1Click quote/status client. The production origin is fixed so an operator
+/// typo cannot forward its API credential to an arbitrary server. It cannot
+/// sign or send funds. Tests inject loopback through the private constructor.
 pub struct OneClick {
     client: reqwest::Client,
     origin: String,
@@ -259,6 +290,24 @@ impl OneClick {
         })
     }
 
+    /// Ask the provider for deposit instructions matching approved terms.
+    ///
+    /// The caller must admit the work, serialize quote creation for its order,
+    /// and persist this response with `record_quote` before showing a deposit
+    /// address. This method does not authorize work, create credit or retry a
+    /// POST. A lost response must not be treated as a saved invoice.
+    pub async fn quote(&self, terms: &InvoiceTerms) -> Result<QuoteResponse, PaymentError> {
+        validate_quote_request(terms, Utc::now())?;
+        let request = self
+            .client
+            .post(format!("{}/v0/quote", self.origin))
+            .header("X-API-Key", self.api_key.clone())
+            .json(&terms.quote_request);
+        let response: QuoteResponse = self.response(request).await?;
+        validate_quote(terms, &response)?;
+        Ok(response)
+    }
+
     async fn status(&self, invoice: &Invoice) -> Result<ProviderStatus, PaymentError> {
         let mut url = url::Url::parse(&format!("{}/v0/status", self.origin))
             .map_err(|_| PaymentError::Configuration)?;
@@ -272,6 +321,13 @@ impl OneClick {
             .client
             .get(url)
             .header("X-API-Key", self.api_key.clone());
+        self.response(request).await
+    }
+
+    async fn response<T: serde::de::DeserializeOwned>(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<T, PaymentError> {
         let mut response = request
             .send()
             .await
