@@ -5,15 +5,21 @@ import { useLive } from './useLive';
 
 type Check = { name: string; expected: boolean; actual: boolean };
 type Run = { version: 'original' | 'patched' | 'clean'; completed: boolean; elapsed_ms: number; checks: Check[] };
+type Observation = { owner_reads: boolean; blocks_other_user: boolean };
+type AgentResult = {
+  kind: 'owned_agent_v1'; outcome: string; declared_model: string; model: string; model_digest: string;
+  image_digest: string; duration_ms: number; inference_calls: number; terminal_calls: number;
+  cleanup_confirmed: boolean; observation: { original: Observation; patched: Observation } | null; summary: string;
+};
 type Step = {
   role: 'investigator' | 'reproducer' | 'challenger'; state: string; attempts: number;
   device_id: string | null; operator_id: string | null; compute_group: string | null;
-  result: { runs: Run[] } | null; fixture_matches: boolean | null;
+  result: { runs: Run[] } | AgentResult | null; fixture_matches: boolean | null;
 };
 type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; steps: Step[]; evidence_source: string };
 
 const states: Record<string, string> = {
-  queued: 'Waiting for a relay', running: 'In progress', completed: 'Fixture checks complete',
+  queued: 'Waiting for a relay', running: 'In progress', completed: 'Example checks complete',
   needs_review: 'Needs review', cancelled: 'Cancelled', failed: 'Incomplete', leased: 'Assigned',
 };
 const label = (value: string) => states[value] ?? value.replaceAll('_', ' ');
@@ -23,49 +29,81 @@ function NewReview({ csrf, onCreated, onClose }: { csrf: string; onCreated: (rev
   const requestId = useRef(crypto.randomUUID());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<'owned_fixture' | 'owned_agent'>('owned_fixture');
   useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      const review = await write<Review>('/reviews', csrf, { request_id: requestId.current, scenario: 'access_control_v1' });
+      const review = await write<Review>('/reviews', csrf, { request_id: requestId.current, scenario: 'access_control_v1', ...(mode === 'owned_agent' ? { mode } : {}) });
       onCreated(review); onClose();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
   return <dialog ref={dialog} onCancel={onClose} aria-labelledby="new-review-title">
     <button className="close" onClick={onClose} aria-label="Close review setup">×</button>
     <p className="eyebrow">OWNED EXAMPLE / NO CHARGE</p><h2 id="new-review-title">Watch a review move through the swarm.</h2>
-    <p>A signed-in user can read someone else’s document. Three relays run the original example, its fix and a separate clean control.</p>
-    <ul className="review-terms"><li>Three distinct approved devices; shared machines run one at a time.</li><li>Only the built-in example runs. No website, repository or model call is involved.</li><li>Expires after 15 minutes. You can cancel while it is queued or running.</li></ul>
-    <form onSubmit={submit}>{error && <div className="notice error" role="alert">{error}</div>}<button className="primary full" disabled={busy}>{busy ? 'Creating review…' : 'Run the owned example →'}</button></form>
+    <p>A signed-in user can read someone else’s document. The example includes that bug and a supplied fix.</p>
+    <form onSubmit={submit}>
+      <fieldset className="review-mode" disabled={busy}><legend>How should it run?</legend>
+        <label><input type="radio" name="review-mode" checked={mode === 'owned_fixture'} onChange={() => { setMode('owned_fixture'); requestId.current = crypto.randomUUID(); }} /><span><strong>Quick fixture check</strong><small>Built-in tests. No model calls.</small></span></label>
+        <label><input type="radio" name="review-mode" checked={mode === 'owned_agent'} onChange={() => { setMode('owned_agent'); requestId.current = crypto.randomUUID(); }} /><span><strong>Local agent check</strong><small>Agents inspect the code and run tools.</small></span></label>
+      </fieldset>
+      <ul className="review-terms"><li>Three distinct approved devices; shared machines run one at a time.</li><li>{mode === 'owned_agent' ? 'Each agent checks the same supplied bug and fix. CPU models can take several minutes per role.' : 'Each relay runs the original, the fix and a separate clean control.'}</li><li>Expires after {mode === 'owned_agent' ? '35' : '15'} minutes, including waiting. You can cancel while it is queued or running.</li></ul>
+      {error && <div className="notice error" role="alert">{error}</div>}<button className="primary full" disabled={busy}>{busy ? 'Creating review…' : mode === 'owned_agent' ? 'Run agent checks →' : 'Run the owned example →'}</button>
+    </form>
   </dialog>;
 }
 
+function Evidence({ step }: { step: Step }) {
+  if (!step.result) return <p className="subtle">No evidence received yet.</p>;
+  if ('runs' in step.result) return <>
+    <p className={`result-line ${step.fixture_matches ? 'match' : 'mismatch'}`}>{step.fixture_matches ? 'Original flaw reproduced; patch and clean control pass.' : 'The evidence does not match the expected fixture regression.'}</p>
+    <div className="table-scroll"><table><thead><tr><th>Version</th><th>Execution</th><th>Checks matching policy</th></tr></thead><tbody>{step.result.runs.map((run, index) => <tr key={`${run.version}-${index}`}><td>{run.version}</td><td>{run.completed ? 'Finished' : 'Did not finish'}</td><td>{run.checks.filter(check => check.actual === check.expected).length} / {run.checks.length}</td></tr>)}</tbody></table></div>
+  </>;
+  const result = step.result;
+  return <>
+    <p className={`result-line ${step.fixture_matches ? 'match' : 'mismatch'}`}>{step.fixture_matches ? 'Tool evidence shows the original flaw and the supplied fix passing.' : 'The agent did not provide a complete, matching tool result.'}</p>
+    <p className="model-name"><strong>{result.model}</strong><small>{Math.round(result.duration_ms / 1000)} seconds · {result.inference_calls} model calls · {result.terminal_calls} completed terminal calls</small></p>
+    {result.observation && <div className="table-scroll"><table><thead><tr><th>Observed check</th><th>Original</th><th>Patched</th></tr></thead><tbody>
+      <tr><td>Owner can read</td><td>{result.observation.original.owner_reads ? 'Yes' : 'No'}</td><td>{result.observation.patched.owner_reads ? 'Yes' : 'No'}</td></tr>
+      <tr><td>Other user is blocked</td><td>{result.observation.original.blocks_other_user ? 'Yes' : 'No'}</td><td>{result.observation.patched.blocks_other_user ? 'Yes' : 'No'}</td></tr>
+    </tbody></table></div>}
+    {result.summary && <><p className="fine">AGENT’S EXPLANATION / UNVERIFIED TEXT</p><pre className="agent-summary">{result.summary}</pre></>}
+    <details className="execution-details"><summary>Execution details</summary><dl><dt>Outcome</dt><dd>{result.outcome.replaceAll('_', ' ')}</dd><dt>Container cleanup</dt><dd>{result.cleanup_confirmed ? 'Confirmed by relay' : 'Not confirmed'}</dd><dt>Paired model declaration</dt><dd>{result.declared_model}</dd><dt>Model digest</dt><dd><code>{result.model_digest}</code></dd><dt>Runtime image</dt><dd><code>{result.image_digest}</code></dd></dl></details>
+  </>;
+}
+
 function Detail({ id, csrf, onClose, onChange }: { id: string; csrf: string; onClose: () => void; onChange: () => void }) {
+  const panel = useRef<HTMLElement>(null);
   const detail = useLive<Review>(`/reviews/${id}`);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const review = detail.data;
+  useEffect(() => {
+    panel.current?.focus({ preventScroll: true });
+    panel.current?.scrollIntoView({ block: 'start' });
+  }, [id]);
   async function cancel() {
-    if (!window.confirm('Cancel this fixture review? Unfinished assignments will stop being accepted.')) return;
+    if (!window.confirm('Cancel this review? Connected agents will stop when they check their lease; further results will be rejected.')) return;
     setBusy(true); setError('');
     try { await write(`/reviews/${id}/cancel`, csrf, {}); detail.refresh(); onChange(); }
     catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
   const operators = new Set(review?.steps.flatMap(step => step.operator_id ? [step.operator_id] : []));
-  const groups = new Set(review?.steps.flatMap(step => step.compute_group ? [step.compute_group] : []));
+  const groups = new Set(review?.steps.flatMap(step => step.compute_group ? [`${step.operator_id}:${step.compute_group}`] : []));
   const devices = new Set(review?.steps.flatMap(step => step.device_id ? [step.device_id] : []));
-  return <section className="review-detail panel" aria-label="Fixture review report">
-    <div className="section-heading"><div><p className="eyebrow">ACCESS CONTROL / OWNED FIXTURE</p><h2>{review ? label(review.state) : 'Loading review…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
+  return <section ref={panel} tabIndex={-1} className="review-detail panel" aria-label="Review report">
+    <div className="section-heading"><div><p className="eyebrow">ACCESS CONTROL / {review?.mode === 'owned_agent' ? 'LOCAL AGENT CHECK' : 'OWNED FIXTURE'}</p><h2>{review ? label(review.state) : 'Loading review…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
     {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error}</div>}
     {review && <>
       <div className="review-actions"><a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a><button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel review</button>}</div>
-      <div className="notice">{devices.size} devices · {operators.size} operators · {groups.size} declared compute groups. These are device-reported fixture results, not an independent audit or proof of model quality.</div>
+      {['queued', 'running'].includes(review.state) && <p className="fine">{review.steps.filter(step => step.state === 'completed').length} of 3 reports received · Ends at {new Date(review.deadline_at * 1000).toLocaleTimeString()}</p>}
+      <div className="notice">{devices.size} {devices.size === 1 ? 'device' : 'devices'} · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. These are operator-reported checks of our owned example. Shared machines and models are not independent reviewers; this is not a customer audit.</div>
       <div className="review-steps">{review.steps.map(step => <article key={step.role} className="review-step">
-        <div className="step-title"><h3>{step.role}</h3><span className={`badge ${step.state === 'completed' ? 'approved' : step.state === 'failed' ? 'revoked' : 'pending'}`}>{label(step.state)}</span></div>
+        <div className="step-title"><h3>{step.role}</h3><span className={`badge ${step.state === 'completed' && step.fixture_matches ? 'approved' : step.state === 'failed' ? 'revoked' : 'pending'}`}>{step.state === 'completed' ? 'Reported' : label(step.state)}</span></div>
         <p className="fine">Attempt {step.attempts} / 3{step.compute_group ? ` · ${step.compute_group}` : ' · awaiting capacity'}</p>
-        {step.result ? <><p className={`result-line ${step.fixture_matches ? 'match' : 'mismatch'}`}>{step.fixture_matches ? 'Original flaw reproduced; patch and clean control pass.' : 'The evidence does not match the expected fixture regression.'}</p><div className="table-scroll"><table><thead><tr><th>Version</th><th>Execution</th><th>Checks matching policy</th></tr></thead><tbody>{step.result.runs.map((run, index) => <tr key={`${run.version}-${index}`}><td>{run.version}</td><td>{run.completed ? 'Finished' : 'Did not finish'}</td><td>{run.checks.filter(check => check.actual === check.expected).length} / {run.checks.length}</td></tr>)}</tbody></table></div></> : <p className="subtle">No evidence received yet.</p>}
+        <Evidence step={step} />
       </article>)}</div>
-      <p className="fine">The original should fail one access check; the patched and clean versions should pass all three. A completed fixture workflow is not a verdict about any other system.</p>
+      <p className="fine">{review.mode === 'owned_agent' ? 'The fix is supplied, not generated by these agents. Model names and digests come from the operator; they are not proof of the remote model’s identity.' : 'The original should fail one access check; the patched and clean versions should pass all three.'} Completing this example is not a verdict about any other system.</p>
     </>}
   </section>;
 }
@@ -75,14 +113,14 @@ export function Reviews({ csrf }: { csrf: string }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   return <>
-    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Start with an owned example. No customer targets or paid work are enabled.</p></div><button className="primary" onClick={() => setCreating(true)}>New fixture review +</button></section>
+    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Start with an owned example. No customer targets or paid work are enabled.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>
     {reviews.error && <div className="notice error" role="alert">{reviews.error} <button className="inline" onClick={reviews.refresh}>Retry</button></div>}
-    <section className="panel"><div className="table-toolbar"><strong>{reviews.data ? `${reviews.data.length} fixture reviews` : 'Loading reviews…'}</strong><button className="quiet" onClick={reviews.refresh}>Refresh reviews ↻</button></div>
-      {reviews.data?.length === 0 && <div className="empty"><h2>Make the evidence visible.</h2><p>Send the built-in example through three relay roles and inspect the original, patched and clean results.</p></div>}
-      {Boolean(reviews.data?.length) && <div className="review-list">{reviews.data!.map(review => <button className={`review-item ${selected === review.id ? 'selected' : ''}`} key={review.id} onClick={() => setSelected(review.id)}><span><strong>Access-control example</strong><small>{new Date(review.created_at * 1000).toLocaleString()} · {review.id.slice(0, 8)}</small></span><span>{label(review.state)} <span aria-hidden="true">↗</span></span></button>)}</div>}
+    <section className="panel"><div className="table-toolbar"><strong>{reviews.data ? `${reviews.data.length} ${reviews.data.length === 1 ? 'review' : 'reviews'}` : 'Loading reviews…'}</strong><button className="quiet" onClick={reviews.refresh}>Refresh reviews ↻</button></div>
+      {reviews.data?.length === 0 && <div className="empty"><h2>Make the evidence visible.</h2><p>Run quick fixture tests or let local agents inspect the supplied bug and fix.</p></div>}
+      {Boolean(reviews.data?.length) && <div className="review-list">{reviews.data!.map(review => <button className={`review-item ${selected === review.id ? 'selected' : ''}`} key={review.id} onClick={() => setSelected(review.id)}><span><strong>Access-control example</strong><small>{review.mode === 'owned_agent' ? 'Local agents' : 'Fixture tests'} · {new Date(review.created_at * 1000).toLocaleString()} · {review.id.slice(0, 8)}</small></span><span>{label(review.state)} <span aria-hidden="true">↗</span></span></button>)}</div>}
     </section>
     {selected && <Detail key={selected} id={selected} csrf={csrf} onClose={() => setSelected(null)} onChange={reviews.refresh} />}
-    <p className="fine">At most three active fixture reviews per account. Keep three approved relays connected with <code>--fixtures</code> to run the complete workflow.</p>
+    <p className="fine">At most three active reviews per account. Each run needs three approved devices in its chosen mode. The relay setup guide explains how to contribute.</p>
     {creating && <NewReview csrf={csrf} onCreated={review => { reviews.refresh(); setSelected(review.id); }} onClose={() => setCreating(false)} />}
   </>;
 }

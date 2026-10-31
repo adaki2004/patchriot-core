@@ -5,7 +5,7 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Prototype:** pairing, approval, a browser dashboard, a public incident log and a three-role fixture review work today. The fixture is a known example; real agent assessments and checkout are not enabled.
+**Prototype:** pairing, approval, a browser dashboard, a public incident log and three sequential checks of an owned example. Choose quick fixture tests or isolated local agents. Customer assessments and checkout are not enabled.
 
 ## What we're building
 
@@ -36,7 +36,7 @@ The investigator makes a specific claim. The reproducer checks it. The challenge
 
 ## Contribute an agent
 
-Bring an agent capable of source review, web/API assessment, **authorized penetration testing**, reproductions and patch checks. Connect through the [relay](https://github.com/adaki2004/patchriot-relay), set local limits and pause whenever needed. Manual approval comes before private customer work. Hermes agents can pair and report presence with a declared model; the current queue executes only the owned fixture.
+Bring an agent capable of source review, web/API assessment, **authorized penetration testing**, reproductions and patch checks. Connect through the [relay](https://github.com/adaki2004/patchriot-relay), set local limits and pause whenever needed. Manual approval comes before private customer work. Hermes devices declare their model and can opt in to the owned-example queue using a pinned local runtime.
 
 ## Implementation plan and status
 
@@ -45,7 +45,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Accounts and dashboard | Invitation login, private sessions, patcher/admin views; Google login and stronger authentication follow |
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
-| Isolation and agents | Linux sandbox diagnostics and a manual Hermes check with a local CPU model; model jobs through the queue follow |
+| Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
 | NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
 | Website checks | One-off owned-site checks, then approved baselines and recurring checks |
 | Incident feed | Admin drafts, reviewed publication, source links and keyboard/touch browsing; research-job imports follow |
@@ -82,7 +82,12 @@ target/debug/patchriot-core invite member "A contributor"
 
 Open **http://127.0.0.1:7410** and enter the private invitation. Invitations are single-use and valid for 24 hours; sessions last 12 hours. `invite-account <account-uuid>` renews access to an existing account. `disable-account <account-uuid>` revokes its sessions.
 
-In **Relay setup**, pair three distinct devices and approve them under **Fleet & approvals**. Keep them connected with `--fixtures`, then choose **Reviews → New fixture review**. Inspect the original failure, patched result and clean control; download the private JSON report. This example is free and makes no model calls.
+In **Relay setup**, pair three distinct devices and approve them under **Fleet & approvals**. Then choose **Reviews → New example review**:
+
+- **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
+- **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role; the review expires after 35 minutes including waiting.
+
+Both examples are free. The private report separates tool observations from the model's explanation and includes actual operator/device counts. Download its JSON or cancel from the report. This checks a supplied example; it does not demonstrate independent discovery or prove model identity.
 
 Core uses the `patchriot_core` schema; dispatcher uses the dedicated database's public schema. Configure separate database roles before public deployment. For UI development, `npm run dev` in `web` uses port 5173; set core's public origin to match.
 

@@ -70,7 +70,7 @@ function Pair({ account, csrf, onPaired, onClose }: { account: Account; csrf: st
       {error && <Notice error>{error}</Notice>}
       <button className="primary full" disabled={busy}>{busy ? 'Pairing…' : 'Pair relay →'}</button>
     </form>
-    <p className="fine">This build runs owned fixtures only. Pairing does not enable customer-code execution.</p>
+    <p className="fine">This build runs owned examples only. Pairing does not enable customer-code execution.</p>
   </dialog>;
 }
 
@@ -109,7 +109,7 @@ function Guide() {
       <li><strong>Pair, then stay connected.</strong><span>Enter the pairing code under “Pair a relay”. An administrator approves the device before it joins the fleet.</span><pre>{'patchriot-relay pair --state-dir ~/.patchriot\npatchriot-relay connect --state-dir ~/.patchriot'}</pre></li>
       <li><strong>Stay in control.</strong><span>Pause locally whenever needed. Keep the state directory private; it contains your device key.</span><pre>{'patchriot-relay pause --state-dir ~/.patchriot\npatchriot-relay resume --state-dir ~/.patchriot'}</pre></li>
     </ol>
-    <Notice>Add <code>--fixtures</code> to an owned-fixture device’s connect command to accept the built-in review example. Three distinct approved devices are needed; shared machines run one role at a time. Hermes agents can pair with a declared version and model; see the relay README. Their connection currently reports presence only. Different relay processes on one machine remain shared infrastructure.</Notice>
+    <Notice>Use <code>--fixtures</code> for the quick built-in tests. For local agent checks, pair a Hermes device and use <code>--agents --agent-config PATH</code>; the relay README covers the isolated runtime and model setup. Both modes need three approved devices, running one role at a time on shared machines. Different relay processes on one machine remain shared infrastructure.</Notice>
   </section>;
 }
 
@@ -154,7 +154,7 @@ function App() {
         <section className="stats" aria-label="Live fleet counts"><div><span className="stat-value">{fleet.data?.online_devices ?? '—'}</span><span>Online relays</span></div><div><span className="stat-value">{fleet.data?.online_operators ?? '—'}</span><span>Distinct operators</span></div><div><span className="stat-value">{fleet.data?.online_compute_groups ?? '—'}</span><span>Declared compute groups</span></div><p>Live counts, not a decentralization claim. Several relays can belong to one operator or share one machine.</p></section>
         <section className="section-heading"><div><p className="eyebrow">EVIDENCE OVER ASSURANCES</p><h2>Find it. Reproduce it. Challenge it.</h2></div><span className="subtle">The review workflow we’re building</span></section>
         <div className="roles"><article><span className="role-number">01 / INVESTIGATE</span><h3>Follow the weak link.</h3><p>Inspect authorized code and websites. Turn a suspicion into a precise claim with evidence.</p></article><article><span className="role-number">02 / REPRODUCE</span><h3>Make the finding stand up.</h3><p>Run the same conditions against the same target. A confident answer is not a reproduction.</p></article><article><span className="role-number">03 / CHALLENGE</span><h3>Check the fix, too.</h3><p>Question the assumptions. Test the proposed patch and keep disagreements in the report.</p></article></div>
-        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Onboarding and fixture reviews.</strong> Pair a relay, approve it and run the owned example through three review roles. Customer assessments and paid reviews are not enabled.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
+        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Onboarding and owned examples.</strong> Pair a relay, approve it and run fixture tests or local agent checks. Customer assessments and paid reviews are not enabled.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
         <IncidentLog />
       </>}
       {view === 'devices' && account && <>
@@ -172,7 +172,7 @@ function App() {
     </main>
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>
     {login && <Login onLogin={loadSession} onClose={() => setLogin(false)} />}
-    {pairing && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => changed('Relay paired. An administrator must approve it before it joins the fleet.')} onClose={() => setPairing(false)} />}
+    {pairing && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => changed('Relay paired. Check its approval and live status in My relays.')} onClose={() => setPairing(false)} />}
     {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(decision.action === 'approve' ? 'Relay approved. It will appear online after its next heartbeat.' : 'Relay revoked. Its key is no longer accepted.')} onClose={() => setDecision(null)} />}
   </>;
 }

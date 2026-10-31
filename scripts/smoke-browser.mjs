@@ -114,24 +114,24 @@ try {
     await expect(nextRow.getByText('approved', { exact: true })).toBeVisible();
   }
   await ownerPage.getByRole('button', { name: 'Reviews', exact: true }).click();
-  await ownerPage.getByRole('button', { name: 'New fixture review +' }).click();
+  await ownerPage.getByRole('button', { name: 'New example review +' }).click();
   await ownerPage.getByRole('button', { name: 'Run the owned example →', exact: true }).click();
-  const reportPanel = ownerPage.getByRole('region', { name: 'Fixture review report' });
+  const reportPanel = ownerPage.getByRole('region', { name: 'Review report' });
   await expect(reportPanel.getByRole('heading', { name: 'Waiting for a relay' })).toBeVisible();
   for (const relayState of relayStates) {
     const events = command(relay, ['connect', '--state-dir', relayState, '--once', '--fixtures']).split('\n').map(line => JSON.parse(line));
     assert(events.some(event => event.event === 'fixture_result_accepted' && event.fixture_matches === true));
   }
   await ownerPage.getByRole('button', { name: 'Refresh report ↻', exact: true }).click();
-  await expect(reportPanel.getByRole('heading', { name: 'Fixture checks complete' })).toBeVisible();
-  await expect(reportPanel.getByText('3 devices · 1 operators · 1 declared compute groups.', { exact: false })).toBeVisible();
+  await expect(reportPanel.getByRole('heading', { name: 'Example checks complete' })).toBeVisible();
+  await expect(reportPanel.getByText('3 devices · 1 operator · 1 declared compute group.', { exact: false })).toBeVisible();
   const downloadLink = reportPanel.getByRole('link', { name: 'Download evidence JSON ↓' });
   const reportPath = await downloadLink.getAttribute('href');
   assert.equal((await outsider.context.request.get(`${origin}${reportPath}`)).status(), 404);
   const downloadPromise = ownerPage.waitForEvent('download');
   await downloadLink.click();
   const download = await downloadPromise;
-  assert(download.suggestedFilename().startsWith('patchriot-fixture-'));
+  assert(download.suggestedFilename().startsWith('patchriot-review-'));
   assert.equal(await download.failure(), null);
 
   // The row locator also matches the added labels, so pin the exact first device.

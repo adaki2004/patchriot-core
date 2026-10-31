@@ -200,7 +200,7 @@ pub async fn report(
             ),
             (
                 header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"patchriot-fixture-{id}.json\""),
+                format!("attachment; filename=\"patchriot-review-{id}.json\""),
             ),
         ],
         bytes,
