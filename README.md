@@ -48,7 +48,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
 | NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
 | Website checks | Approved snapshots, explicit sharing and three offline agent roles; baselines and recurring checks follow |
-| Incident feed | Admin drafts, reviewed publication, source links and keyboard/touch browsing; research-job imports follow |
+| Incident feed | Admin drafts, research JSON import, reviewed publication, source links and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
 ## Run locally
@@ -109,7 +109,9 @@ The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/ev
 
 **Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries with touch or ↑/↓ keys.
 
-Saving an edit keeps the previous public version unchanged. Publish the correction explicitly, or withdraw the entry; the private draft and edit history remain. Concurrent edits are rejected rather than overwritten. The feed never imports customer reports, fetches source links or starts paid research automatically. Research-job results can later feed this draft step. An evidence label describes the source's claim, not independent verification by Patchriot.
+Saving an edit keeps the previous public version unchanged. Publish the correction explicitly, or withdraw the entry; the private draft and edit history remain. Concurrent edits are rejected rather than overwritten. The feed never imports customer reports, fetches source links or starts paid research automatically. An evidence label describes the source's claim, not independent verification by Patchriot.
+
+**Load research JSON** accepts one entry from a local file or pasted JSON, up to 12 KB. It fills an **unsaved, editable** draft. Saving and publishing remain separate actions; imported claims still need review. The dialog shows the format: `title`, `occurred_on` (UTC date), `evidence` (`reported`, `confirmed` or `advisory`), `summary`, `takeaway`, and 1–4 `sources` with `label` and public HTTPS `url`. Use the original sources, not a private customer report. No upload, link fetch or publication happens when opening the file.
 
 ## Payments: record funds before starting work
 

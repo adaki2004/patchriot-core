@@ -102,3 +102,58 @@ test('admin saves separately from publication and cannot publish unsaved changes
   await expect(page.getByRole('region', { name: 'Incident editor' })).toContainText('Save your changes before publishing');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('research import stays local and unsaved until the admin saves the editable draft', async ({ page }) => {
+  await setup(page, 'admin');
+  await page.route('**/api/admin/incidents', route => route.fulfill({ json: [] }));
+  const writes: unknown[] = [];
+  await page.route('**/api/admin/incidents/*', async route => {
+    const body = route.request().postDataJSON(); writes.push(body);
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
+    await route.fulfill({ json: { id: route.request().url().split('/').at(-1), revision: 1, content: body.content, published_revision: null, published_at: null, updated_at: '2025-01-04T00:00:00Z' } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+  await page.getByRole('button', { name: 'Load research JSON' }).click();
+  const imported = { ...content, title: '<img src=x onerror=alert(1)>', summary: 'Untrusted research claim. Check its sources.' };
+  await page.getByLabel('JSON file').setInputFiles({ name: 'research.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(imported)) });
+  await expect(page.getByLabel('Or paste one JSON entry')).toHaveValue(JSON.stringify(imported));
+  await expect(page.getByRole('status')).toContainText('Loaded research.json');
+  expect(writes).toEqual([]);
+  await page.getByRole('button', { name: 'Open as unsaved draft →' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(imported.title);
+  await expect(page.getByRole('region', { name: 'Incident editor' })).toContainText('Unsaved changes');
+  await expect(page.getByRole('button', { name: 'Publish saved draft' })).toHaveCount(0);
+  await expect(page.locator('.incident-editor img, .incident-editor script')).toHaveCount(0);
+  expect(writes).toEqual([]);
+  await page.getByLabel('Title', { exact: true }).fill('Edited after checking the source');
+  await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('public entry has not changed');
+  expect(writes).toEqual([{ action: 'save', revision: 0, content: { ...imported, title: 'Edited after checking the source' } }]);
+  await expect(page.getByRole('button', { name: 'Publish saved draft' })).toBeDisabled();
+});
+
+test('research import rejects oversized files, extra fields and incomplete reports without saving', async ({ page }) => {
+  await setup(page, 'admin');
+  await page.route('**/api/admin/incidents', route => route.fulfill({ json: [] }));
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+  await page.getByRole('button', { name: 'Load research JSON' }).click();
+  await page.getByLabel('JSON file').setInputFiles({ name: 'too-large.json', mimeType: 'application/json', buffer: Buffer.alloc(12_001, 65) });
+  await expect(page.getByRole('alert')).toContainText('at most 12 KB');
+  const input = page.getByLabel('Or paste one JSON entry');
+  for (const raw of ['```json\n{}\n```', JSON.stringify([content]), JSON.stringify({ ...content, private_report: 'do not import' }), JSON.stringify({ ...content, sources: [] }), JSON.stringify({ ...content, title: ['not text'] })]) {
+    await input.fill(raw);
+    await page.getByRole('button', { name: 'Open as unsaved draft →' }).click();
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByRole('dialog')).toBeVisible();
+  }
+  await page.getByText('Expected JSON format', { exact: true }).click();
+  expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Close research import' }).click();
+  expect(writes).toEqual([]);
+  await expect(page.getByRole('region', { name: 'Incident editor' })).toHaveCount(0);
+});

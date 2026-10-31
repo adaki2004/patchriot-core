@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
@@ -12,6 +12,72 @@ type Published = { id: string; revision: number; content: Content; published_at:
 type Draft = { id: string; revision: number; content: Content; published_revision: number | null; published_at: string | null; updated_at: string };
 const evidenceLabels = { reported: 'Reported · details developing', confirmed: 'Confirmed by the cited source', advisory: 'Security advisory' };
 const date = (value: string) => new Date(value.length === 10 ? `${value}T12:00:00Z` : value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+const researchFormat = {
+  title: 'Public incident or advisory title', occurred_on: '2026-10-01', evidence: 'reported',
+  summary: 'What the public sources say, including uncertainty.',
+  takeaway: 'A practical action supported by those sources.',
+  sources: [{ label: 'Original public source', url: 'https://example.com/advisory' }],
+};
+const maxImportBytes = 12_000;
+
+/** This only fills an unsaved form. The server validates every subsequent save. */
+function researchContent(raw: string): Content {
+  if (new TextEncoder().encode(raw).length > maxImportBytes) throw new Error('Use one entry of at most 12 KB.');
+  let value: unknown;
+  try { value = JSON.parse(raw); } catch { throw new Error('Use a JSON object without markdown fences or extra commentary.'); }
+  function record(value: unknown, keys: string[]): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+  }
+  function text(value: unknown, limit: number): value is string {
+    return typeof value === 'string' && value.trim().length > 0 && new TextEncoder().encode(value).length <= limit;
+  }
+  if (!record(value, ['title', 'occurred_on', 'evidence', 'summary', 'takeaway', 'sources'])
+      || !text(value.title, 140) || !text(value.summary, 2400) || !text(value.takeaway, 1200)
+      || typeof value.occurred_on !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.occurred_on)
+      || typeof value.evidence !== 'string' || !['reported', 'confirmed', 'advisory'].includes(value.evidence)
+      || !Array.isArray(value.sources) || value.sources.length < 1 || value.sources.length > 4
+      || !value.sources.every(source => record(source, ['label', 'url']) && text(source.label, 100) && text(source.url, 1500))) {
+    throw new Error('Use the shown format for one entry, with 1–4 original public sources. Extra fields and full review reports are not accepted.');
+  }
+  // Never turn imported URLs or HTML into links/markup. They remain form text
+  // until the existing authenticated save endpoint validates them.
+  return value as Content;
+}
+
+function ResearchImport({ onLoad, onClose }: { onLoad: (content: Content) => void; onClose: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [raw, setRaw] = useState('');
+  const [filename, setFilename] = useState('');
+  const [error, setError] = useState('');
+  const [reading, setReading] = useState(false);
+  useEffect(() => { dialog.current?.showModal(); }, []);
+  async function read(file?: File) {
+    if (!file) return;
+    setError(''); setRaw(''); setFilename('');
+    if (file.size > maxImportBytes) { setError('Use one entry of at most 12 KB.'); return; }
+    setReading(true);
+    try { setRaw(await file.text()); setFilename(file.name.slice(0, 180)); } catch { setError('The file could not be read. Paste the JSON instead.'); } finally { setReading(false); }
+  }
+  function load(event: FormEvent) {
+    event.preventDefault(); setError('');
+    try { onLoad(researchContent(raw)); } catch (error) { setError((error as Error).message); }
+  }
+  return <dialog ref={dialog} aria-labelledby="research-import-title" onCancel={onClose}>
+    <button className="close" aria-label="Close research import" onClick={onClose}>×</button>
+    <p className="eyebrow">ADMIN / RESEARCH INBOX</p><h2 id="research-import-title">Bring the research.</h2>
+    <p>Load one public research entry into the editor. Nothing is saved or published yet. Check the original sources before publishing.</p>
+    <p className="fine">Public research only. Keep private customer reports, credentials and unpublished exploit details out of this feed.</p>
+    {error && <div className="notice error" role="alert">{error}</div>}
+    <form onSubmit={load}>
+      <label>JSON file <span className="fine">· up to 12 KB</span><input type="file" accept=".json,application/json" disabled={reading} onChange={event => { void read(event.target.files?.[0]); event.target.value = ''; }} /></label>
+      {filename && <p className="fine" role="status">Loaded {filename}. Review its text below.</p>}
+      <label htmlFor="research-json">Or paste one JSON entry</label><textarea id="research-json" rows={8} maxLength={maxImportBytes} value={raw} disabled={reading} onChange={event => { setRaw(event.target.value); setFilename(''); setError(''); }} required spellCheck={false} />
+      <details className="research-format"><summary>Expected JSON format</summary><p className="fine">Use original public source links. The example below is a format guide, not a real incident.</p><pre>{JSON.stringify(researchFormat, null, 2)}</pre></details>
+      <button className="primary full" disabled={reading || !raw.trim()}>{reading ? 'Reading file…' : 'Open as unsaved draft →'}</button>
+    </form>
+  </dialog>;
+}
 
 function ContentView({ content }: { content: Content }) {
   return <>
@@ -101,12 +167,14 @@ export function IncidentDesk({ csrf }: { csrf: string }) {
   const drafts = useLive<Draft[]>('/admin/incidents', true, 60_000);
   const [selected, select] = useState<Draft | null>(null);
   const [opened, setOpened] = useState(0);
-  function open(draft: Draft | null) {
+  const [importing, setImporting] = useState(false);
+  function open(draft: Draft | null, content: Content = { title: '', occurred_on: new Date().toISOString().slice(0, 10), evidence: 'reported', summary: '', takeaway: '', sources: [{ label: '', url: '' }] }) {
     setOpened(value => value + 1);
-    select(draft ?? { id: crypto.randomUUID(), revision: 0, content: { title: '', occurred_on: new Date().toISOString().slice(0, 10), evidence: 'reported', summary: '', takeaway: '', sources: [{ label: '', url: '' }] }, published_revision: null, published_at: null, updated_at: '' });
+    select(draft ?? { id: crypto.randomUUID(), revision: 0, content, published_revision: null, published_at: null, updated_at: '' });
   }
   return <>
-    <section className="section-heading fleet-heading"><div><p className="eyebrow">ADMIN / PUBLIC RESEARCH</p><h1 className="page-title">Incident desk.</h1><p className="subtle">Review a source. Explain the lesson. Publish when it’s ready.</p></div><button className="primary" onClick={() => open(null)}>New entry +</button></section>
+    <section className="section-heading fleet-heading"><div><p className="eyebrow">ADMIN / PUBLIC RESEARCH</p><h1 className="page-title">Incident desk.</h1><p className="subtle">Review a source. Explain the lesson. Publish when it’s ready.</p></div><div className="review-actions"><button className="quiet" onClick={() => setImporting(true)}>Load research JSON</button><button className="primary" onClick={() => open(null)}>New entry +</button></div></section>
+    {importing && <ResearchImport onClose={() => setImporting(false)} onLoad={content => { open(null, content); setImporting(false); }} />}
     {drafts.error && <div className="notice error" role="alert">{drafts.error} <button className="inline" onClick={drafts.refresh}>Reload drafts</button></div>}
     <div className="incident-desk-layout"><aside className="panel draft-list" aria-label="Saved incident drafts"><div className="table-toolbar"><strong>Latest drafts</strong><button className="quiet" onClick={drafts.refresh}>Refresh</button></div>{drafts.data?.length === 0 && <p className="fine">No drafts yet. Start with a public source.</p>}{drafts.data?.map(draft => <button key={draft.id} className={`review-item ${selected?.id === draft.id ? 'selected' : ''}`} onClick={() => open(draft)}><span><strong>{draft.content.title}</strong><small>{draft.published_revision === null ? 'Private draft' : draft.published_revision === draft.revision ? 'Published' : 'Unpublished changes'} · revision {draft.revision}</small></span></button>)}</aside>
       {selected ? <Editor key={`${selected.id}-${opened}`} draft={selected} csrf={csrf} onSaved={value => { select(value); drafts.refresh(); }} /> : <section className="panel empty"><h2>Keep the record useful.</h2><p>Open a draft or add an entry. Public research is separate from private customer work.</p></section>}
