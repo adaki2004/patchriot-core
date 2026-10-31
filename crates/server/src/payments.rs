@@ -16,6 +16,7 @@ use uuid::Uuid;
 use crate::{ApiError, AppState, auth};
 
 pub mod checkout;
+pub mod funding;
 
 const API_ORIGIN: &str = "https://1click.chaindefuser.com";
 const RESPONSE_LIMIT: usize = 128 * 1024;

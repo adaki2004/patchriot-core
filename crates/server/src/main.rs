@@ -57,9 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("One-use prototype invitation; expires in 24 hours. Share privately.");
         return Ok(());
     }
-    if !args.is_empty() && args != ["serve"] {
+    if !args.is_empty() && args != ["serve"] && args != ["payments-fund-once"] {
         return Err(
-            "expected serve, invite, invite-account, disable-account or payments-reconcile-once"
+            "expected serve, invite, invite-account, disable-account, payments-reconcile-once or payments-fund-once"
                 .into(),
         );
     }
@@ -72,10 +72,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|_| "PATCHRIOT_INTERNAL_KEY is required")?,
         std::env::var_os("PATCHRIOT_WEB_ROOT").map(PathBuf::from),
     )?;
+    let state = AppState::new(pool, config)?;
+    if args == ["payments-fund-once"] {
+        let result = patchriot_core::payments::funding::deliver_once(&state).await?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
     let bind: SocketAddr = std::env::var("PATCHRIOT_CORE_BIND")
         .unwrap_or_else(|_| "127.0.0.1:7410".into())
         .parse()?;
-    let app = router(AppState::new(pool, config)?);
+    let app = router(state);
     let listener = tokio::net::TcpListener::bind(bind).await?;
     eprintln!("Patchriot core listening on {bind}");
     axum::serve(listener, app)

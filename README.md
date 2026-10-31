@@ -46,7 +46,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| NEAR Intents | Saved orders, review admission, provider quotes, settlement poller and ledger; browser checkout and payouts follow |
+| NEAR Intents | Saved orders, provider quotes, settlement ledger and review activation; browser checkout and payouts follow |
 | Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
 | Incident feed | Admin drafts, research JSON import, reviewed publication, source links and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
@@ -144,7 +144,15 @@ With `DATABASE_URL` and `PATCHRIOT_1CLICK_API_KEY` in runtime secrets:
 cargo run --locked -p patchriot-core -- payments-reconcile-once
 ```
 
-This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, funding-event delivery, spending, payouts and held-fund release remain unexposed.
+With the normal core/dispatcher service configuration, deliver up to ten due funding events:
+
+```sh
+cargo run --locked -p patchriot-core -- payments-fund-once
+```
+
+The funding worker checks the saved order, invoice and ledger before contacting dispatcher. It reads review status first, so a lost activation reply can be recovered without starting another review. New activation rechecks the account and order; dispatcher rechecks the exact consented agents. Temporary failures retry on a later invocation. Closed, conflicting or unresolved cases require review and retain their recorded funds. Activation is not proof of completed service or permission to refund; cancellation during an in-flight activation is flagged for reconciliation.
+
+The web server does not start either worker. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, spending, payouts and held-fund release remain unexposed. Neither worker has a treasury signing key.
 
 ## Verify it
 

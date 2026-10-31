@@ -184,11 +184,21 @@ async fn claim(
 }
 
 fn matches_admission(view: &ReviewView, terms: &CheckoutTerms, input: &AdmitWebsiteReview) -> bool {
+    matches_review(view, terms, input.payment_expires_at)
+        && view.state == "awaiting_payment"
+        && view
+            .payment
+            .as_ref()
+            .is_some_and(|payment| payment.invoice_id.is_none() && payment.funded_at.is_none())
+}
+
+/// Funding verifies the same immutable request even after the reservation's
+/// deadline, because an earlier activation reply may have been lost.
+pub(super) fn matches_review(view: &ReviewView, terms: &CheckoutTerms, expires: i64) -> bool {
     !view.id.is_nil()
         && view.request_id == terms.payment.request_id
         && view.scenario == FixtureScenario::WebsiteSnapshotV1
         && view.mode == "website_agent"
-        && view.state == "awaiting_payment"
         && view.website.as_ref().is_some_and(|context| {
             context.site_check_id == terms.site_check_id
                 && context.snapshot_sha256 == terms.consent.snapshot_sha256
@@ -200,10 +210,9 @@ fn matches_admission(view: &ReviewView, terms: &CheckoutTerms, input: &AdmitWebs
                     == terms.consent.device_ids
         })
         && view.payment.as_ref().is_some_and(|payment| {
-            payment.price == input.price
-                && payment.expires_at == input.payment_expires_at
-                && payment.invoice_id.is_none()
-                && payment.funded_at.is_none()
+            payment.price.asset == terms.payment.destination_asset
+                && payment.price.amount == terms.payment.required_amount.to_string()
+                && payment.expires_at == expires
         })
 }
 

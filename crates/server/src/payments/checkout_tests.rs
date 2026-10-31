@@ -4,6 +4,9 @@ use patchriot_protocol::website_reviews::CreateWebsiteReview;
 use std::sync::atomic::AtomicBool;
 use tokio::sync::{Notify, Semaphore};
 
+#[path = "funding_tests.rs"]
+mod funding;
+
 fn terms(db: &TestDb) -> (CheckoutTerms, QuoteResponse) {
     let (payment, quote) = db.quote();
     let consent = CreateWebsiteReview {
