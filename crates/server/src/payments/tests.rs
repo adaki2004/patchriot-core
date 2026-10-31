@@ -1,5 +1,7 @@
 use super::*;
 
+#[path = "browser_checkout_tests.rs"]
+mod browser_checkout;
 #[path = "checkout_tests.rs"]
 mod checkout;
 use axum::{

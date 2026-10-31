@@ -46,7 +46,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| NEAR Intents | Private order history, cancellation, provider quotes, settlement ledger and review activation; browser checkout and payouts follow |
+| NEAR Intents | Session-owned checkout API, private orders, settlement ledger and review activation; payment UI and payouts follow |
 | Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
 | Incident feed | Admin drafts, research JSON import, reviewed publication, source links and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
@@ -164,7 +164,33 @@ cargo run --locked -p patchriot-core -- payments-cancel-once
 
 `POST /api/orders/:id/cancel` takes `{}` with the owner's session, same-origin check and CSRF token. It saves cancellation intent; the separate worker confirms the stop. The UI keeps pending, confirmed and already-finished outcomes distinct. Funds needing review remain visible, and a failed refresh preserves the last status with an error.
 
-The web server does not start payment workers. Run reconciliation, funding and cancellation delivery periodically before enabling checkout. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, spending, payouts and held-fund release remain unexposed. None has a treasury signing key.
+### Enable the checkout API
+
+`PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `closed` (no new website reviews or deposit instructions), or `paid`. Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Paid mode also blocks the free website-review route. Existing order reads and payment workers remain available when new checkout is closed.
+
+The configuration fixes the service price, recipient and allowed input tokens. Copy exact asset IDs, decimals and chain names from the [supported-token catalog](https://docs.near-intents.org/api-reference/oneclick/get-supported-tokens), verify the treasury destination, and replace every placeholder below. This is a format example, not a usable payment configuration.
+
+```json
+{
+  "destination": { "asset_id": "nep141:<catalog-id>", "symbol": "USDC", "decimals": 6, "blockchain": "base" },
+  "amount": "1000000",
+  "recipient": "<treasury-address>",
+  "recipient_type": "DESTINATION_CHAIN",
+  "inputs": [{ "asset_id": "nep141:<catalog-id>", "symbol": "USDC", "decimals": 6, "blockchain": "base" }]
+}
+```
+
+The amount is in destination-token smallest units. `recipient_type` is `DESTINATION_CHAIN` or `INTENTS`; the latter uses a NEAR account. This first checkout supports NEAR and the configured EVM networks (`eth`, `base`, `arb`, `op`, `pol`, `bsc`, `avax`), up to eight input tokens. It validates address format, not control of an address. Quotes have a five-minute payment window and 1% slippage tolerance. Restart core to change configuration; existing orders retain their original terms and token metadata.
+
+| Session-owned endpoint | Purpose |
+| --- | --- |
+| `GET /api/checkout` | Read the mode and current offer: price, tokens and offer ID |
+| `POST /api/site-checks/:id/checkout` | Submit `consent` (the existing website-review consent), `offer_id`, `origin_asset` and `refund_address`; receive saved deposit instructions |
+| `POST /api/orders/:id/quote` | Send `{}` to recheck an existing order and retrieve its original instructions |
+
+Writes require the owner's session, same-origin check and CSRF token. The browser cannot choose the price, treasury recipient or account. Changed consent or payment details need a new request ID; retries preserve the original deadline. Creation is limited to five orders per account per 15 minutes, with ten seconds between retries. A quote is not proof of payment or permission to assign work.
+
+The web server does not start payment workers. Schedule reconciliation, funding and cancellation delivery before enabling checkout. `GET /api/payments` exposes the signed-in account's recorded totals; `checkout_enabled` reflects paid mode. **Before accepting live funds, establish a refund procedure and test the complete flow with synthetic payments.** Payouts and held-fund release remain unexposed; none of these services has a treasury signing key. The payment UI is a separate next step.
 
 ## Verify it
 

@@ -15,6 +15,8 @@ pub struct CheckoutTerms {
     pub site_check_id: Uuid,
     pub consent: CreateWebsiteReview,
     pub payment: InvoiceTerms,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<access::PaymentPresentation>,
 }
 
 /// Deposit instructions are returned only after both the invoice and its order
@@ -83,7 +85,7 @@ struct Order {
     operation_until: Option<DateTime<Utc>>,
 }
 
-fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, CheckoutError> {
+pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, CheckoutError> {
     let deadline = validate_quote_request(&terms.payment, Utc::now())?;
     if terms.site_check_id.is_nil()
         || terms.payment.account_id.is_nil()
@@ -313,6 +315,9 @@ async fn prepare_claimed(
             quote: invoice.quote,
         };
         validate_quote(&terms.payment, &payment)?;
+        if let Some(presentation) = &terms.presentation {
+            presentation.validate_quote(&terms.payment, &payment)?;
+        }
         clear_claim(&mut tx, order.id).await?;
         tx.commit().await?;
         return Ok(CheckoutQuote {
@@ -324,6 +329,9 @@ async fn prepare_claimed(
     }
     tx.commit().await?;
     let payment = provider.quote(&terms.payment).await?;
+    if let Some(presentation) = &terms.presentation {
+        presentation.validate_quote(&terms.payment, &payment)?;
+    }
     let mut tx = state.pool.begin().await?;
     current(&mut tx, order.id, token).await?;
     let invoice_id = record_quote_in(&mut tx, &terms.payment, &payment).await?;

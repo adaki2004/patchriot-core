@@ -25,6 +25,7 @@ async fn seed(test: &TestApp, account: Uuid) -> (Uuid, Uuid, Uuid) {
     };
     let invoice = record_quote(&test.pool, &payment, &quote).await.unwrap();
     let terms = CheckoutTerms {
+        presentation: None,
         site_check_id: Uuid::new_v4(),
         consent: CreateWebsiteReview {
             request_id: request,

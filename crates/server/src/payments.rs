@@ -1,5 +1,5 @@
 //! Exact-output 1Click quotes and settlement accounting. Browser access is
-//! limited to private status and cancellation. Quotes use server-approved terms,
+//! limited to session-owned checkout, status and cancellation. Quotes use server-approved terms,
 //! never JSON supplied by a requester, relay, webhook or agent.
 //!
 //! A provider SUCCESS is trusted only after binding it to the saved quote. It is
@@ -15,6 +15,8 @@ use uuid::Uuid;
 
 use crate::{ApiError, AppState, auth};
 
+pub mod access;
+pub(crate) mod browser_checkout;
 pub mod cancellation;
 pub mod checkout;
 pub mod funding;
@@ -562,7 +564,7 @@ pub(crate) async fn summary(
     let totals: Vec<Total> = sqlx::query_as("SELECT asset, credit, sum(amount)::text AS amount FROM payment_ledger WHERE account_id = $1 GROUP BY asset, credit ORDER BY asset, credit")
         .bind(account.id).fetch_all(&state.pool).await?;
     Ok(Json(
-        serde_json::json!({"checkout_enabled":false, "totals": totals}),
+        serde_json::json!({"checkout_enabled":state.review_access.is_paid(), "totals": totals}),
     ))
 }
 

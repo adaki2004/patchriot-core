@@ -177,6 +177,21 @@ pub async fn create_review(
     Json(input): Json<CreateWebsiteReview>,
 ) -> Result<Json<ReviewView>, ApiError> {
     let session = auth::require_write(&headers, &state).await?;
+    match state.review_access {
+        crate::payments::access::ReviewAccess::FreePilot => {}
+        crate::payments::access::ReviewAccess::Paid(_) => {
+            return Err(ApiError::new(
+                StatusCode::PAYMENT_REQUIRED,
+                "payment_required",
+            ));
+        }
+        crate::payments::access::ReviewAccess::Closed => {
+            return Err(ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "checkout_unavailable",
+            ));
+        }
+    }
     gateway::request(
         &state,
         Method::POST,

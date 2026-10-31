@@ -30,6 +30,7 @@ pub struct AppState {
     pub pool: PgPool,
     pub config: Arc<Config>,
     pub client: reqwest::Client,
+    pub(crate) review_access: payments::access::ReviewAccess,
 }
 
 pub struct Config {
@@ -106,7 +107,13 @@ impl AppState {
             pool,
             config: Arc::new(config),
             client,
+            review_access: payments::access::ReviewAccess::default(),
         })
+    }
+
+    pub fn with_review_access(mut self, access: payments::access::ReviewAccess) -> Self {
+        self.review_access = access;
+        self
     }
 }
 
@@ -153,6 +160,15 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/session", get(auth::session))
         .route("/api/payments", get(payments::summary))
+        .route("/api/checkout", get(payments::access::settings))
+        .route(
+            "/api/site-checks/{id}/checkout",
+            post(payments::browser_checkout::create),
+        )
+        .route(
+            "/api/orders/{id}/quote",
+            post(payments::browser_checkout::resume),
+        )
         .route("/api/orders", get(payments::orders::list))
         .route("/api/orders/{id}", get(payments::orders::detail))
         .route("/api/orders/{id}/cancel", post(payments::orders::cancel))

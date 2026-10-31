@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|_| "PATCHRIOT_INTERNAL_KEY is required")?,
         std::env::var_os("PATCHRIOT_WEB_ROOT").map(PathBuf::from),
     )?;
-    let state = AppState::new(pool, config)?;
+    let mut state = AppState::new(pool, config)?;
     if args == ["payments-fund-once"] {
         let result = patchriot_core::payments::funding::deliver_once(&state).await?;
         println!("{}", serde_json::to_string(&result)?);
@@ -87,6 +87,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string(&result)?);
         return Ok(());
     }
+    let mode = match std::env::var("PATCHRIOT_REVIEW_MODE") {
+        Ok(mode) => mode,
+        Err(std::env::VarError::NotPresent) => "pilot".into(),
+        Err(_) => return Err("invalid review mode".into()),
+    };
+    let policy = std::env::var_os("PATCHRIOT_CHECKOUT_CONFIG")
+        .map(|path| {
+            use std::io::Read;
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)
+                .map_err(|_| "unable to read checkout configuration")?
+                .take(16 * 1024 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|_| "unable to read checkout configuration")?;
+            Ok::<_, &str>(bytes)
+        })
+        .transpose()?;
+    let key = std::env::var("PATCHRIOT_1CLICK_API_KEY").ok();
+    state = state.with_review_access(patchriot_core::payments::access::ReviewAccess::configured(
+        &mode,
+        policy.as_deref(),
+        key.as_deref(),
+    )?);
     let bind: SocketAddr = std::env::var("PATCHRIOT_CORE_BIND")
         .unwrap_or_else(|_| "127.0.0.1:7410".into())
         .parse()?;
