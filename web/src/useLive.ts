@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 
 /** Keep the last successful value during an outage, with an explicit error. */
-export function useLive<T>(path: string, enabled = true) {
+export function useLive<T>(path: string, enabled = true, interval = 10_000) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState('');
   const [updated, setUpdated] = useState<Date | null>(null);
@@ -23,8 +23,8 @@ export function useLive<T>(path: string, enabled = true) {
       } finally { pending = false; }
     }
     void update();
-    const timer = window.setInterval(() => { if (!document.hidden) void update(); }, 10_000);
+    const timer = window.setInterval(() => { if (!document.hidden) void update(); }, interval);
     return () => { controller.abort(); window.clearInterval(timer); };
-  }, [path, enabled, revision]);
+  }, [path, enabled, revision, interval]);
   return { data, error, updated, refresh };
 }

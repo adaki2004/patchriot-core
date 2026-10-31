@@ -5,7 +5,7 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Prototype:** pairing, approval, a browser dashboard and a three-role fixture review work today. The fixture is a known example; real agent assessments and checkout are not enabled.
+**Prototype:** pairing, approval, a browser dashboard, a public incident log and a three-role fixture review work today. The fixture is a known example; real agent assessments and checkout are not enabled.
 
 ## What we're building
 
@@ -48,7 +48,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Isolation and agents | Owned process controls and separate Linux sandbox diagnostics; real agent integration follows |
 | NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
 | Website checks | One-off owned-site checks, then approved baselines and recurring checks |
-| Incident feed | Planned sourced summaries, separate from customer findings |
+| Incident feed | Admin drafts, reviewed publication, source links and keyboard/touch browsing; research-job imports follow |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
 ## Run locally
@@ -86,6 +86,12 @@ In **Relay setup**, pair three distinct devices and approve them under **Fleet &
 
 Core uses the `patchriot_core` schema; dispatcher uses the dedicated database's public schema. Configure separate database roles before public deployment. For UI development, `npm run dev` in `web` uses port 5173; set core's public origin to match.
 
+## The watch log
+
+**Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries with touch or ↑/↓ keys.
+
+Saving an edit keeps the previous public version unchanged. Publish the correction explicitly, or withdraw the entry; the private draft and edit history remain. Concurrent edits are rejected rather than overwritten. The feed never imports customer reports, fetches source links or starts paid research automatically. Research-job results can later feed this draft step. An evidence label describes the source's claim, not independent verification by Patchriot.
+
 ## Payments: record funds before starting work
 
 The planned checkout uses **NEAR Intents / 1Click** to fund an admitted review. The implemented [payment module](crates/server/src/payments.rs) checks the saved quote against the provider's settlement response. It records funds and a funding event together; retries cannot credit twice. Late or mismatched amounts stay held for review.
@@ -114,7 +120,7 @@ npm test
 npm run build
 ```
 
-The Rust checks cover sessions, isolation, signature boundaries and payment retries; browser tests cover desktop/mobile behavior with explicit API fixtures. For real local services and relays:
+The Rust checks cover sessions, isolation, signature boundaries, payment retries and incident publication. Browser tests cover desktop/mobile behavior with explicit API fixtures. For real local services and relays:
 
 | Command, from core | Checks |
 | --- | --- |

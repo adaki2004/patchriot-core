@@ -4,6 +4,7 @@
 
 mod auth;
 mod gateway;
+mod incidents;
 pub mod payments;
 
 use axum::{
@@ -142,6 +143,9 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/session", get(auth::session))
         .route("/api/payments", get(payments::summary))
+        .route("/api/incidents", get(incidents::list))
+        .route("/api/admin/incidents", get(incidents::drafts))
+        .route("/api/admin/incidents/{id}", post(incidents::edit))
         .route("/api/auth/redeem", post(auth::redeem))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/fleet", get(gateway::fleet))

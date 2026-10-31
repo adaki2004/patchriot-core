@@ -32,7 +32,10 @@ const messages: Record<string, string> = {
   not_found: 'No matching pairing or device was found. Check the code and try again.',
   invalid_request: 'Check the pairing code and profile details, then try again.',
   action_not_allowed: 'Your account cannot perform this action.',
-  admin_required: 'Only an administrator can approve a relay.',
+  admin_required: 'Only an administrator can perform this action.',
+  invalid_incident: 'Check the text, date and public source links. Use HTTPS links without credentials or query parameters.',
+  sources_review_required: 'Review the saved draft and its sources before publishing.',
+  incident_changed: 'This entry changed or the previous request already succeeded. Refresh the drafts, then open the saved entry before editing again.',
   try_again_later: 'Too many requests. Wait a moment before trying again.',
 };
 

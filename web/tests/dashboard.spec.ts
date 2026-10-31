@@ -8,6 +8,7 @@ async function setup(page: Page, signedIn = false) {
   await page.route('**/api/session', route => route.fulfill({ json: { account: signedIn ? account : null, csrf_token: signedIn ? 'test-csrf' : null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: fleet }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
+  await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
 }
 
 test('shows real fleet dimensions, prototype scope and usable mobile layout', async ({ page }) => {

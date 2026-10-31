@@ -144,6 +144,324 @@ impl TestApp {
     }
 }
 
+fn incident_content(title: &str) -> Value {
+    json!({"title":title,"occurred_on":"2025-01-01","evidence":"reported",
+        "summary":"A public source reports a dependency incident. This is an explicit test fixture.",
+        "takeaway":"Check the affected version before drawing a conclusion.",
+        "sources":[{"label":"Public advisory","url":"https://github.com/advisories/GHSA-example"}]})
+}
+
+#[tokio::test]
+async fn incident_drafts_stay_private_and_edits_do_not_replace_the_published_snapshot() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (cookie, session) = test.login("admin").await;
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    let id = Uuid::new_v4();
+    let path = format!("/api/admin/incidents/{id}");
+    let (status, _, draft) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"save","revision":0,"content":incident_content("Private draft")}),
+            &headers,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(draft["revision"], 1);
+    assert_eq!(
+        test.request("GET", "/api/incidents", Value::Null, &[])
+            .await
+            .2,
+        json!([])
+    );
+    let (_, _, admin_list) = test
+        .request("GET", "/api/admin/incidents", Value::Null, &headers)
+        .await;
+    assert_eq!(admin_list[0]["content"]["title"], "Private draft");
+    let (status, _, _) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"publish","revision":1,"sources_reviewed":false}),
+            &headers,
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (_, _, published) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"publish","revision":1,"sources_reviewed":true}),
+            &headers,
+        )
+        .await;
+    assert_eq!(published["published_revision"], 2);
+    let public = test
+        .request("GET", "/api/incidents", Value::Null, &[])
+        .await
+        .2;
+    assert_eq!(public[0]["content"]["title"], "Private draft");
+    assert!(public[0].get("actor_id").is_none());
+    assert!(public[0].get("updated_at").is_none());
+
+    let (status, _, updated) = test.request("POST", &path, json!({"action":"save","revision":2,"content":incident_content("Unapproved correction")}), &headers).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["revision"], 3);
+    assert_eq!(updated["published_revision"], 2);
+    assert_eq!(
+        test.request("GET", "/api/incidents", Value::Null, &[])
+            .await
+            .2,
+        public
+    );
+    let (status, _, _) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"publish","revision":2,"sources_reviewed":true}),
+            &headers,
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let (status, _, _) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"publish","revision":3,"sources_reviewed":true}),
+            &headers,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        test.request("GET", "/api/incidents", Value::Null, &[])
+            .await
+            .2[0]["content"]["title"],
+        "Unapproved correction"
+    );
+
+    let (status, _, _) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"withdraw","revision":4}),
+            &headers,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        test.request("GET", "/api/incidents", Value::Null, &[])
+            .await
+            .2,
+        json!([])
+    );
+    let edits: Vec<(i32, String)> = sqlx::query_as(
+        "SELECT revision, action FROM incident_edits WHERE incident_id = $1 ORDER BY revision",
+    )
+    .bind(id)
+    .fetch_all(&test.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        edits,
+        vec![
+            (1, "draft_saved".into()),
+            (2, "published".into()),
+            (3, "draft_saved".into()),
+            (4, "published".into()),
+            (5, "withdrawn".into())
+        ]
+    );
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn incident_authoring_requires_admin_origin_csrf_and_handles_concurrent_edits() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (admin, session) = test.login("admin").await;
+    let (member, member_session) = test.login("member").await;
+    let headers = [
+        ("cookie", admin.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    let id = Uuid::new_v4();
+    let path = format!("/api/admin/incidents/{id}");
+    let save = json!({"action":"save","revision":0,"content":incident_content("One incident")});
+    assert_eq!(
+        test.request("GET", "/api/admin/incidents", Value::Null, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        test.request(
+            "GET",
+            "/api/admin/incidents",
+            Value::Null,
+            &[("cookie", &member)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            save.clone(),
+            &[
+                ("cookie", &member),
+                ("origin", ORIGIN),
+                (
+                    "x-csrf-token",
+                    member_session["csrf_token"].as_str().unwrap()
+                ),
+                ("x-patchriot-role", "admin")
+            ]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            save.clone(),
+            &[("cookie", &admin), ("origin", ORIGIN)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            save.clone(),
+            &[
+                ("cookie", &admin),
+                ("origin", "https://wrong.example"),
+                ("x-csrf-token", session["csrf_token"].as_str().unwrap())
+            ]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+
+    let (first, second) = tokio::join!(
+        test.request("POST", &path, save.clone(), &headers),
+        test.request("POST", &path, save, &headers)
+    );
+    assert_eq!(
+        [first.0, second.0]
+            .iter()
+            .filter(|&&s| s == StatusCode::OK)
+            .count(),
+        1
+    );
+    assert_eq!(
+        [first.0, second.0]
+            .iter()
+            .filter(|&&s| s == StatusCode::CONFLICT)
+            .count(),
+        1
+    );
+    let save = json!({"action":"save","revision":1,"content":incident_content("Edited once")});
+    let (first, second) = tokio::join!(
+        test.request("POST", &path, save.clone(), &headers),
+        test.request("POST", &path, save, &headers)
+    );
+    assert_eq!(
+        [first.0, second.0]
+            .iter()
+            .filter(|&&s| s == StatusCode::OK)
+            .count(),
+        1
+    );
+    assert_eq!(
+        [first.0, second.0]
+            .iter()
+            .filter(|&&s| s == StatusCode::CONFLICT)
+            .count(),
+        1
+    );
+    let (records, edits): (i64, i64) = sqlx::query_as(
+        "SELECT (SELECT count(*) FROM incidents), (SELECT count(*) FROM incident_edits)",
+    )
+    .fetch_one(&test.pool)
+    .await
+    .unwrap();
+    assert_eq!((records, edits), (1, 2));
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn incident_sources_reject_executable_private_and_secret_bearing_links() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (cookie, session) = test.login("admin").await;
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    let path = format!("/api/admin/incidents/{}", Uuid::new_v4());
+    for url in [
+        "javascript:alert(1)",
+        "data:text/html,unsafe",
+        "http://public.example/advisory",
+        "https://user:secret@public.example/",
+        "https://public.example/?token=secret",
+        "https://127.0.0.1/",
+        "https://[::1]/",
+        "https://host.local/advisory",
+        "https://localhost/",
+        "https://public.example:8443/",
+        "https://public.example\n/path",
+    ] {
+        let mut content = incident_content("Invalid source");
+        content["sources"][0]["url"] = url.into();
+        assert_eq!(
+            test.request(
+                "POST",
+                &path,
+                json!({"action":"save","revision":0,"content":content}),
+                &headers
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST,
+            "{url}"
+        );
+    }
+    for field in ["title", "summary", "takeaway"] {
+        let mut content = incident_content("Empty text");
+        content[field] = " ".into();
+        assert_eq!(
+            test.request(
+                "POST",
+                &path,
+                json!({"action":"save","revision":0,"content":content}),
+                &headers
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM incidents")
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    test.finish().await;
+}
+
 #[tokio::test]
 async fn payment_totals_are_private_and_do_not_enable_checkout() {
     let test = TestApp::new("http://127.0.0.1:1").await;

@@ -6,6 +6,7 @@ import type { Account, Device, Fleet, Session } from './api';
 import './style.css';
 import { useLive } from './useLive';
 import { Reviews } from './Reviews';
+import { IncidentDesk, IncidentLog } from './Incidents';
 
 function Mark() {
   return <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M3 3h26v17L16 33 3 20V3Z" fill="none" stroke="currentColor" strokeWidth="3" /><path d="m10 19 5-9h7l-5 7h6L12 28l3-9h-5Z" fill="currentColor" /></svg>;
@@ -117,7 +118,7 @@ function App() {
   const [sessionError, setSessionError] = useState('');
   const [login, setLogin] = useState(false);
   const [pairing, setPairing] = useState(false);
-  const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'guide'>('overview');
+  const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'guide' | 'incidents' | 'incident-desk'>('overview');
   const [decision, setDecision] = useState<{ device: Device; action: 'approve' | 'revoke' } | null>(null);
   const [notice, setNotice] = useState('');
   const fleet = useLive<Fleet>('/fleet');
@@ -141,7 +142,7 @@ function App() {
       <div className="header-right"><span className="version">v0.0.1 / PRIVATE ALPHA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button>}</div>
     </header>
     <main id="main">
-      <nav aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
+      <nav aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button>{isAdmin && <button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
       {sessionError && <Notice error>{sessionError} <button className="inline" onClick={() => void loadSession().catch(() => {})}>Retry</button></Notice>}
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
       {view === 'overview' && <>
@@ -154,6 +155,7 @@ function App() {
         <section className="section-heading"><div><p className="eyebrow">EVIDENCE OVER ASSURANCES</p><h2>Find it. Reproduce it. Challenge it.</h2></div><span className="subtle">The review workflow we’re building</span></section>
         <div className="roles"><article><span className="role-number">01 / INVESTIGATE</span><h3>Follow the weak link.</h3><p>Inspect authorized code and websites. Turn a suspicion into a precise claim with evidence.</p></article><article><span className="role-number">02 / REPRODUCE</span><h3>Make the finding stand up.</h3><p>Run the same conditions against the same target. A confident answer is not a reproduction.</p></article><article><span className="role-number">03 / CHALLENGE</span><h3>Check the fix, too.</h3><p>Question the assumptions. Test the proposed patch and keep disagreements in the report.</p></article></div>
         <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Onboarding and fixture reviews.</strong> Pair a relay, approve it and run the owned example through three review roles. Customer assessments and paid reviews are not enabled.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
+        <IncidentLog />
       </>}
       {view === 'devices' && account && <>
         <section className="section-heading fleet-heading"><div><p className="eyebrow">{isAdmin ? 'OPERATOR CONSOLE' : 'YOUR CONTRIBUTION'}</p><h1 className="page-title">{isAdmin ? 'Fleet & approvals' : 'Your relays'}</h1><p className="subtle">Pairing proves a device key. Approval is a separate decision.</p></div><button className="primary" onClick={() => setPairing(true)}>Pair a relay +</button></section>
@@ -165,6 +167,8 @@ function App() {
       </>}
       {view === 'reviews' && account && session?.csrf_token && <Reviews csrf={session.csrf_token} />}
       {view === 'guide' && <Guide />}
+      {view === 'incidents' && <IncidentLog />}
+      {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}
     </main>
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>
     {login && <Login onLogin={loadSession} onClose={() => setLogin(false)} />}
