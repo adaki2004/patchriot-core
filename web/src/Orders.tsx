@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
 import { ReviewDetail } from './Reviews';
+import { DepositInstructions, checkedDeposit, useNow } from './Checkout';
+import type { CheckoutSettings, Deposit } from './Checkout';
 
 type Order = {
   id: string; review_id: string | null; state: string;
@@ -26,22 +28,38 @@ function paymentLabel(order: Order) {
   return ({ pending: 'No payment confirmed', processing: 'Transfer being processed', incomplete: 'Transfer incomplete', expired: 'Payment window ended', failed: 'Transfer failed', refunded: 'Provider reports refund', settled: 'Funds recorded', held: 'Funds held for review', needs_review: 'Payment needs review' } as Record<string, string>)[order.payment.state] ?? 'Payment needs review';
 }
 
-function OrderDetail({ id, csrf, onClose, onChange }: { id: string; csrf: string; onClose: () => void; onChange: () => void }) {
+function OrderDetail({ id, csrf, initialQuote, paymentEnabled, onClose, onChange }: { id: string; csrf: string; initialQuote?: Deposit | null; paymentEnabled: boolean; onClose: () => void; onChange: () => void }) {
   const panel = useRef<HTMLElement>(null);
   const detail = useLive<Order>(`/orders/${id}`);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [requested, setRequested] = useState(false);
   const [report, setReport] = useState(false);
+  const [quote, setQuote] = useState<Deposit | null>(initialQuote ?? null);
+  const [sent, setSent] = useState(false);
+  const now = useNow();
   const order = detail.data;
+  const canPay = paymentEnabled && order && !requested && !sent && !order.cancellation && !order.requires_attention && !detail.error && !error && !busy
+    && ['preparing', 'awaiting_payment'].includes(order.state) && (!order.payment || order.payment.state === 'pending')
+    && Date.parse(order.expires_at) > now && (!order.payment || Date.parse(order.payment.deadline) > now);
+  const currentQuote = canPay && quote && quote.order_id === id && quote.review_id === order.review_id
+    && quote.output.token.asset_id === order.price.asset && quote.output.amount === order.price.amount && Date.parse(quote.expires_at) > now ? quote : null;
   useEffect(() => { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView({ block: 'start' }); }, []);
   useEffect(() => { if (order) onChange(); }, [order?.state, order?.payment?.state, order?.cancellation?.confirmed_at, order?.requires_attention, onChange]);
   async function cancel() {
     if (!window.confirm('Request cancellation? This closes checkout and asks the agents to stop. Work already done and transfers already sent cannot be undone. This does not issue a refund.')) return;
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setQuote(null);
     try {
       await write(`/orders/${id}/cancel`, csrf, {});
       setRequested(true); detail.refresh(); onChange();
+    } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
+  }
+  async function resume() {
+    setBusy(true); setError(''); setQuote(null);
+    try {
+      const value = checkedDeposit(await write<Deposit>(`/orders/${id}/quote`, csrf, {}));
+      if (value.order_id !== id) throw new Error('The quote does not match this order. Do not send a transfer.');
+      setQuote(value); detail.refresh();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
   return <>
@@ -52,9 +70,13 @@ function OrderDetail({ id, csrf, onClose, onChange }: { id: string; csrf: string
         <div className="order-facts"><div><span>Payment</span><strong>{paymentLabel(order)}</strong></div><div><span>Created</span><strong>{new Date(order.created_at).toLocaleString()}</strong></div></div>
         {(requested || order.cancellation) && <div className="notice" role="status">{order.cancellation?.confirmed_at ? order.cancellation.review_state === 'cancelled' ? 'The review has stopped. Cancellation does not return funds.' : 'The review had already ended when cancellation was checked. Its actual result is preserved.' : 'Your cancellation is saved. Confirmation that the review stopped is still pending.'} Do not send another payment.</div>}
         {order.requires_attention && <div className="notice error" role="status">This order needs a manual check. Any recorded funds remain recorded; no refund is issued by cancelling work.</div>}
-        {!order.cancellation && !requested && <p className="fine">{order.state === 'activated' ? 'Payment authorized this review to start. Open the report for its current progress and result.' : 'This history is not a payment instruction. A saved or expired order is not permission to send a new transfer.'}</p>}
+        {!order.cancellation && !requested && <p className="fine">{order.state === 'activated' ? 'Payment authorized this review to start. Open the report for its current progress and result.' : 'Only use current payment instructions. A saved or expired order is not permission to send a new transfer.'}</p>}
+        {sent && <p className="notice" role="status">Waiting for confirmation. Your click does not confirm payment; the server checks settlement. Do not send another transfer.</p>}
+        {currentQuote && <DepositInstructions key={currentQuote.invoice_id} quote={currentQuote} onSent={() => { setSent(true); setQuote(null); detail.refresh(); }} />}
+        {!currentQuote && quote && <p className="fine">Payment instructions are hidden until the order is confirmed payable. Do not use a previous address or quote.</p>}
         <div className="review-actions">
           <button className="quiet" onClick={() => { setError(''); detail.refresh(); }}>Refresh order ↻</button>
+          {canPay && !currentQuote && <button className="primary" onClick={() => void resume()}>{order.state === 'preparing' ? 'Resume checkout →' : 'Show current payment instructions →'}</button>}
           {order.review_id && <button className="text-button" onClick={() => setReport(true)}>Open review report →</button>}
           {order.can_cancel && !requested && <button className="quiet" onClick={() => void cancel()} disabled={busy || !!detail.error}>{busy ? 'Saving request…' : 'Request cancellation'}</button>}
         </div>
@@ -71,18 +93,24 @@ function OrderDetail({ id, csrf, onClose, onChange }: { id: string; csrf: string
   </>;
 }
 
-export function Orders({ csrf }: { csrf: string }) {
+export function Orders({ csrf, initialQuote, onClearQuote }: { csrf: string; initialQuote?: Deposit | null; onClearQuote: () => void }) {
   const orders = useLive<Order[]>('/orders');
-  const [selected, setSelected] = useState<string | null>(null);
+  const checkout = useLive<CheckoutSettings>('/checkout');
+  const [selected, setSelected] = useState<string | null>(initialQuote?.order_id ?? null);
+  // The fresh response is consumed once. Returning to Orders must recheck the
+  // saved quote explicitly, especially after the customer says they sent it.
+  useEffect(() => { if (initialQuote) onClearQuote(); }, [initialQuote, onClearQuote]);
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your orders</h1><p className="subtle">Track payment and work separately. A received payment is not a completed review.</p></div><button className="quiet" onClick={orders.refresh}>Refresh orders ↻</button></section>
     {orders.error && <div className="notice error" role="alert">{orders.error}<br />The last saved list remains visible; it may be out of date.</div>}
+    {checkout.error && <div className="notice error" role="alert">Payment instructions are unavailable. Your saved order records remain visible.</div>}
+    {checkout.data?.mode === 'closed' && <p className="notice">New payments are paused. Do not send a transfer using an earlier quote.</p>}
     <section className="panel" aria-label="Order history">
       {orders.data === null && <div className="empty"><p>{orders.error ? 'Order history could not be loaded.' : 'Loading orders…'}</p></div>}
-      {orders.data?.length === 0 && <div className="empty"><h2>No paid orders yet.</h2><p>The current pilot reviews are free. Paid checkout is not enabled.</p></div>}
+      {orders.data?.length === 0 && <div className="empty"><h2>No paid orders yet.</h2><p>{checkout.data?.mode === 'pilot' ? 'The current pilot reviews are free. Paid checkout is not enabled.' : 'Website review orders will appear here after checkout is prepared.'}</p></div>}
       {orders.data?.map(order => <button key={order.id} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => setSelected(order.id)}><span><strong>Website review · {order.id.slice(0, 8)}</strong><small>{new Date(order.created_at).toLocaleString()} · {paymentLabel(order)}</small></span><span className={`badge ${order.requires_attention ? 'revoked' : 'pending'}`}>{orderLabel(order)}</span></button>)}
     </section>
     {orders.data?.length === 50 && <p className="fine">Showing your 50 most recent orders.</p>}
-    {selected && <OrderDetail key={selected} id={selected} csrf={csrf} onClose={() => setSelected(null)} onChange={orders.refresh} />}
+    {selected && <OrderDetail key={selected} id={selected} csrf={csrf} initialQuote={initialQuote?.order_id === selected ? initialQuote : null} paymentEnabled={checkout.data?.mode === 'paid' && !checkout.error} onClose={() => { setSelected(null); onClearQuote(); }} onChange={orders.refresh} />}
   </>;
 }

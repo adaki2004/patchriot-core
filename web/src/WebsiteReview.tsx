@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
+import { PaymentFields, checkedDeposit, tokenAmount } from './Checkout';
+import type { CheckoutSettings, Deposit } from './Checkout';
 
 export type WebsiteReviewer = { device_id: string; operator_id: string; operator_name: string; device_name: string; declared_model: string; compute_group: string };
 export type WebsiteContext = { site_check_id: string; snapshot_sha256: string; reviewers: WebsiteReviewer[] };
@@ -14,42 +16,64 @@ export type WebsiteResult = {
 };
 const roles = ['Investigator', 'Reproducer', 'Challenger'];
 
-export function WebsiteReviewSetup({ siteId, csrf, onCreated, onClose }: { siteId: string; csrf: string; onCreated: (id: string) => void; onClose: () => void }) {
+export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClose }: { siteId: string; csrf: string; onCreated: (id: string) => void; onCheckout: (quote: Deposit) => void; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const requestId = useRef(crypto.randomUUID());
   const plan = useLive<Plan>(`/site-checks/${siteId}/review-plan`);
+  const checkout = useLive<CheckoutSettings>('/checkout');
+  const [asset, setAsset] = useState('');
+  const [refund, setRefund] = useState('');
+  const [paymentStep, setPaymentStep] = useState(false);
+  const [accepted, setAccepted] = useState(false);
   const [selected, setSelected] = useState(['', '', '']);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const reviewers = selected.map(id => plan.data?.candidates.find(device => device.device_id === id));
   const ready = reviewers.every(Boolean) && new Set(selected).size === 3 && !plan.error;
+  const mode = checkout.data?.mode;
+  const offer = mode === 'paid' ? checkout.data?.offer : null;
+  const paymentReady = !checkout.error && (mode === 'pilot' || !!(offer && tokenAmount(offer.price.amount, offer.destination) && (!paymentStep || offer.inputs.some(token => token.asset_id === asset) && refund.trim())));
   const operators = new Set(reviewers.flatMap(device => device ? [device.operator_id] : []));
   const groups = new Set(reviewers.flatMap(device => device ? [`${device.operator_id}:${device.compute_group}`] : []));
   useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); if (!ready || !plan.data) return;
-    const accepted = new FormData(event.currentTarget).get('consent') === 'on';
+    event.preventDefault(); if (!ready || !plan.data || !paymentReady || !accepted) return;
+    if (mode === 'paid' && !paymentStep) { setPaymentStep(true); dialog.current?.scrollTo(0, 0); return; }
     setBusy(true); setError('');
     try {
-      const review = await write<{ id: string }>(`/site-checks/${siteId}/review`, csrf, { request_id: requestId.current, snapshot_sha256: plan.data.snapshot_sha256, device_ids: selected, accepts_operator_access: accepted });
-      onCreated(review.id); onClose();
+      const consent = { request_id: requestId.current, snapshot_sha256: plan.data.snapshot_sha256, device_ids: selected, accepts_operator_access: accepted };
+      if (mode === 'paid' && offer) {
+        const quote = checkedDeposit(await write<Deposit>(`/site-checks/${siteId}/checkout`, csrf, { consent, offer_id: offer.id, origin_asset: asset, refund_address: refund.trim() }));
+        if (quote.review_id !== consent.request_id || quote.input.token.asset_id !== asset || quote.refund_address !== refund.trim() || quote.output.token.asset_id !== offer.price.asset || quote.output.amount !== offer.price.amount) throw new Error('The quote does not match your request. Do not send a transfer. Check Orders before trying again.');
+        onCheckout(quote);
+      } else if (mode === 'pilot') {
+        const review = await write<{ id: string }>(`/site-checks/${siteId}/review`, csrf, consent);
+        onCreated(review.id);
+      }
+      onClose();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
   return <dialog ref={dialog} aria-labelledby="website-review-title" onCancel={event => { if (busy) event.preventDefault(); else onClose(); }}>
     <button className="close" aria-label="Close agent selection" disabled={busy} onClick={onClose}>×</button>
-    <p className="eyebrow">PRIVATE SNAPSHOT / AGENT REVIEW</p><h2 id="website-review-title">Choose who can see it.</h2>
-    <p>These operators can read the saved homepage, scripts and earlier review findings. The agents review saved text in isolation; they do not browse or attack your site.</p>
-    {(error || plan.error) && <div className="notice error" role="alert">{error || plan.error}</div>}
+    <p className="eyebrow">PRIVATE SNAPSHOT / {paymentStep ? '2. PAYMENT' : 'AGENT REVIEW'}</p><h2 id="website-review-title">{paymentStep ? 'Fund this review.' : 'Choose who can see it.'}</h2>
+    <p>{paymentStep ? 'Your selected agents are unchanged. Check the fee, network and refund address before preparing payment.' : 'These operators can read the saved homepage, scripts and earlier review findings. The agents review saved text in isolation; they do not browse or attack your site.'}</p>
+    {(error || plan.error || checkout.error) && <div className="notice error" role="alert">{error || plan.error || checkout.error}{error && mode === 'paid' && <p>If a reply was lost, check Orders before preparing another payment. Retrying unchanged details uses the same order.</p>}</div>}
     <form className="site-form" onSubmit={submit} onChange={() => { requestId.current = crypto.randomUUID(); }}><fieldset disabled={busy}>
-      <div className="reviewer-list">{roles.map((role, index) => <label key={role}>{role}<select required aria-label={`${role} device`} value={selected[index]} onChange={event => setSelected(current => current.map((value, i) => i === index ? event.target.value : value))}>
+      {!paymentStep && <><div className="reviewer-list">{roles.map((role, index) => <label key={role}>{role}<select required aria-label={`${role} device`} value={selected[index]} onChange={event => { setSelected(current => current.map((value, i) => i === index ? event.target.value : value)); setAccepted(false); }}>
         <option value="">Select an approved device</option>{plan.data?.candidates.map(device => <option key={device.device_id} value={device.device_id} disabled={selected.includes(device.device_id) && selected[index] !== device.device_id}>{device.device_name} · {device.operator_name} · {device.device_id.slice(0, 8)}</option>)}
       </select>{reviewers[index] && <small><strong>{reviewers[index]!.operator_name}</strong> · {reviewers[index]!.declared_model}<br />Declared compute group: {reviewers[index]!.compute_group}</small>}</label>)}</div>
       {(plan.data?.candidates.length ?? 0) < 3 && <p className="notice">{plan.data ? `${plan.data.candidates.length} eligible devices online. Three are needed.` : 'Checking available devices…'} Each needs private-work approval and the operator’s website-review opt-in.</p>}
       {ready && <p className="notice">3 devices · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. Shared operators, machines or models are not independent reviewers.</p>}
-      <label className="check"><input type="checkbox" name="consent" required /><span>I allow these three devices and their named operators to read this snapshot and earlier reports for this review.</span></label>
-      <p className="fine">Free pilot. Three sequential roles, up to {Math.ceil((plan.data?.review_timeout_seconds ?? 2100) / 60)} minutes including waiting. No automatic replacement devices. Reports can include quoted website text; raw snapshot bodies expire after seven days.</p>
-      <button className="primary full" disabled={busy || !ready}>{busy ? 'Starting review…' : 'Share snapshot & start review →'}</button>
-      <button type="button" className="quiet full" onClick={plan.refresh}>Refresh eligible devices ↻</button>
+      <label className="check"><input type="checkbox" name="consent" required checked={accepted} onChange={event => setAccepted(event.target.checked)} /><span>I allow these three devices and their named operators to read this snapshot and earlier reports for this review.</span></label>
+      <p className="fine">{mode === 'pilot' ? 'Free pilot. ' : ''}Three sequential roles, up to {Math.ceil((plan.data?.review_timeout_seconds ?? 2100) / 60)} minutes including waiting after activation. No automatic replacement devices. Reports can include quoted website text; raw snapshot bodies expire after seven days.</p>
+      {offer && <p className="fine">Review fee: <strong>{tokenAmount(offer.price.amount, offer.destination)}</strong>. Check payment details in the next step.</p>}</>}
+      {paymentStep && <details className="execution-details"><summary>Selected agents and sharing permission</summary><p>You allowed these devices and their operators to read this saved snapshot and earlier reports.</p><ul>{reviewers.map((device, i) => <li key={i}>{roles[i]}: {device ? `${device.device_name} · ${device.operator_name} · ${device.declared_model}` : 'Device no longer eligible'}</li>)}</ul><p>3 devices · {operators.size} distinct operators · {groups.size} declared compute groups. No replacement devices.</p></details>}
+      {paymentStep && offer && <PaymentFields offer={offer} asset={asset} refund={refund} onAsset={value => { setAsset(value); setRefund(''); }} onRefund={setRefund} />}
+      {mode === 'closed' && <p className="notice">New website reviews are paused. Existing orders and reports remain available.</p>}
+      {!mode && !checkout.error && <p className="fine">Checking review access…</p>}
+      <button className="primary full" disabled={busy || !ready || !paymentReady}>{mode === 'paid' ? busy ? 'Preparing payment…' : paymentStep ? 'Reserve review & get quote →' : 'Continue to payment →' : busy ? 'Starting review…' : 'Share snapshot & start review →'}</button>
+      {paymentStep && <button type="button" className="quiet full" onClick={() => { setPaymentStep(false); setError(''); dialog.current?.scrollTo(0, 0); }}>← Back to selected agents</button>}
+      <button type="button" className="quiet full" onClick={() => { plan.refresh(); checkout.refresh(); }}>Refresh eligible devices ↻</button>
     </fieldset></form>
   </dialog>;
 }

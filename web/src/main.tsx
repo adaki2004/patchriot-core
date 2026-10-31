@@ -8,6 +8,7 @@ import { useLive } from './useLive';
 import { Reviews } from './Reviews';
 import { Orders } from './Orders';
 import { Sites } from './Sites';
+import type { Deposit } from './Checkout';
 import { IncidentDesk, IncidentLog } from './Incidents';
 
 function Mark() {
@@ -132,6 +133,7 @@ function App() {
   const [sessionError, setSessionError] = useState('');
   const [login, setLogin] = useState(false);
   const [pairing, setPairing] = useState(false);
+  const [checkout, setCheckout] = useState<Deposit | null>(null);
   const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'orders' | 'sites' | 'guide' | 'incidents' | 'incident-desk'>('overview');
   const [decision, setDecision] = useState<{ device: Device; action: DecisionAction } | null>(null);
   const [notice, setNotice] = useState('');
@@ -142,7 +144,7 @@ function App() {
   const endSession = useCallback((message = '') => {
     sessionChanged();
     setSession({ account: null, csrf_token: null }); setView('overview');
-    setPairing(false); setDecision(null); setLogin(false); setSessionError(''); setNotice(message);
+    setPairing(false); setDecision(null); setLogin(false); setCheckout(null); setSessionError(''); setNotice(message);
   }, []);
   useEffect(() => {
     const expired = () => endSession('Your session has ended. Sign in again to continue.');
@@ -178,7 +180,7 @@ function App() {
         <section className="stats" aria-label="Live fleet counts"><div><span className="stat-value">{fleet.data?.online_devices ?? '—'}</span><span>Online relays</span></div><div><span className="stat-value">{fleet.data?.online_operators ?? '—'}</span><span>Distinct operators</span></div><div><span className="stat-value">{fleet.data?.online_compute_groups ?? '—'}</span><span>Declared compute groups</span></div><p>Live counts, not a decentralization claim. Several relays can belong to one operator or share one machine.</p></section>
         <section className="section-heading"><div><p className="eyebrow">EVIDENCE OVER ASSURANCES</p><h2>Find it. Reproduce it. Challenge it.</h2></div><span className="subtle">The review workflow we’re building</span></section>
         <div className="roles"><article><span className="role-number">01 / INVESTIGATE</span><h3>Follow the weak link.</h3><p>Inspect authorized code and websites. Turn a suspicion into a precise claim with evidence.</p></article><article><span className="role-number">02 / REPRODUCE</span><h3>Make the finding stand up.</h3><p>Run the same conditions against the same target. A confident answer is not a reproduction.</p></article><article><span className="role-number">03 / CHALLENGE</span><h3>Check the fix, too.</h3><p>Question the assumptions. Test the proposed patch and keep disagreements in the report.</p></article></div>
-        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Evidence you can inspect.</strong> Pair an agent, run an owned example or review an approved website snapshot. Private access is explicit; checkout and active penetration tests follow.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
+        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Evidence you can inspect.</strong> Pair an agent, run an owned example or review an approved website snapshot. Private access is explicit; active penetration tests follow.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
         <IncidentLog />
       </>}
       {view === 'devices' && account && <>
@@ -190,8 +192,8 @@ function App() {
         </section><p className="fine">Online means the relay sent a recent heartbeat. Agent versions and model names are operator declarations. Pause and resume from the machine; presence expires after 30 seconds.</p>
       </>}
       {view === 'reviews' && account && session?.csrf_token && <Reviews csrf={session.csrf_token} onOpenOrders={() => setView('orders')} />}
-      {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} />}
-      {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} accountId={account.id} />}
+      {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} initialQuote={checkout} onClearQuote={() => setCheckout(null)} />}
+      {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} accountId={account.id} onCheckout={quote => { setCheckout(quote); setView('orders'); }} />}
       {view === 'guide' && <Guide />}
       {view === 'incidents' && <IncidentLog />}
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}

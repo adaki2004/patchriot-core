@@ -18,6 +18,7 @@ function example() {
 }
 
 async function setup(page: Page, signedIn = true) {
+  await page.route('**/api/checkout', route => route.fulfill({ json: { mode: 'pilot', offer: null } }));
   await page.route('**/api/session', route => route.fulfill({ json: { account: signedIn ? account : null, csrf_token: signedIn ? 'test-csrf' : null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));

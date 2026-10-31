@@ -8,6 +8,7 @@ const pending = {
 };
 
 async function setup(page: Page, admin = false) {
+  await page.route('**/api/checkout', route => route.fulfill({ json: { mode: 'pilot', offer: null } }));
   await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, role: admin ? 'admin' : 'member' }, csrf_token: 'test-csrf' } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 3, online_operators: 1, online_compute_groups: 1 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));

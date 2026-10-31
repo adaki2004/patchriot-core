@@ -1,4 +1,8 @@
 :root { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #20271e; background: #f5f6f1; font-synthesis: none; font-weight: 400; line-height: 1.5; --ink: #20271e; --muted: #6a7266; --line: #dbe0d4; --lime: #d0f56a; --dark: #181e16; }
+.checkout-fields { border-top: 1px solid var(--line); margin: 22px 0; padding-top: 20px; }
+.checkout-price { margin-bottom: 22px; display: grid; gap: 5px; }.checkout-price > span { font-size: 12px; color: var(--muted); }.checkout-price strong { font-size: 26px; font-weight: 550; overflow-wrap: anywhere; }.checkout-price small { font-size: 12px; color: var(--muted); }
+.deposit-card { margin: 22px 0; padding: 22px; background: #f0f5e8; border: 1px solid #cfdabc; border-radius: 6px; }.deposit-card h3 { font-size: 25px; margin: 8px 0 0; overflow-wrap: anywhere; }.deposit-network { margin-top: 2px; color: var(--muted); }.deposit-value { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 4px; background: #fff; padding: 16px; margin: 12px 0; }.deposit-value > span { font-size: 11px; color: var(--muted); }.deposit-value code { overflow-wrap: anywhere; }.deposit-value button { justify-self: start; padding-left: 0; }.deposit-card .primary { width: 100%; gap: 8px; }
+@media (max-width: 700px) { .deposit-card { padding: 18px 12px; }.deposit-card h3 { font-size: 22px; } }
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input, select, textarea { font: inherit; }

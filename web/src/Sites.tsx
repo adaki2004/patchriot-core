@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
 import { WebsiteReviewSetup } from './WebsiteReview';
+import type { Deposit } from './Checkout';
 import { ReviewDetail } from './Reviews';
 import { SiteComparison } from './SiteComparison';
 
@@ -59,7 +60,7 @@ function NewSite({ csrf, onCreated, onClose }: { csrf: string; onCreated: (site:
   </dialog>;
 }
 
-function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onClose, onChange }: { id: string; csrf: string; admin: boolean; accountId: string; sites: Site[]; onReview: (id: string) => void; onClose: () => void; onChange: () => void }) {
+function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onCheckout, onClose, onChange }: { id: string; csrf: string; admin: boolean; accountId: string; sites: Site[]; onReview: (id: string) => void; onCheckout: (quote: Deposit) => void; onClose: () => void; onChange: () => void }) {
   const panel = useRef<HTMLElement>(null);
   const detail = useLive<Site>(`/site-checks/${id}`);
   const [error, setError] = useState('');
@@ -102,11 +103,11 @@ function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onClose, onCh
       </>}
       {admin && site.state === 'pending_approval' && <form className="site-form site-decision" onSubmit={decide}><fieldset disabled={busy}><h3>Check authority before allowing requests.</h3><label>Decision<select name="decision" defaultValue="approve"><option value="approve">Approve this exact scope</option><option value="reject">Reject this request</option></select></label><label>Decision note<textarea name="reason" minLength={12} maxLength={1200} rows={2} required placeholder="How was permission checked, or why is it refused?" /></label><label className="check"><input type="checkbox" required /><span>I reviewed the listed origins and the requester’s authority.</span></label><button className="primary" disabled={busy}>{busy ? 'Recording…' : 'Record decision'}</button></fieldset></form>}
     </>}
-    {reviewing && <WebsiteReviewSetup siteId={id} csrf={csrf} onCreated={onReview} onClose={() => setReviewing(false)} />}
+    {reviewing && <WebsiteReviewSetup siteId={id} csrf={csrf} onCreated={onReview} onCheckout={onCheckout} onClose={() => setReviewing(false)} />}
   </section>;
 }
 
-export function Sites({ csrf, admin, accountId }: { csrf: string; admin: boolean; accountId: string }) {
+export function Sites({ csrf, admin, accountId, onCheckout }: { csrf: string; admin: boolean; accountId: string; onCheckout: (quote: Deposit) => void }) {
   const sites = useLive<Site[]>('/site-checks');
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -118,9 +119,9 @@ export function Sites({ csrf, admin, accountId }: { csrf: string; admin: boolean
       {sites.data?.length === 0 && <div className="empty"><h2>Know what your site serves.</h2><p>Start with the public homepage and the scripts it includes. Permission comes first; a snapshot gives you evidence to review.</p></div>}
       {sites.data?.map(site => <button className={`review-item site-item ${selected === site.id ? 'selected' : ''}`} key={site.id} onClick={() => setSelected(site.id)}><span><strong>{site.scope.homepage}</strong><small>{date(site.created_at)} · {site.id.slice(0, 8)}</small></span><span>{label(site.state)} <span aria-hidden="true">↗</span></span></button>)}
     </section>
-    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} accountId={accountId} sites={sites.data ?? []} onReview={setReview} onClose={() => setSelected(null)} onChange={sites.refresh} />}
+    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} accountId={accountId} sites={sites.data ?? []} onReview={setReview} onCheckout={onCheckout} onClose={() => setSelected(null)} onChange={sites.refresh} />}
     {review && <ReviewDetail key={review} id={review} csrf={csrf} onClose={() => setReview(null)} onChange={sites.refresh} />}
-    <p className="fine">Private, free pilot. Up to two pending/active requests and three submissions per day per account. Raw evidence expires after seven days; scope and status remain in your history.</p>
+    <p className="fine">Snapshot collection is free during the pilot. Up to two pending/active snapshots and three submissions per day per account. Agent-review pricing is shown before you start. Raw evidence expires after seven days; scope and status remain in your history.</p>
     {creating && <NewSite csrf={csrf} onCreated={site => { sites.refresh(); setSelected(site.id); }} onClose={() => setCreating(false)} />}
   </>;
 }
