@@ -41,7 +41,16 @@ const messages: Record<string, string> = {
   try_again_later: 'Too many requests. Wait a moment before trying again.',
 };
 
+export const sessionExpiredEvent = 'patchriot:session-expired';
+let sessionRevision = 0;
+/** Late replies from a previous login must not clear a newer workspace. */
+export function sessionChanged() { sessionRevision += 1; }
+export class SessionExpiredError extends Error {
+  constructor() { super(messages.sign_in_required); }
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const revision = sessionRevision;
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
@@ -56,6 +65,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   const body = await response.json().catch(() => null);
   if (!response.ok) {
+    if (response.status === 401 && body?.error === 'sign_in_required') {
+      if (revision === sessionRevision && !options.signal?.aborted) {
+        window.dispatchEvent(new Event(sessionExpiredEvent));
+      }
+      throw new SessionExpiredError();
+    }
     throw new Error(messages[body?.error] ?? `The request failed (${response.status}). Please try again.`);
   }
   if (body === null) throw new Error('The server returned an unreadable response. Please try again.');

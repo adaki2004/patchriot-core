@@ -80,7 +80,7 @@ target/debug/patchriot-core invite admin "Your name"
 target/debug/patchriot-core invite member "A contributor"
 ```
 
-Open **http://127.0.0.1:7410** and enter the private invitation. Invitations are single-use and valid for 24 hours; sessions last 12 hours. `invite-account <account-uuid>` renews access to an existing account. `disable-account <account-uuid>` revokes its sessions.
+Open **http://127.0.0.1:7410** and enter the private invitation. Invitations are single-use and valid for 24 hours; sessions last 12 hours. On a confirmed session expiry, the browser closes private views and offers sign-in again. `invite-account <account-uuid>` renews access to an existing account. `disable-account <account-uuid>` revokes its sessions.
 
 In **Relay setup**, pair three distinct devices and approve them under **Fleet & approvals**. Then choose **Reviews → New example review**:
 

@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, write } from './api';
+import { api, write, sessionChanged, sessionExpiredEvent, SessionExpiredError } from './api';
 import type { Account, Device, Fleet, Session } from './api';
 import './style.css';
 import { useLive } from './useLive';
@@ -129,14 +129,24 @@ function App() {
   const devices = useLive<Device[]>('/devices', Boolean(session?.account));
   const account = session?.account;
   const isAdmin = account?.role === 'admin';
+  const endSession = useCallback((message = '') => {
+    sessionChanged();
+    setSession({ account: null, csrf_token: null }); setView('overview');
+    setPairing(false); setDecision(null); setLogin(false); setSessionError(''); setNotice(message);
+  }, []);
+  useEffect(() => {
+    const expired = () => endSession('Your session has ended. Sign in again to continue.');
+    window.addEventListener(sessionExpiredEvent, expired);
+    return () => window.removeEventListener(sessionExpiredEvent, expired);
+  }, [endSession]);
   const loadSession = useCallback(async () => {
-    try { const value = await api<Session>('/session'); setSession(value); setSessionError(''); }
+    try { const value = await api<Session>('/session'); sessionChanged(); setSession(value); setSessionError(''); if (value.account) setNotice(''); }
     catch (error) { setSessionError((error as Error).message); throw error; }
   }, []);
   useEffect(() => { void loadSession().catch(() => {}); }, [loadSession]);
   async function logout() {
-    try { await write('/auth/logout', session!.csrf_token!); setSession({ account: null, csrf_token: null }); setView('overview'); setNotice(''); }
-    catch (error) { setSessionError((error as Error).message); }
+    try { await write('/auth/logout', session!.csrf_token!); endSession(); }
+    catch (error) { if (!(error instanceof SessionExpiredError)) setSessionError((error as Error).message); }
   }
   function changed(message: string) { devices.refresh(); fleet.refresh(); setNotice(message); }
   return <>

@@ -40,6 +40,78 @@ test('an outage keeps the previous count and displays the failure', async ({ pag
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
+test('session expiry clears private views and open dialogs while an outage preserves the workspace', async ({ page }) => {
+  await setup(page, true);
+  let failure = 0;
+  await page.route('**/api/devices', route => route.fulfill(failure
+    ? { status: failure, json: { error: failure === 401 ? 'sign_in_required' : 'dispatcher_unavailable' } }
+    : { json: [{ id: 'private-device', operator_id: account.id, operator_name: account.display_name, label: 'My private relay', runtime: 'owned_fixture', runtime_version: '0.0.1', compute_group: 'my-machine', approval: 'approved', state: 'online', last_seen_at: null }] }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'My relays', exact: true }).click();
+  await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
+  failure = 503;
+  await page.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('dispatcher is unavailable');
+  await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Pair a relay +', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  failure = 401;
+  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('My private relay', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'My relays', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Your session has ended');
+  await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+  await expect(page.getByLabel('Invitation code', { exact: true })).toBeVisible();
+});
+
+test('an expired session can leave the workspace through sign out', async ({ page }) => {
+  await setup(page, true);
+  await page.route('**/api/auth/logout', route => route.fulfill({ status: 401, json: { error: 'sign_in_required' } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('a late failure from the previous login does not dismiss a new session', async ({ page }) => {
+  await setup(page, true);
+  let releaseClaim!: () => void;
+  const pending = new Promise<void>(resolve => { releaseClaim = resolve; });
+  let claimStarted = false;
+  await page.route('**/api/pairings/claim', async route => {
+    claimStarted = true;
+    await pending;
+    await route.fulfill({ status: 401, json: { error: 'sign_in_required' } });
+  });
+  await page.route('**/api/auth/logout', route => route.fulfill({ json: { ok: true } }));
+  await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'My relays', exact: true }).click();
+    await page.getByRole('button', { name: 'Pair a relay +', exact: true }).click();
+    await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
+    await page.getByLabel('I will use assigned data', { exact: false }).check();
+    await page.getByRole('button', { name: 'Pair relay →', exact: true }).click();
+    await expect.poll(() => claimStarted).toBe(true);
+    await page.getByRole('button', { name: 'Close pairing', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: 'new-account', display_name: 'Another member' }, csrf_token: 'new-csrf' } }));
+    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
+    await expect(page.getByText('Another member', { exact: true })).toHaveText('Another member');
+    const staleReply = page.waitForResponse('**/api/pairings/claim');
+    releaseClaim();
+    await (await staleReply).finished();
+    await page.getByRole('button', { name: 'My relays', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Your session has ended' })).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  } finally { releaseClaim(); }
+});
+
 test('pairing collects consent, sends the session CSRF and does not self-approve', async ({ page }) => {
   await setup(page, true);
   let submission: Record<string, unknown> | undefined;
