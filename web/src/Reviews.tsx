@@ -77,7 +77,7 @@ function Evidence({ step }: { step: Step }) {
       <tr><td>Owner can read</td><td>{result.observation.original.owner_reads ? 'Yes' : 'No'}</td><td>{result.observation.patched.owner_reads ? 'Yes' : 'No'}</td></tr>
       <tr><td>Other user is blocked</td><td>{result.observation.original.blocks_other_user ? 'Yes' : 'No'}</td><td>{result.observation.patched.blocks_other_user ? 'Yes' : 'No'}</td></tr>
     </tbody></table></div>}
-    {result.summary && <><p className="fine">AGENT’S EXPLANATION / UNVERIFIED TEXT</p><pre className="agent-summary">{result.summary}</pre></>}
+    {result.summary && <><p className="fine"><strong>Agent explanation · unverified</strong><br />Passing the tool checks does not validate this explanation.</p><pre className="agent-summary">{result.summary}</pre></>}
     <details className="execution-details"><summary>Execution details</summary><dl><dt>Outcome</dt><dd>{result.outcome.replaceAll('_', ' ')}</dd><dt>Container cleanup</dt><dd>{result.cleanup_confirmed ? 'Confirmed by relay' : 'Not confirmed'}</dd><dt>Paired model declaration</dt><dd>{result.declared_model}</dd><dt>Model digest</dt><dd><code>{result.model_digest}</code></dd><dt>Runtime image</dt><dd><code>{result.image_digest}</code></dd></dl></details>
   </>;
 }

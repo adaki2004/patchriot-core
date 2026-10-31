@@ -87,7 +87,7 @@ In **Relay setup**, pair three distinct devices and approve them under **Fleet &
 - **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
 - **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role; the review expires after 35 minutes including waiting.
 
-Both examples are free. The private report separates tool observations from the model's explanation and includes actual operator/device counts. Download its JSON or cancel from the report. This checks a supplied example; it does not demonstrate independent discovery or prove model identity.
+Both examples are free. The private report separates tool observations from the model's explanation and includes actual operator/device counts. **Passing tool checks does not validate the explanation:** a model can run the right test and still describe the bug incorrectly. Download its JSON or cancel from the report. This checks a supplied example; it does not demonstrate independent discovery or prove model identity.
 
 Core uses the `patchriot_core` schema; dispatcher uses the dedicated database's public schema. Configure separate database roles before public deployment: grant each role database access and ownership of its own pre-created schema. Core can start and run migrations without database-wide `CREATE` permission. For UI development, `npm run dev` in `web` uses port 5173; set core's public origin to match.
 
