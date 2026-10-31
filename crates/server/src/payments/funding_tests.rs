@@ -1,6 +1,9 @@
 use super::*;
 use crate::payments::funding::deliver_once;
 
+#[path = "cancellation_tests.rs"]
+mod cancellation;
+
 struct FundingServer {
     state: AppState,
     view: Arc<Mutex<Value>>,

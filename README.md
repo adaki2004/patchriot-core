@@ -152,7 +152,15 @@ cargo run --locked -p patchriot-core -- payments-fund-once
 
 The funding worker checks the saved order, invoice and ledger before contacting dispatcher. It reads review status first, so a lost activation reply can be recovered without starting another review. New activation rechecks the account and order; dispatcher rechecks the exact consented agents. Temporary failures retry on a later invocation. Closed, conflicting or unresolved cases require review and retain their recorded funds. Activation is not proof of completed service or permission to refund; cancellation during an in-flight activation is flagged for reconciliation.
 
-The web server does not start either worker. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, spending, payouts and held-fund release remain unexposed. Neither worker has a treasury signing key.
+[Cancellation](crates/server/src/payments/cancellation.rs) first closes the saved checkout, preventing new quotes or funding attempts. A separate bounded worker confirms that the exact review stopped, recovers lost replies and continues a previously requested cancellation after account disable. Unknown or mismatched replies need attention. A review that already finished stays recorded as finished. Before admission returns a review ID, cancellation asks the caller to retry; it cannot claim to have stopped unknown work.
+
+```sh
+cargo run --locked -p patchriot-core -- payments-cancel-once
+```
+
+**Cancellation is not a refund.** Money already received remains in the ledger for a separate decision, including money arriving after cancellation. The worker does not cancel a blockchain transfer or send funds back. It retries transient failures for up to 24 hours, then requires operator attention.
+
+The web server does not start these workers. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, spending, payouts and held-fund release remain unexposed. None has a treasury signing key.
 
 ## Verify it
 

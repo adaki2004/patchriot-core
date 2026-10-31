@@ -444,8 +444,8 @@ async fn lost_claim_or_disabled_account_blocks_quote_after_admission_reply() {
 }
 
 #[tokio::test]
-async fn late_provider_reply_cannot_publish_after_account_disable_or_claim_expiry() {
-    for mutation in ["disabled", "expired_claim"] {
+async fn late_provider_reply_cannot_publish_after_account_disable_claim_expiry_or_cancellation() {
+    for mutation in ["disabled", "expired_claim", "cancellation"] {
         let db = TestDb::new().await;
         let (terms, quote) = terms(&db);
         let dispatcher = AdmissionServer::new(&db, &terms).await;
@@ -456,8 +456,13 @@ async fn late_provider_reply_cannot_publish_after_account_disable_or_claim_expir
             async move {
                 let bound:bool=sqlx::query_scalar("SELECT review_id IS NOT NULL FROM checkout_orders WHERE account_id=$1").bind(account).fetch_one(&pool).await.unwrap();
                 assert!(bound,"review binding must commit before quote HTTP");
-                let sql=if mutation=="disabled" {"UPDATE accounts SET disabled=true WHERE id=$1"} else {"UPDATE checkout_orders SET operation_until=now()-interval '1 second' WHERE account_id=$1"};
-                sqlx::query(sql).bind(account).execute(&pool).await.unwrap();
+                if mutation=="cancellation" {
+                    let order:Uuid=sqlx::query_scalar("SELECT id FROM checkout_orders WHERE account_id=$1").bind(account).fetch_one(&pool).await.unwrap();
+                    crate::payments::cancellation::request(&pool,account,order).await.unwrap();
+                } else {
+                    let sql=if mutation=="disabled" {"UPDATE accounts SET disabled=true WHERE id=$1"} else {"UPDATE checkout_orders SET operation_until=now()-interval '1 second' WHERE account_id=$1"};
+                    sqlx::query(sql).bind(account).execute(&pool).await.unwrap();
+                }
                 Json(quote)
             }
         }));
@@ -480,6 +485,13 @@ async fn late_provider_reply_cannot_publish_after_account_disable_or_claim_expir
             .await
             .unwrap();
         assert_eq!(count, 0);
+        if mutation == "cancellation" {
+            let stopped:bool=sqlx::query_scalar("SELECT state='cancelled' AND cancel_requested_at IS NOT NULL AND invoice_id IS NULL FROM checkout_orders WHERE account_id=$1").bind(account).fetch_one(&db.pool).await.unwrap();
+            assert!(
+                stopped,
+                "a late quote reply cannot reopen checkout or publish an invoice"
+            );
+        }
         task.abort();
         db.finish().await;
     }

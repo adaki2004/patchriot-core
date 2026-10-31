@@ -255,7 +255,7 @@ pub async fn prepare(
         // Never clear another worker's claim after a late HTTP reply. Errors
         // contain no provider bodies, addresses, credentials or SQL.
         let closed = matches!(error, CheckoutError::InvalidAdmission);
-        sqlx::query("UPDATE checkout_orders SET operation_token = NULL, operation_until = NULL, last_error = $3, state = CASE WHEN $4 THEN 'needs_review' WHEN expires_at <= now() THEN 'expired' ELSE state END, updated_at = now() WHERE id = $1 AND operation_token = $2")
+        sqlx::query("UPDATE checkout_orders SET operation_token = NULL, operation_until = NULL, last_error = $3, state = CASE WHEN state NOT IN ('preparing','awaiting_payment') THEN state WHEN $4 THEN 'needs_review' WHEN expires_at <= now() THEN 'expired' ELSE state END, updated_at = now() WHERE id = $1 AND operation_token = $2")
             .bind(order.id).bind(token).bind(error.to_string()).bind(closed)
             .execute(&state.pool).await?;
     }

@@ -57,9 +57,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("One-use prototype invitation; expires in 24 hours. Share privately.");
         return Ok(());
     }
-    if !args.is_empty() && args != ["serve"] && args != ["payments-fund-once"] {
+    if !args.is_empty()
+        && args != ["serve"]
+        && args != ["payments-fund-once"]
+        && args != ["payments-cancel-once"]
+    {
         return Err(
-            "expected serve, invite, invite-account, disable-account, payments-reconcile-once or payments-fund-once"
+            "expected serve, invite, invite-account, disable-account, payments-reconcile-once, payments-fund-once or payments-cancel-once"
                 .into(),
         );
     }
@@ -75,6 +79,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = AppState::new(pool, config)?;
     if args == ["payments-fund-once"] {
         let result = patchriot_core::payments::funding::deliver_once(&state).await?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
+    if args == ["payments-cancel-once"] {
+        let result = patchriot_core::payments::cancellation::deliver_once(&state).await?;
         println!("{}", serde_json::to_string(&result)?);
         return Ok(());
     }
