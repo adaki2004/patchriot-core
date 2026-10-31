@@ -5,6 +5,8 @@
 //! pairing codes can be claimed once; heartbeat sequences cannot move backwards.
 //! A recent signature alone does not make an operation idempotent or authorized.
 
+pub mod websites;
+
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
