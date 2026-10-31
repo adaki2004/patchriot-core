@@ -8,7 +8,7 @@ Patchriot is an AI defense swarm pooling agents, inference and compute to help p
 
 A compromised script, a vulnerable dependency or a misconfigured endpoint can put a whole product and its users at risk. Patchriot brings agents together to investigate those weaknesses, reproduce what they find and check proposed fixes. The result is a private report with evidence people can inspect and act on.
 
-**Development status:** the local prototype has a browser dashboard, invitation sessions, signed relay pairing, manual approval, heartbeat presence and revocation. Customer assessments and paid reviews are not enabled. The capabilities below describe the product being built; see the [implementation plan and status](#implementation-plan-and-status).
+**Development status:** the local prototype has a browser dashboard, invitation sessions, signed relay pairing, manual approval, presence/revocation and a three-role owned-fixture review with private evidence downloads. Customer assessments and paid reviews are not enabled. The capabilities below describe the product being built; see the [implementation plan and status](#implementation-plan-and-status).
 
 ## What you can bring to Patchriot
 
@@ -110,7 +110,7 @@ Owned backend and relay components use Rust; the website uses React/TypeScript. 
 
 ## Implementation plan and status
 
-The browser dashboard connects to the Rust core API and private dispatcher. The relay has a runnable owned-fixture demo and device commands for pairing, heartbeat presence, pause and resume. PostgreSQL persists invitation sessions, claims, manual approval and revocation. No component accepts arbitrary customer commands or makes model calls yet. Each milestone adds tested behavior and reproducible setup instructions.
+The browser dashboard connects to the Rust core API and private dispatcher. PostgreSQL persists invitation sessions, onboarding and a bounded three-role fixture queue. Relays execute the built-in original/patch/control example; a saved result survives a lost reply, and stale attempts cannot replace current work. Reports distinguish the actual devices, operators and shared machines. No component accepts arbitrary customer commands or makes model calls yet.
 
 | Milestone | What completion means | Status |
 | --- | --- | --- |
@@ -119,13 +119,13 @@ The browser dashboard connects to the Rust core API and private dispatcher. The 
 | Linux sandbox | Enforced filesystem/network/resource limits, host-canary and escape checks | Next |
 | Hermes and CPU inference | A real agent run with measured resource use and reproducible output | Planned; VPS access needed |
 | Device onboarding | Signed pairing, separate manual approval, heartbeat presence, pause and revocation | Implemented across dashboard, API and relay |
-| Work dispatch | Leases, retries, resource limits and accepted results | Planned |
-| Review and verification | Investigator, reproducer and challenger roles with checked evidence and patch regressions | Planned |
-| Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Invitation sessions and account isolation implemented; federation, MFA and reports follow |
+| Work dispatch | Leases, retries, resource limits and accepted results | Implemented for the fixed owned example |
+| Review and verification | Investigator, reproducer and challenger roles with checked evidence and patch regressions | Three-role fixture workflow implemented; models and independent validation follow |
+| Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Invitation sessions, account isolation and fixture report downloads implemented; federation and MFA follow |
 | Website assessments | Owned-site fixtures, script/request inspection, DNS/TLS observations and scoped active checks | Planned |
 | Recurring checks | Authorized schedules, approved baselines, private alerts, spending caps and missed-run handling | After one-off website reviews |
 | NEAR Intents payments | Reconciliation and ledger tests, then a bounded live payment test | Planned |
-| Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Patcher/admin dashboard implemented; review UI and incident feed follow |
+| Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Fixture-review and patcher/admin interfaces implemented; incident feed follows |
 | GPU demonstration | Three review roles on stronger models with measured results and honest operator/compute counts | After local and CPU checks |
 
 The first test targets are owned fixtures. Run `cargo run --locked -- demo` inside `patchriot-relay`; its README explains the results and current execution boundary. Reproduction, patch behavior, account isolation, payment retries and sandbox boundaries need evidence before a capability is marked complete. Broader model support, optional contributor collateral and confidential execution are later decisions.
@@ -155,6 +155,8 @@ Each command prints a private, one-use invitation for a new account, valid for 2
 
 In the website, **Relay setup** shows the CLI steps. A contributor pairs their machine; an administrator uses **Fleet & approvals** to approve it. The contributor can pause locally or revoke their device. Members see their own machines; administrators see the fleet. Live counts distinguish devices, operators and declared compute groups. Connection failures remain visible with the last successful response.
 
+To run the queued example, keep three distinct approved relays connected with `--fixtures`, then choose **Reviews → New fixture review → Run the owned example**. The dispatcher assigns the roles sequentially and permits one assignment per declared compute group. Reports and JSON downloads require the requester's session (or admin access). The example is free, accepts no customer target and labels all evidence as device-reported fixture output. A known original failure plus passing patch/control is a regression demonstration, not proof of AI quality or independent execution. Contradictory results remain **Needs review**; missing reviewers eventually produce an incomplete report. You can cancel queued/running reviews.
+
 Browser sessions use HttpOnly cookies, an origin check and a CSRF token. The service key stays on the server; core derives dispatcher identity headers from the session. HTTPS is required except for explicit loopback development. Invitation and session bearer values are hashed in storage. The static site loads no analytics, third-party scripts or fonts.
 
 For UI development, use `npm run dev` in `web`, set core's public origin to `http://127.0.0.1:5173`, and keep core on port 7410. Vite proxies `/api` to core. Do not use the development server as a public deployment.
@@ -165,9 +167,11 @@ Set `PATCHRIOT_TEST_DATABASE_URL` to a local test PostgreSQL database whose role
 
 In `web`, run `npx --no-install playwright install chromium` once, then `npm test`. These desktop/mobile tests use explicit API fixtures to check the UI, including outages and safe rendering of operator names. `npm run build` checks TypeScript and produces the static site. CI repeats these checks on Linux.
 
-For a real browser-to-database check, run both Rust services, build the relay, install the browser as above and run `node scripts/smoke-browser.mjs` from core with `DATABASE_URL` and `PATCHRIOT_AUDIENCE` in the environment. It only targets localhost, creates three test accounts, pairs a real relay through the UI, checks account isolation, approves it, tests presence/pause/resume, then revokes the relay and disables the test accounts. It does not make model calls or assess a website.
+For a real browser-to-database check, run both Rust services, build the relay, install the browser as above and run `node scripts/smoke-browser.mjs` from core with `DATABASE_URL` and `PATCHRIOT_AUDIENCE` in the environment. It only targets localhost, creates three test accounts, pairs and approves three real relays through the UI, runs the three-role example, checks the private report/download and account isolation, then revokes the relays and disables the test accounts. It does not make model calls or assess a website.
 
 With the dispatcher on port 7411 and its internal key/audience in your environment, `python3 scripts/smoke-relays.py` tests three real relay instances. It reports one operator and one shared compute group, then revokes its devices.
+
+`python3 scripts/smoke-reviews.py` uses the same local configuration to test queued fixture execution. A local proxy deliberately drops the first successful completion reply; the relay must recover its saved result and the dispatcher must accept the retry without duplicating work. The report contains three devices, one operator and one compute group. Queue limits, expiry, cancellation, conflicting evidence and retry exhaustion have PostgreSQL integration tests in the dispatcher.
 
 ## License
 

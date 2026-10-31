@@ -74,3 +74,23 @@ test('renders operator-controlled names as text and exposes no admin actions to 
   await expect(page.locator('td img, td script')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 });
+
+test('keeps conflicting evidence visible without presenting it as a successful review', async ({ page }) => {
+  await setup(page, true);
+  const review = {
+    id: '00000000-0000-4000-8000-000000000010', mode: 'owned_fixture', state: 'needs_review',
+    created_at: 1793428766, deadline_at: 1793429666, evidence_source: 'device_reported_fixture_not_independently_verified',
+    steps: [{ role: 'reproducer', state: 'completed', attempts: 1, device_id: 'device-a', operator_id: 'operator-a', compute_group: 'shared-machine', fixture_matches: false,
+      result: { runs: [{ version: 'original', completed: true, elapsed_ms: 10, checks: [{ name: 'another_user_can_read', expected: false, actual: false }] }] } }],
+  };
+  await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
+  await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await page.getByRole('button', { name: 'Access-control example', exact: false }).click();
+  const report = page.getByRole('region', { name: 'Fixture review report' });
+  await expect(report.getByRole('heading', { name: 'Needs review' })).toBeVisible();
+  await expect(report.getByText('The evidence does not match the expected fixture regression.')).toBeVisible();
+  await expect(report.getByRole('heading', { name: 'Fixture checks complete' })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

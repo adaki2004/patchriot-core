@@ -2,9 +2,13 @@ use crate::{ApiError, AppState, auth};
 use axum::{
     Json,
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
+    response::{IntoResponse, Response},
 };
-use patchriot_protocol::{ClaimPairing, DeviceDecision, DeviceView, FleetSummary, PairingStatus};
+use patchriot_protocol::{
+    CancelReview, ClaimPairing, CreateReview, DeviceDecision, DeviceView, FleetSummary,
+    PairingStatus, ReviewView,
+};
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
@@ -114,4 +118,92 @@ pub async fn decision(
         Some(&input),
     )
     .await
+}
+
+pub async fn reviews(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<ReviewView>>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    request::<(), _>(
+        &state,
+        reqwest::Method::GET,
+        "/internal/reviews",
+        Some(&session),
+        None,
+    )
+    .await
+}
+
+pub async fn review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Json<ReviewView>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    request::<(), _>(
+        &state,
+        reqwest::Method::GET,
+        &format!("/internal/reviews/{id}"),
+        Some(&session),
+        None,
+    )
+    .await
+}
+
+pub async fn create_review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(input): Json<CreateReview>,
+) -> Result<Json<ReviewView>, ApiError> {
+    let session = auth::require_write(&headers, &state).await?;
+    request(
+        &state,
+        reqwest::Method::POST,
+        "/internal/reviews",
+        Some(&session),
+        Some(&input),
+    )
+    .await
+}
+
+pub async fn cancel_review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(input): Json<CancelReview>,
+) -> Result<Json<ReviewView>, ApiError> {
+    let session = auth::require_write(&headers, &state).await?;
+    request(
+        &state,
+        reqwest::Method::POST,
+        &format!("/internal/reviews/{id}/cancel"),
+        Some(&session),
+        Some(&input),
+    )
+    .await
+}
+
+pub async fn report(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    let Json(report) = review(State(state), headers, Path(id)).await?;
+    let bytes = serde_json::to_vec_pretty(&report)
+        .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "report_encoding_failed"))?;
+    Ok((
+        [
+            (
+                header::CONTENT_TYPE,
+                "application/json; charset=utf-8".to_owned(),
+            ),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"patchriot-fixture-{id}.json\""),
+            ),
+        ],
+        bytes,
+    )
+        .into_response())
 }

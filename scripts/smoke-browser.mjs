@@ -20,6 +20,7 @@ const directory = mkdtempSync(join(tmpdir(), 'patchriot-browser-'));
 const state = join(directory, 'relay');
 const label = `Browser smoke ${randomUUID().slice(0, 8)}`;
 const accounts = [];
+const cleanupDevices = new Set();
 const browser = await chromium.launch({ env: safeEnv });
 let owner, ownerPage, adminPage, deviceId;
 const browserErrors = [];
@@ -63,6 +64,7 @@ try {
   const devices = await ownerPage.evaluate(() => fetch('/api/devices').then(response => response.json()));
   assert.equal(devices.length, 1);
   deviceId = devices[0].id;
+  cleanupDevices.add(deviceId);
   assert.equal(relayCommand('connect', '--once').state, 'awaiting_approval');
 
   const outsider = await login('member', 'Browser smoke unrelated user');
@@ -90,19 +92,63 @@ try {
   await expect(ownerPage.getByText('paused', { exact: true })).toBeVisible();
   relayCommand('resume');
   assert.equal(relayCommand('connect', '--once').state, 'online');
-  await row.getByRole('button', { name: 'Revoke', exact: true }).click();
+
+  const relayStates = [state];
+  for (let i = 2; i <= 3; i++) {
+    const nextState = join(directory, `relay-${i}`);
+    relayStates.push(nextState);
+    const nextLabel = `${label}-${i}`;
+    command(relay, ['init', '--state-dir', nextState, '--dispatcher', 'http://127.0.0.1:7411', '--audience', process.env.PATCHRIOT_AUDIENCE, '--label', nextLabel, '--compute-group', 'browser-smoke-host']);
+    const pair = JSON.parse(command(relay, ['pair', '--state-dir', nextState]));
+    await ownerPage.getByRole('button', { name: 'Pair a relay +' }).click();
+    await ownerPage.getByLabel('Pairing code', { exact: true }).fill(pair.user_code);
+    await ownerPage.getByLabel('I will use assigned data', { exact: false }).check();
+    await ownerPage.getByRole('button', { name: 'Pair relay →', exact: true }).click();
+    await expect(ownerPage.getByRole('row').filter({ hasText: nextLabel })).toBeVisible();
+    const current = await ownerPage.evaluate(() => fetch('/api/devices').then(response => response.json()));
+    cleanupDevices.add(current.find(device => device.label === nextLabel).id);
+    await adminPage.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
+    const nextRow = adminPage.getByRole('row').filter({ hasText: nextLabel });
+    await nextRow.getByRole('button', { name: 'Approve', exact: true }).click();
+    await adminPage.getByRole('button', { name: 'Approve relay', exact: true }).click();
+    await expect(nextRow.getByText('approved', { exact: true })).toBeVisible();
+  }
+  await ownerPage.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await ownerPage.getByRole('button', { name: 'New fixture review +' }).click();
+  await ownerPage.getByRole('button', { name: 'Run the owned example →', exact: true }).click();
+  const reportPanel = ownerPage.getByRole('region', { name: 'Fixture review report' });
+  await expect(reportPanel.getByRole('heading', { name: 'Waiting for a relay' })).toBeVisible();
+  for (const relayState of relayStates) {
+    const events = command(relay, ['connect', '--state-dir', relayState, '--once', '--fixtures']).split('\n').map(line => JSON.parse(line));
+    assert(events.some(event => event.event === 'fixture_result_accepted' && event.fixture_matches === true));
+  }
+  await ownerPage.getByRole('button', { name: 'Refresh report ↻', exact: true }).click();
+  await expect(reportPanel.getByRole('heading', { name: 'Fixture checks complete' })).toBeVisible();
+  await expect(reportPanel.getByText('3 devices · 1 operators · 1 declared compute groups.', { exact: false })).toBeVisible();
+  const downloadLink = reportPanel.getByRole('link', { name: 'Download evidence JSON ↓' });
+  const reportPath = await downloadLink.getAttribute('href');
+  assert.equal((await outsider.context.request.get(`${origin}${reportPath}`)).status(), 404);
+  const downloadPromise = ownerPage.waitForEvent('download');
+  await downloadLink.click();
+  const download = await downloadPromise;
+  assert(download.suggestedFilename().startsWith('patchriot-fixture-'));
+  assert.equal(await download.failure(), null);
+
+  // The row locator also matches the added labels, so pin the exact first device.
+  const firstRow = adminPage.getByRole('row').filter({ has: adminPage.getByText(label, { exact: true }) });
+  await firstRow.getByRole('button', { name: 'Revoke', exact: true }).click();
   await adminPage.getByRole('button', { name: 'Revoke relay', exact: true }).click();
-  await expect(row.locator('.badge')).toHaveText('revoked');
+  await expect(firstRow.locator('.badge')).toHaveText('revoked');
   assert.throws(() => relayCommand('connect', '--once'));
   deviceId = undefined;
   assert.deepEqual(browserErrors, []);
-  console.log(JSON.stringify({ passed: true, checks: ['browser sign-in', 'real relay pairing', 'pending approval', 'cross-account isolation', 'admin approval', 'heartbeat', 'pause/resume', 'revocation', 'production CSP'], accounts: 3, real_model_calls: 0 }));
+  console.log(JSON.stringify({ passed: true, checks: ['browser sign-in', 'real relay pairing', 'pending approval', 'cross-account isolation', 'admin approval', 'heartbeat', 'pause/resume', 'three-role review', 'private evidence download', 'revocation', 'production CSP'], accounts: 3, relay_instances: 3, real_model_calls: 0 }));
 } finally {
-  if (deviceId && ownerPage && owner) {
+  if (ownerPage && owner) for (const device of cleanupDevices) {
     const status = await ownerPage.evaluate(async ({ id, csrf }) => {
       const response = await fetch(`/api/devices/${id}/decision`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': csrf }, body: JSON.stringify({ action: 'revoke', reason: 'Browser smoke cleanup' }) });
       return response.status;
-    }, { id: deviceId, csrf: owner.session.csrf_token });
+    }, { id: device, csrf: owner.session.csrf_token });
     if (status !== 200) console.error('Smoke relay cleanup needs operator attention.');
   }
   await browser.close();

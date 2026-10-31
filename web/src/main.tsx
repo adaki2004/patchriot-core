@@ -4,33 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { api, write } from './api';
 import type { Account, Device, Fleet, Session } from './api';
 import './style.css';
-
-function useLive<T>(path: string, enabled = true) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState('');
-  const [updated, setUpdated] = useState<Date | null>(null);
-  const [revision, setRevision] = useState(0);
-  const refresh = useCallback(() => setRevision(value => value + 1), []);
-  useEffect(() => {
-    if (!enabled) { setData(null); setError(''); setUpdated(null); return; }
-    const controller = new AbortController();
-    let pending = false;
-    async function update() {
-      if (pending || controller.signal.aborted) return;
-      pending = true;
-      try {
-        const value = await api<T>(path, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
-        if (!controller.signal.aborted) { setData(value); setError(''); setUpdated(new Date()); }
-      } catch (error) {
-        if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Unable to refresh.');
-      } finally { pending = false; }
-    }
-    void update();
-    const timer = window.setInterval(() => { if (!document.hidden) void update(); }, 10_000);
-    return () => { controller.abort(); window.clearInterval(timer); };
-  }, [path, enabled, revision]);
-  return { data, error, updated, refresh };
-}
+import { useLive } from './useLive';
+import { Reviews } from './Reviews';
 
 function Mark() {
   return <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M3 3h26v17L16 33 3 20V3Z" fill="none" stroke="currentColor" strokeWidth="3" /><path d="m10 19 5-9h7l-5 7h6L12 28l3-9h-5Z" fill="currentColor" /></svg>;
@@ -133,7 +108,7 @@ function Guide() {
       <li><strong>Pair, then stay connected.</strong><span>Enter the pairing code under “Pair a relay”. An administrator approves the device before it joins the fleet.</span><pre>{'patchriot-relay pair --state-dir ~/.patchriot\npatchriot-relay connect --state-dir ~/.patchriot'}</pre></li>
       <li><strong>Stay in control.</strong><span>Pause locally whenever needed. Keep the state directory private; it contains your device key.</span><pre>{'patchriot-relay pause --state-dir ~/.patchriot\npatchriot-relay resume --state-dir ~/.patchriot'}</pre></li>
     </ol>
-    <Notice>Current runtime: owned fixtures. No customer targets or model calls are enabled. Different relay processes on one machine remain shared infrastructure.</Notice>
+    <Notice>Add <code>--fixtures</code> to the connect command to accept the built-in review example. Three distinct approved devices are needed; shared machines run one role at a time. Current runtime: owned fixtures. No customer targets or model calls are enabled. Different relay processes on one machine remain shared infrastructure.</Notice>
   </section>;
 }
 
@@ -142,7 +117,7 @@ function App() {
   const [sessionError, setSessionError] = useState('');
   const [login, setLogin] = useState(false);
   const [pairing, setPairing] = useState(false);
-  const [view, setView] = useState<'overview' | 'devices' | 'guide'>('overview');
+  const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'guide'>('overview');
   const [decision, setDecision] = useState<{ device: Device; action: 'approve' | 'revoke' } | null>(null);
   const [notice, setNotice] = useState('');
   const fleet = useLive<Fleet>('/fleet');
@@ -166,7 +141,7 @@ function App() {
       <div className="header-right"><span className="version">v0.0.1 / PRIVATE ALPHA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button>}</div>
     </header>
     <main id="main">
-      <nav aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
+      <nav aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
       {sessionError && <Notice error>{sessionError} <button className="inline" onClick={() => void loadSession().catch(() => {})}>Retry</button></Notice>}
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
       {view === 'overview' && <>
@@ -178,7 +153,7 @@ function App() {
         <section className="stats" aria-label="Live fleet counts"><div><span className="stat-value">{fleet.data?.online_devices ?? '—'}</span><span>Online relays</span></div><div><span className="stat-value">{fleet.data?.online_operators ?? '—'}</span><span>Distinct operators</span></div><div><span className="stat-value">{fleet.data?.online_compute_groups ?? '—'}</span><span>Declared compute groups</span></div><p>Live counts, not a decentralization claim. Several relays can belong to one operator or share one machine.</p></section>
         <section className="section-heading"><div><p className="eyebrow">EVIDENCE OVER ASSURANCES</p><h2>Find it. Reproduce it. Challenge it.</h2></div><span className="subtle">The review workflow we’re building</span></section>
         <div className="roles"><article><span className="role-number">01 / INVESTIGATE</span><h3>Follow the weak link.</h3><p>Inspect authorized code and websites. Turn a suspicion into a precise claim with evidence.</p></article><article><span className="role-number">02 / REPRODUCE</span><h3>Make the finding stand up.</h3><p>Run the same conditions against the same target. A confident answer is not a reproduction.</p></article><article><span className="role-number">03 / CHALLENGE</span><h3>Check the fix, too.</h3><p>Question the assumptions. Test the proposed patch and keep disagreements in the report.</p></article></div>
-        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Device onboarding.</strong> Pair a relay, approve it, see its heartbeat and revoke access. This prototype uses owned fixtures; customer assessments and paid reviews are not enabled.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
+        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Onboarding and fixture reviews.</strong> Pair a relay, approve it and run the owned example through three review roles. Customer assessments and paid reviews are not enabled.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
       </>}
       {view === 'devices' && account && <>
         <section className="section-heading fleet-heading"><div><p className="eyebrow">{isAdmin ? 'OPERATOR CONSOLE' : 'YOUR CONTRIBUTION'}</p><h1 className="page-title">{isAdmin ? 'Fleet & approvals' : 'Your relays'}</h1><p className="subtle">Pairing proves a device key. Approval is a separate decision.</p></div><button className="primary" onClick={() => setPairing(true)}>Pair a relay +</button></section>
@@ -188,6 +163,7 @@ function App() {
           {Boolean(devices.data?.length) && <div className="table-scroll"><table><thead><tr><th>Relay / operator</th><th>Runtime / compute</th><th>Access</th><th>Presence</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{devices.data!.map(device => <tr key={device.id}><td><strong>{device.label}</strong><small>{device.operator_name}</small></td><td>{device.runtime === 'owned_fixture' ? 'Owned fixture' : 'Hermes'}<small>{device.compute_group}</small></td><td><span className={`badge ${device.approval}`}>{device.approval === 'pending' ? 'Awaiting approval' : device.approval}</span></td><td><span className={`presence ${device.state}`}>{device.state.replaceAll('_', ' ')}</span><small>{device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleTimeString() : 'No heartbeat yet'}</small></td><td className="row-actions">{isAdmin && device.approval === 'pending' && <button className="approve" onClick={() => setDecision({ device, action: 'approve' })}>Approve</button>}{device.approval !== 'revoked' && <button className="quiet" onClick={() => setDecision({ device, action: 'revoke' })}>Revoke</button>}</td></tr>)}</tbody></table></div>}
         </section><p className="fine">An approved relay is counted online after a fresh heartbeat. Pause and resume from its machine. Presence expires after 30 seconds without a heartbeat.</p>
       </>}
+      {view === 'reviews' && account && session?.csrf_token && <Reviews csrf={session.csrf_token} />}
       {view === 'guide' && <Guide />}
     </main>
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>

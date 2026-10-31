@@ -147,6 +147,13 @@ pub fn router(state: AppState) -> Router {
         .route("/api/pairings/claim", post(gateway::claim))
         .route("/api/devices/{id}/decision", post(gateway::decision))
         .route(
+            "/api/reviews",
+            get(gateway::reviews).post(gateway::create_review),
+        )
+        .route("/api/reviews/{id}", get(gateway::review))
+        .route("/api/reviews/{id}/cancel", post(gateway::cancel_review))
+        .route("/api/reviews/{id}/report", get(gateway::report))
+        .route(
             "/api/{*path}",
             axum::routing::any(|| async { ApiError::new(StatusCode::NOT_FOUND, "not_found") }),
         )
