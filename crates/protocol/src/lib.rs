@@ -210,6 +210,171 @@ pub struct FleetSummary {
     pub online_compute_groups: i64,
 }
 
+/// The first queued review executes only compiled-in, owned fixtures. It carries
+/// no URL, source archive, shell command, credentials or model instructions.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CreateReview {
+    pub request_id: Uuid,
+    pub scenario: FixtureScenario,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FixtureScenario {
+    AccessControlV1,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewRole {
+    Investigator,
+    Reproducer,
+    Challenger,
+}
+
+impl ReviewRole {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Investigator => "investigator",
+            Self::Reproducer => "reproducer",
+            Self::Challenger => "challenger",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkPoll {
+    pub sequence: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WorkAssignment {
+    pub lease_id: Uuid,
+    pub review_id: Uuid,
+    pub role: ReviewRole,
+    pub scenario: FixtureScenario,
+    pub expires_at: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WorkReply {
+    pub assignment: Option<WorkAssignment>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FixtureVersion {
+    Original,
+    Patched,
+    Clean,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct FixtureCheck {
+    pub name: String,
+    pub expected: bool,
+    pub actual: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct FixtureRun {
+    pub version: FixtureVersion,
+    pub completed: bool,
+    pub checks: Vec<FixtureCheck>,
+    pub elapsed_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct FixtureResult {
+    pub runs: Vec<FixtureRun>,
+}
+
+impl FixtureResult {
+    /// Validate the specific fixture regression, not a claim about an arbitrary
+    /// target or proof that a remote operator really executed these checks.
+    pub fn matches_fixture(&self) -> bool {
+        self.runs.len() == 3
+            && self
+                .runs
+                .iter()
+                .zip([
+                    FixtureVersion::Original,
+                    FixtureVersion::Patched,
+                    FixtureVersion::Clean,
+                ])
+                .all(|(run, version)| {
+                    run.version == version
+                        && run.completed
+                        && run.elapsed_ms <= 5_000
+                        && run.checks.len() == 3
+                        && run
+                            .checks
+                            .iter()
+                            .zip([
+                                ("owner_can_read", true),
+                                ("another_user_can_read", false),
+                                ("anonymous_can_read", false),
+                            ])
+                            .all(|(check, (name, expected))| {
+                                check.name == name
+                                    && check.expected == expected
+                                    && check.actual
+                                        == (expected
+                                            || (version == FixtureVersion::Original
+                                                && name == "another_user_can_read"))
+                            })
+                })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CompleteWork {
+    pub lease_id: Uuid,
+    pub result: FixtureResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WorkAccepted {
+    pub accepted: bool,
+    pub replayed: bool,
+    pub fixture_matches: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ReviewStepView {
+    pub role: ReviewRole,
+    pub state: String,
+    pub attempts: i32,
+    pub device_id: Option<Uuid>,
+    pub operator_id: Option<Uuid>,
+    pub compute_group: Option<String>,
+    pub result: Option<FixtureResult>,
+    pub fixture_matches: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ReviewView {
+    pub id: Uuid,
+    pub request_id: Uuid,
+    pub scenario: FixtureScenario,
+    pub mode: String,
+    pub state: String,
+    pub created_at: i64,
+    pub deadline_at: i64,
+    pub evidence_source: String,
+    pub steps: Vec<ReviewStepView>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CancelReview {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,6 +422,58 @@ mod tests {
                 serde_json::json!({"sequence": 1, "paused": false, "running": 0, "admin": true})
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn fixture_verdict_requires_the_original_failure_and_both_passing_controls() {
+        let mut result = FixtureResult {
+            runs: [
+                FixtureVersion::Original,
+                FixtureVersion::Patched,
+                FixtureVersion::Clean,
+            ]
+            .into_iter()
+            .map(|version| FixtureRun {
+                version,
+                completed: true,
+                elapsed_ms: 10,
+                checks: [
+                    ("owner_can_read", true),
+                    ("another_user_can_read", false),
+                    ("anonymous_can_read", false),
+                ]
+                .into_iter()
+                .map(|(name, expected)| FixtureCheck {
+                    name: name.into(),
+                    expected,
+                    actual: expected
+                        || (version == FixtureVersion::Original && name == "another_user_can_read"),
+                })
+                .collect(),
+            })
+            .collect(),
+        };
+        assert!(result.matches_fixture());
+        result.runs[0].checks[1].actual = false;
+        assert!(
+            !result.matches_fixture(),
+            "a passing original is not a reproduced flaw"
+        );
+        result.runs[0].checks[1].actual = true;
+        result.runs[1].checks[1].actual = true;
+        assert!(!result.matches_fixture(), "the patch must close the flaw");
+        result.runs[1].checks[1].actual = false;
+        result.runs[2].completed = false;
+        assert!(
+            !result.matches_fixture(),
+            "a failed control cannot be accepted"
+        );
+        result.runs[2].completed = true;
+        result.runs.swap(0, 1);
+        assert!(
+            !result.matches_fixture(),
+            "results must bind the expected versions"
         );
     }
 }
