@@ -18,6 +18,8 @@ pub struct WebsiteReviewer {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WebsiteReviewPlan {
+    #[serde(default = "crate::default_agent_review_seconds")]
+    pub review_timeout_seconds: u64,
     pub site_check_id: Uuid,
     pub snapshot_sha256: String,
     pub candidates: Vec<WebsiteReviewer>,
@@ -224,7 +226,7 @@ impl WebsiteAgentResult {
             && run.image_digest.strip_prefix("sha256:").is_some_and(digest)
             && digest(&self.snapshot_sha256)
             && self.inspected_snapshot_sha256.as_deref().is_none_or(digest)
-            && run.duration_ms <= 660_000
+            && run.duration_ms <= crate::MAX_AGENT_RESULT_DURATION_MS
             && run.inference_calls <= 4
             && run.terminal_calls <= 16
             && (self.raw_summary.is_empty() || text(&self.raw_summary, 4000))
@@ -283,8 +285,10 @@ impl WebsiteAssessment {
 
 #[cfg(test)]
 mod tests {
+    use super::WebsiteReviewPlan;
     use crate::{DeviceKey, WorkPoll, WorkResult, sign, verify};
     use serde_json::json;
+    use uuid::Uuid;
 
     #[test]
     fn an_old_signed_poll_stays_identical_and_cannot_opt_in() {
@@ -308,12 +312,28 @@ mod tests {
         let result: WorkResult = serde_json::from_value(encoded.clone()).unwrap();
         assert_eq!(result.mode(), crate::ReviewMode::WebsiteAgent);
         assert!(!result.matches_fixture());
-        let WorkResult::Website(result) = result else {
+        let WorkResult::Website(mut result) = result else {
             panic!("wrong result variant");
         };
         assert!(result.valid());
+        result.execution.duration_ms = crate::MAX_AGENT_RESULT_DURATION_MS;
+        assert!(result.valid());
+        result.execution.duration_ms += 1;
+        assert!(!result.valid());
         let mut unknown = encoded;
         unknown["passed"] = json!(true);
         assert!(serde_json::from_value::<WorkResult>(unknown).is_err());
+    }
+
+    #[test]
+    fn older_plans_and_fleet_summaries_keep_the_default_time_budget() {
+        let plan: WebsiteReviewPlan = serde_json::from_value(json!({"site_check_id":Uuid::new_v4(),"snapshot_sha256":"a".repeat(64),"candidates":[]})).unwrap();
+        assert_eq!(plan.review_timeout_seconds, 2100);
+        let fleet: crate::FleetSummary = serde_json::from_value(
+            json!({"online_devices":0,"online_operators":0,"online_compute_groups":0}),
+        )
+        .unwrap();
+        assert_eq!(fleet.agent_review_timeout_seconds, 2100);
+        assert_eq!(crate::agent_review_seconds(1800), 5700);
     }
 }

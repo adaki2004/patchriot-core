@@ -219,6 +219,7 @@ test('keeps conflicting evidence visible without presenting it as a successful r
 
 test('agent checks are an explicit choice and a retry keeps the same request identity', async ({ page }) => {
   await setup(page, true);
+  await page.route('**/api/fleet', route => route.fulfill({ json: { ...fleet, agent_review_timeout_seconds: 5700 } }));
   const submitted: Record<string, unknown>[] = [];
   await page.route('**/api/reviews', async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: [] });
@@ -231,7 +232,7 @@ test('agent checks are an explicit choice and a retry keeps the same request ide
   await page.getByRole('button', { name: 'New example review +' }).click();
   await expect(page.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
   await page.getByRole('radio', { name: 'Local agent check', exact: false }).check();
-  await expect(page.getByText('Expires after 35 minutes', { exact: false })).toBeVisible();
+  await expect(page.getByText('Expires after 95 minutes', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Run agent checks →' }).click();
   await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
   await page.getByRole('button', { name: 'Run agent checks →' }).click();

@@ -20,6 +20,25 @@ pub const PAIRING_STATUS_PATH: &str = "/v1/pairings/status";
 pub const SIGNATURE_MAX_AGE_SECONDS: i64 = 120;
 pub const SIGNATURE_MAX_FUTURE_SECONDS: i64 = 30;
 
+/// Both deployment and operator limits are explicit. Renewal cannot extend a
+/// saved attempt, and the relay reserves one minute for cleanup/reporting.
+pub const DEFAULT_AGENT_ATTEMPT_SECONDS: u64 = 600;
+pub const MAX_AGENT_ATTEMPT_SECONDS: u64 = 1800;
+pub const AGENT_CLEANUP_SECONDS: u64 = 60;
+pub const MAX_AGENT_RESULT_DURATION_MS: u64 = (MAX_AGENT_ATTEMPT_SECONDS + 60) * 1000;
+
+pub fn default_agent_attempt_seconds() -> u64 {
+    DEFAULT_AGENT_ATTEMPT_SECONDS
+}
+
+pub fn agent_review_seconds(attempt_seconds: u64) -> u64 {
+    attempt_seconds.saturating_mul(3).saturating_add(300)
+}
+
+pub fn default_agent_review_seconds() -> u64 {
+    agent_review_seconds(DEFAULT_AGENT_ATTEMPT_SECONDS)
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SignedRequest<T> {
@@ -212,6 +231,8 @@ pub struct DeviceDecision {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FleetSummary {
+    #[serde(default = "default_agent_review_seconds")]
+    pub agent_review_timeout_seconds: u64,
     pub online_devices: i64,
     pub online_operators: i64,
     pub online_compute_groups: i64,
@@ -495,7 +516,7 @@ impl AgentResult {
                 .image_digest
                 .strip_prefix("sha256:")
                 .is_some_and(digest)
-            && self.duration_ms <= 660_000
+            && self.duration_ms <= MAX_AGENT_RESULT_DURATION_MS
             && self.inference_calls <= 4
             && self.terminal_calls <= 16
             && self.summary.len() <= 4_000
@@ -656,6 +677,11 @@ mod tests {
             summary: "The patch fixes the access-control problem.".into(),
         };
         assert!(result.valid());
+        result.duration_ms = MAX_AGENT_RESULT_DURATION_MS;
+        assert!(result.valid());
+        result.duration_ms += 1;
+        assert!(!result.valid());
+        result.duration_ms = 500_000;
         assert!(!result.matches_fixture());
         result.observation = Some(AgentFixtureObservation {
             original: AgentFixtureCheck {

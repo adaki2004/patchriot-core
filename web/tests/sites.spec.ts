@@ -109,7 +109,7 @@ test('website review requires three explicit devices and snapshot-specific shari
   await setup(page);
   const devices = [1, 2, 3].map(i => ({ device_id: `00000000-0000-4000-8000-00000000000${i + 4}`, operator_id: account.id, operator_name: 'One operator', device_name: `CPU agent ${i}`, declared_model: 'test-model', compute_group: 'same-machine' }));
   await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: { ...pending, state: 'collected', evidence_available: true, summary: { homepage_sha256: '2'.repeat(64), external_scripts: 1, inline_scripts: 1, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 5000, requests_made: 2, finished_at: 1793448000 } } }));
-  await page.route(`**/api/site-checks/${id}/review-plan`, route => route.fulfill({ json: { site_check_id: id, snapshot_sha256: '3'.repeat(64), candidates: devices } }));
+  await page.route(`**/api/site-checks/${id}/review-plan`, route => route.fulfill({ json: { site_check_id: id, snapshot_sha256: '3'.repeat(64), candidates: devices, review_timeout_seconds: 5700 } }));
   let submitted: Record<string, unknown> | undefined;
   const review = { id: '00000000-0000-4000-8000-000000000200', mode: 'website_agent', state: 'queued', steps: [], created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict', website: { site_check_id: id, snapshot_sha256: '3'.repeat(64), reviewers: devices } };
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
@@ -124,6 +124,7 @@ test('website review requires three explicit devices and snapshot-specific shari
   await expect(start).toBeDisabled();
   for (const [i, role] of ['Investigator', 'Reproducer', 'Challenger'].entries()) await page.getByLabel(`${role} device`).selectOption(devices[i].device_id);
   await expect(page.getByRole('dialog')).toContainText('3 devices · 1 operator · 1 declared compute group');
+  await expect(page.getByRole('dialog')).toContainText('up to 95 minutes including waiting');
   await expect(page.getByLabel('Reproducer device').locator(`option[value="${devices[0].device_id}"]`)).toHaveJSProperty('disabled', true);
   await start.click();
   expect(submitted).toBeUndefined();

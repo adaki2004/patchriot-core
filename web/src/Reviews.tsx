@@ -39,6 +39,7 @@ function NewReview({ csrf, onCreated, onClose }: { csrf: string; onCreated: (rev
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'owned_fixture' | 'owned_agent'>('owned_fixture');
+  const limits = useLive<{ agent_review_timeout_seconds?: number }>('/fleet', mode === 'owned_agent');
   useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
@@ -56,8 +57,8 @@ function NewReview({ csrf, onCreated, onClose }: { csrf: string; onCreated: (rev
         <label><input type="radio" name="review-mode" checked={mode === 'owned_fixture'} onChange={() => { setMode('owned_fixture'); requestId.current = crypto.randomUUID(); }} /><span><strong>Quick fixture check</strong><small>Built-in tests. No model calls.</small></span></label>
         <label><input type="radio" name="review-mode" checked={mode === 'owned_agent'} onChange={() => { setMode('owned_agent'); requestId.current = crypto.randomUUID(); }} /><span><strong>Local agent check</strong><small>Agents inspect the code and run tools.</small></span></label>
       </fieldset>
-      <ul className="review-terms"><li>Three distinct approved devices; shared machines run one at a time.</li><li>{mode === 'owned_agent' ? 'Each agent checks the same supplied bug and fix. CPU models can take several minutes per role.' : 'Each relay runs the original, the fix and a separate clean control.'}</li><li>Expires after {mode === 'owned_agent' ? '35' : '15'} minutes, including waiting. You can cancel while it is queued or running.</li></ul>
-      {error && <div className="notice error" role="alert">{error}</div>}<button className="primary full" disabled={busy}>{busy ? 'Creating review…' : mode === 'owned_agent' ? 'Run agent checks →' : 'Run the owned example →'}</button>
+      <ul className="review-terms"><li>Three distinct approved devices; shared machines run one at a time.</li><li>{mode === 'owned_agent' ? 'Each agent checks the same supplied bug and fix. CPU models can take several minutes per role.' : 'Each relay runs the original, the fix and a separate clean control.'}</li><li>Expires after {mode === 'owned_agent' ? Math.ceil((limits.data?.agent_review_timeout_seconds ?? 2100) / 60) : 15} minutes, including waiting. You can cancel while it is queued or running.</li></ul>
+      {(error || limits.error) && <div className="notice error" role="alert">{error || limits.error}</div>}<button className="primary full" disabled={busy || mode === 'owned_agent' && (!limits.data || !!limits.error)}>{busy ? 'Creating review…' : mode === 'owned_agent' ? 'Run agent checks →' : 'Run the owned example →'}</button>
     </form>
   </dialog>;
 }

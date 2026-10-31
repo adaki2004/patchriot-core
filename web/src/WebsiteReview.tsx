@@ -5,7 +5,7 @@ import { useLive } from './useLive';
 
 export type WebsiteReviewer = { device_id: string; operator_id: string; operator_name: string; device_name: string; declared_model: string; compute_group: string };
 export type WebsiteContext = { site_check_id: string; snapshot_sha256: string; reviewers: WebsiteReviewer[] };
-type Plan = { site_check_id: string; snapshot_sha256: string; candidates: WebsiteReviewer[] };
+type Plan = { site_check_id: string; snapshot_sha256: string; candidates: WebsiteReviewer[]; review_timeout_seconds?: number };
 type Finding = { title: string; support: 'observed_in_snapshot' | 'needs_live_test' | 'not_supported'; explanation: string; suggested_action: string; citations: { resource_sha256: string; quote: string }[] };
 export type WebsiteResult = {
   kind: 'website_agent_v1'; snapshot_sha256: string; inspected_snapshot_sha256: string | null;
@@ -47,7 +47,7 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onClose }: { siteI
       {(plan.data?.candidates.length ?? 0) < 3 && <p className="notice">{plan.data ? `${plan.data.candidates.length} eligible devices online. Three are needed.` : 'Checking available devices…'} Each needs private-work approval and the operator’s website-review opt-in.</p>}
       {ready && <p className="notice">3 devices · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. Shared operators, machines or models are not independent reviewers.</p>}
       <label className="check"><input type="checkbox" name="consent" required /><span>I allow these three devices and their named operators to read this snapshot and earlier reports for this review.</span></label>
-      <p className="fine">Free pilot. Three sequential roles, up to 35 minutes including waiting. No automatic replacement devices. Reports can include quoted website text; raw snapshot bodies expire after seven days.</p>
+      <p className="fine">Free pilot. Three sequential roles, up to {Math.ceil((plan.data?.review_timeout_seconds ?? 2100) / 60)} minutes including waiting. No automatic replacement devices. Reports can include quoted website text; raw snapshot bodies expire after seven days.</p>
       <button className="primary full" disabled={busy || !ready}>{busy ? 'Starting review…' : 'Share snapshot & start review →'}</button>
       <button type="button" className="quiet full" onClick={plan.refresh}>Refresh eligible devices ↻</button>
     </fieldset></form>
