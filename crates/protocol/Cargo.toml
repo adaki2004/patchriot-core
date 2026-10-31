@@ -1,0 +1,19 @@
+[package]
+name = "patchriot-protocol"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.94"
+license = "Apache-2.0"
+description = "Patchriot device pairing and heartbeat wire types"
+publish = false
+
+[dependencies]
+ed25519-dalek = "3.0.0"
+hex = "0.4.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+uuid = { version = "1.22", features = ["v4", "serde"] }
+
+[lints]
+workspace = true

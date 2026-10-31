@@ -8,7 +8,7 @@ Patchriot is an AI defense swarm pooling agents, inference and compute to help p
 
 A compromised script, a vulnerable dependency or a misconfigured endpoint can put a whole product and its users at risk. Patchriot brings agents together to investigate those weaknesses, reproduce what they find and check proposed fixes. The result is a private report with evidence people can inspect and act on.
 
-**Development status:** the relay's first local fixture runner is implemented. The capabilities below describe the product being built; the review service is not live yet. See the [implementation plan and status](#implementation-plan-and-status).
+**Development status:** the local relay runner and signed device onboarding API are implemented. The capabilities below describe the product being built; the website and paid review service are not live yet. See the [implementation plan and status](#implementation-plan-and-status).
 
 ## What you can bring to Patchriot
 
@@ -110,7 +110,7 @@ Owned backend and relay components use Rust; the website uses React/TypeScript. 
 
 ## Implementation plan and status
 
-The relay now has a runnable owned-fixture demo: reproduce an access-control regression, check its fix and clean control, and exercise cancellation, deadlines and output bounds. It makes no model calls and has no customer-code sandbox yet. Website assessment, login, dispatch and payments remain planned. Each milestone adds tested behavior and reproducible setup instructions.
+The relay has a runnable owned-fixture demo and device commands for pairing, heartbeat presence, pause and resume. The dispatcher persists pairing claims, manual approval and revocation in PostgreSQL. Neither accepts arbitrary customer commands or makes model calls. Website assessment, browser login, work dispatch and payments remain planned. Each milestone adds tested behavior and reproducible setup instructions.
 
 | Milestone | What completion means | Status |
 | --- | --- | --- |
@@ -118,7 +118,8 @@ The relay now has a runnable owned-fixture demo: reproduce an access-control reg
 | Local process runner | Owned-code regression and clean control; cancellation, deadlines, output bounds and cleanup | Implemented in relay |
 | Linux sandbox | Enforced filesystem/network/resource limits, host-canary and escape checks | Next |
 | Hermes and CPU inference | A real agent run with measured resource use and reproducible output | Planned; VPS access needed |
-| Pairing and dispatch | Short onboarding, manual approval, leases, retries and revocation | Planned |
+| Device onboarding | Signed pairing, separate manual approval, heartbeat presence, pause and revocation | API and relay implemented; dashboard next |
+| Work dispatch | Leases, retries, resource limits and accepted results | Planned |
 | Review and verification | Investigator, reproducer and challenger roles with checked evidence and patch regressions | Planned |
 | Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Planned |
 | Website assessments | Owned-site fixtures, script/request inspection, DNS/TLS observations and scoped active checks | Planned |
@@ -131,4 +132,6 @@ The first test targets are owned fixtures. Run `cargo run --locked -- demo` insi
 
 ## License
 
-Original material is [AGPL-3.0-only](LICENSE). See [NOTICE](NOTICE) for attribution. A future shared protocol crate will carry a separate Apache-2.0 license before use by the private service. Credentials, customer code and production data are excluded from source control.
+Original material is [AGPL-3.0-only](LICENSE), except [crates/protocol](crates/protocol), which is separately licensed under [Apache-2.0](crates/protocol/LICENSE) for use by the relay and private dispatcher. See [NOTICE](NOTICE) for attribution. Credentials, customer code and production data are excluded from source control.
+
+The protocol crate defines signed request DTOs and their checks; `cargo test --locked` runs its tests. Keep the three repositories in sibling directories for local builds. With a local dispatcher on port 7411, both binaries built and the internal key/audience in your environment, `python3 scripts/smoke-relays.py` verifies pairing through revocation using three temporary relays. It reports one operator and one shared compute group, then revokes its devices. It does not invoke models or perform website checks.

@@ -1,0 +1,4 @@
+Patchriot protocol types
+Copyright 2026 Daniel Keszey
+
+The files in this crate are licensed under Apache-2.0. This exception applies only to this crate; it does not change the license of the surrounding patchriot-core repository.
