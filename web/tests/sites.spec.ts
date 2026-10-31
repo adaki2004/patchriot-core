@@ -168,3 +168,60 @@ test('recorded website timeouts show what stopped instead of implying a complete
   await expect(detail.getByText('Reported', { exact: true })).toHaveCount(0);
   await expect(detail).not.toContainText('No supported finding was reported.');
 });
+
+test('snapshot comparison is an explicit private read and displays gaps without declaring removal', async ({ page }) => {
+  await setup(page);
+  const baseline = '00000000-0000-4000-8000-000000000101';
+  const summary = { homepage_sha256: '2'.repeat(64), external_scripts: 1, inline_scripts: 0, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 5000, requests_made: 2, finished_at: 1793448000 };
+  const current = { ...pending, state: 'collected', evidence_available: true, summary };
+  let retained = true;
+  await page.route('**/api/site-checks', route => route.fulfill({ json: [current, { ...current, id: baseline, evidence_available: retained, summary: { ...summary, finished_at: summary.finished_at - 100 } }, { ...current, id: 'not-my-capture', requester_id: 'another-owner' }, { ...current, id: 'another-scope', scope_sha256: 'f'.repeat(64) }] }));
+  await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: current }));
+  const fingerprint = { sha256: '1'.repeat(64), bytes: 20, content_type: 'text/html', headers: { 'content-security-policy': "default-src 'self'" } };
+  let reads = 0;
+  await page.route(`**/api/site-checks/${id}/compare/${baseline}`, route => {
+    expect(route.request().method()).toBe('GET'); reads++;
+    return route.fulfill({ json: { baseline_id: baseline, current_id: id, baseline_finished_at: summary.finished_at - 100, current_finished_at: summary.finished_at, script_references_changed: true, baseline_coverage: { captured_scripts: 1, skipped_scripts: 0, data_only_scripts: 0, script_limit_reached: false }, current_coverage: { captured_scripts: 0, skipped_scripts: 1, data_only_scripts: 0, script_limit_reached: false }, resources: [{ kind: 'homepage', url: 'https://example.com/', change: 'changed', before: fingerprint, after: { ...fingerprint, headers: { 'content-security-policy': '<img src=x onerror=alert(1)>' } } }, { kind: 'external_script', url: 'https://example.com/app.js', change: 'only_earlier', before: fingerprint, after: null }] } });
+  });
+  await page.getByRole('button', { name: 'https://example.com/', exact: false }).first().click();
+  const comparison = page.getByRole('region', { name: 'Compare saved snapshots' });
+  await expect(comparison.getByRole('combobox')).toBeVisible();
+  await expect(comparison.getByRole('option')).toHaveCount(2);
+  expect(reads).toBe(0);
+  await comparison.getByLabel('Earlier snapshot').selectOption(baseline);
+  await expect(comparison.getByRole('heading', { name: 'Captured evidence differs.' })).toBeVisible();
+  expect(reads).toBe(1);
+  await expect(comparison).toContainText('Missing captures do not prove removal.');
+  await expect(comparison).toContainText('Only in earlier capture');
+  await comparison.getByText('https://example.com/', { exact: true }).click();
+  await expect(comparison).toContainText('<img src=x onerror=alert(1)>');
+  await expect(comparison.locator('img, script')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  retained = false;
+  await page.getByRole('button', { name: 'Refresh websites ↻' }).click();
+  await expect(comparison.getByRole('heading', { name: 'Captured evidence differs.' })).toHaveCount(0);
+  await expect(comparison).toContainText('No earlier retained snapshot');
+});
+
+test('matching snapshots are not a safety verdict and failed comparison reads can be retried', async ({ page }) => {
+  await setup(page);
+  const baseline = '00000000-0000-4000-8000-000000000101';
+  const summary = { homepage_sha256: '2'.repeat(64), external_scripts: 0, inline_scripts: 0, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 5000, requests_made: 1, finished_at: 1793448000 };
+  const current = { ...pending, state: 'collected', evidence_available: true, summary };
+  await page.route('**/api/site-checks', route => route.fulfill({ json: [current, { ...current, id: baseline, summary: { ...summary, finished_at: summary.finished_at - 100 } }] }));
+  await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: current }));
+  const coverage = { captured_scripts: 0, skipped_scripts: 0, data_only_scripts: 0, script_limit_reached: false };
+  const fingerprint = { sha256: '1'.repeat(64), bytes: 20, content_type: 'text/html', headers: {} };
+  let fail = true;
+  await page.route(`**/api/site-checks/${id}/compare/${baseline}`, route => fail ? route.fulfill({ status: 503, json: { error: 'dispatcher_unavailable' } }) : route.fulfill({ json: { baseline_id: baseline, current_id: id, baseline_finished_at: summary.finished_at - 100, current_finished_at: summary.finished_at, script_references_changed: false, baseline_coverage: coverage, current_coverage: coverage, resources: [{ kind: 'homepage', url: 'https://example.com/', change: 'unchanged', before: fingerprint, after: fingerprint }] } }));
+  await page.getByRole('button', { name: 'https://example.com/', exact: false }).first().click();
+  const comparison = page.getByRole('region', { name: 'Compare saved snapshots' });
+  await comparison.getByLabel('Earlier snapshot').selectOption(baseline);
+  await expect(comparison.getByRole('alert')).toBeVisible();
+  await expect(comparison.getByRole('heading', { name: 'Captured values match.' })).toHaveCount(0);
+  fail = false;
+  await comparison.getByRole('button', { name: 'Retry comparison' }).click();
+  await expect(comparison.getByRole('heading', { name: 'Captured values match.' })).toBeVisible();
+  await expect(comparison).toContainText('Matching captures do not establish safety.');
+  await expect(comparison.getByRole('alert')).toHaveCount(0);
+});

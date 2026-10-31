@@ -132,3 +132,55 @@ pub struct WebsiteSnapshot {
     pub started_at: i64,
     pub finished_at: i64,
 }
+
+/// Differences between two retained captures of the same approved scope. This
+/// describes saved bytes and selected headers, not live behavior or site safety.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebsiteComparison {
+    pub baseline_id: Uuid,
+    pub current_id: Uuid,
+    pub baseline_finished_at: i64,
+    pub current_finished_at: i64,
+    pub resources: Vec<ResourceComparison>,
+    pub script_references_changed: bool,
+    pub baseline_coverage: ComparisonCoverage,
+    pub current_coverage: ComparisonCoverage,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ComparisonCoverage {
+    pub captured_scripts: u16,
+    pub skipped_scripts: u16,
+    pub data_only_scripts: u16,
+    pub script_limit_reached: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceChange {
+    Unchanged,
+    Changed,
+    /// Absence from a capture does not establish addition or removal on a site.
+    OnlyEarlier,
+    OnlyLater,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ResourceComparison {
+    pub kind: ResourceKind,
+    /// Inline scripts match by their position in the HTML, not a stable identity.
+    pub url: String,
+    pub change: ResourceChange,
+    pub before: Option<ResourceFingerprint>,
+    pub after: Option<ResourceFingerprint>,
+}
+
+/// Intentionally excludes response bodies, IPs and collection times. A different
+/// timestamp or CDN address alone is not reported as a content change.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ResourceFingerprint {
+    pub sha256: String,
+    pub bytes: u64,
+    pub content_type: String,
+    pub headers: BTreeMap<String, String>,
+}

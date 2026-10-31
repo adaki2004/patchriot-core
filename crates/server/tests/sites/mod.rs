@@ -9,6 +9,7 @@ async fn site_routes_require_sessions_csrf_and_admin_decisions() {
         format!("/api/site-checks/{id}"),
         format!("/api/site-checks/{id}/evidence"),
         format!("/api/site-checks/{id}/review-plan"),
+        format!("/api/site-checks/{id}/compare/{}", Uuid::new_v4()),
     ] {
         assert_eq!(
             test.request("GET", &path, Value::Null, &[]).await.0,

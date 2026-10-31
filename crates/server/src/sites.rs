@@ -6,7 +6,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use patchriot_protocol::websites::{
-    CancelSiteCheck, CreateSiteCheck, DecideSiteCheck, SiteCheckView, WebsiteSnapshot,
+    CancelSiteCheck, CreateSiteCheck, DecideSiteCheck, SiteCheckView, WebsiteComparison,
+    WebsiteSnapshot,
 };
 use patchriot_protocol::{
     ReviewView,
@@ -58,6 +59,23 @@ pub async fn create(
         "/internal/site-checks",
         Some(&session),
         Some(&input),
+    )
+    .await
+}
+
+pub async fn compare(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((id, baseline_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<WebsiteComparison>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    gateway::request_with_limit::<(), _>(
+        &state,
+        Method::GET,
+        &format!("/internal/site-checks/{id}/compare/{baseline_id}"),
+        Some(&session),
+        None,
+        1024 * 1024,
     )
     .await
 }
