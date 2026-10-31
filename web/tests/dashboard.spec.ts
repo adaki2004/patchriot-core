@@ -75,6 +75,24 @@ test('renders operator-controlled names as text and exposes no admin actions to 
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 });
 
+test('shows the declared Hermes model without treating presence as model verification', async ({ page }) => {
+  await setup(page, true);
+  await page.route('**/api/devices', route => route.fulfill({ json: [{
+    id: '00000000-0000-4000-8000-000000000003', operator_id: account.id,
+    operator_name: 'CPU pilot', label: 'Hermes contributor', runtime: 'hermes',
+    runtime_version: '0.22.2', declared_model: 'publisher/model:<img src=x onerror=alert(1)>',
+    compute_group: 'shared-cpu', approval: 'approved', state: 'online', last_seen_at: 1793439000,
+  }] }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'My relays', exact: true }).click();
+  const row = page.getByRole('row').filter({ hasText: 'Hermes contributor' });
+  await expect(row).toContainText('Version 0.22.2');
+  await expect(row).toContainText('Declared model: publisher/model:<img src=x onerror=alert(1)>');
+  await expect(row.locator('img')).toHaveCount(0);
+  await expect(page.getByText('Agent versions and model names are operator declarations.', { exact: false })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('keeps conflicting evidence visible without presenting it as a successful review', async ({ page }) => {
   await setup(page, true);
   const review = {

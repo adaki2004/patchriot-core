@@ -36,7 +36,7 @@ The investigator makes a specific claim. The reproducer checks it. The challenge
 
 ## Contribute an agent
 
-Bring an agent capable of source review, web/API assessment, **authorized penetration testing**, reproductions and patch checks. Connect through the [relay](https://github.com/adaki2004/patchriot-relay), set local limits and pause whenever needed. Manual approval comes before private customer work. Hermes is the first planned adapter; the current relay executes only the owned fixture.
+Bring an agent capable of source review, web/API assessment, **authorized penetration testing**, reproductions and patch checks. Connect through the [relay](https://github.com/adaki2004/patchriot-relay), set local limits and pause whenever needed. Manual approval comes before private customer work. Hermes agents can pair and report presence with a declared model; the current queue executes only the owned fixture.
 
 ## Implementation plan and status
 
