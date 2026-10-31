@@ -1,6 +1,53 @@
 use super::*;
 
 #[tokio::test]
+async fn browser_cannot_set_a_review_price_or_confirm_its_own_payment() {
+    let test = TestApp::new("http://127.0.0.1:9").await;
+    let (cookie, session) = test.login("member").await;
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+        ("x-patchriot-role", "admin"),
+    ];
+    let id = Uuid::new_v4();
+    let consent = json!({"request_id":Uuid::new_v4(), "snapshot_sha256":"1".repeat(64), "device_ids":[Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4()], "accepts_operator_access":true});
+    for (field, value) in [
+        (
+            "price",
+            json!({"asset":"nep141:fixture-usdc", "amount":"1"}),
+        ),
+        ("invoice_id", json!(Uuid::new_v4())),
+        ("payment", json!({"funded":true})),
+    ] {
+        let mut forged = consent.clone();
+        forged[field] = value;
+        let response = test
+            .request(
+                "POST",
+                &format!("/api/site-checks/{id}/review"),
+                forged,
+                &headers,
+            )
+            .await;
+        assert_eq!(
+            response.0,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{}",
+            response.2
+        );
+    }
+    for path in [
+        format!("/api/site-checks/{id}/admit-review"),
+        format!("/api/reviews/{id}/fund"),
+    ] {
+        let response = test.request("POST", &path, json!({}), &headers).await;
+        assert_eq!(response.0, StatusCode::NOT_FOUND, "{}", response.2);
+    }
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn site_routes_require_sessions_csrf_and_admin_decisions() {
     let test = TestApp::new("http://127.0.0.1:9").await;
     let id = Uuid::new_v4();

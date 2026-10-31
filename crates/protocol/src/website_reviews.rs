@@ -34,6 +34,59 @@ pub struct CreateWebsiteReview {
     pub accepts_operator_access: bool,
 }
 
+/// A service price chosen by core. Amounts are positive smallest-unit integers,
+/// encoded as decimal strings so browser clients cannot round them.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ReviewPrice {
+    pub asset: String,
+    pub amount: String,
+}
+
+impl ReviewPrice {
+    pub fn valid(&self) -> bool {
+        !self.asset.is_empty()
+            && self.asset.len() <= 256
+            && !self
+                .asset
+                .chars()
+                .any(|c| c.is_whitespace() || c.is_control())
+            && !self.amount.is_empty()
+            && self.amount.len() <= 19
+            && !self.amount.starts_with('0')
+            && self.amount.bytes().all(|b| b.is_ascii_digit())
+            && self.amount.parse::<i64>().is_ok_and(|value| value > 0)
+    }
+}
+
+/// Internal core → dispatcher admission. Core records the requester's consent
+/// and supplies the price; a browser cannot choose its own payment requirement.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AdmitWebsiteReview {
+    pub consent: CreateWebsiteReview,
+    pub price: ReviewPrice,
+    pub payment_expires_at: i64,
+}
+
+/// Core sends this only after recording a verified provider settlement. The
+/// dispatcher trusts authenticated core, not a wallet hash or agent assertion.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FundReview {
+    pub request_id: Uuid,
+    pub invoice_id: Uuid,
+    pub price: ReviewPrice,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ReviewPayment {
+    pub price: ReviewPrice,
+    pub expires_at: i64,
+    pub invoice_id: Option<Uuid>,
+    pub funded_at: Option<i64>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WebsiteReviewContext {
     pub site_check_id: Uuid,

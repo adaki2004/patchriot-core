@@ -558,6 +558,8 @@ pub struct ReviewView {
     pub steps: Vec<ReviewStepView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub website: Option<website_reviews::WebsiteReviewContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payment: Option<website_reviews::ReviewPayment>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

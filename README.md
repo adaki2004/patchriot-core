@@ -130,7 +130,7 @@ Saving an edit keeps the previous public version unchanged. Publish the correcti
 
 ## Payments: record funds before starting work
 
-The planned checkout uses **NEAR Intents / 1Click** to fund an admitted review. The [payment module](crates/server/src/payments.rs) can request an [exact-output quote](https://docs.near-intents.org/api-reference/oneclick/request-a-swap-quote) using server-approved payment and refund terms. It rejects changed terms, expired quotes and missing deposit instructions. The caller must admit the review and save the quote before showing an address to pay.
+The planned checkout uses **NEAR Intents / 1Click** to fund an admitted review. Dispatcher can reserve the exact snapshot, selected agents and price in **awaiting_payment**, without assigning work. The [payment module](crates/server/src/payments.rs) can request an [exact-output quote](https://docs.near-intents.org/api-reference/oneclick/request-a-swap-quote) using server-approved payment and refund terms. It rejects changed terms, expired quotes and missing deposit instructions. Core must connect these steps and save the quote before showing an address to pay.
 
 Reconciliation checks the saved quote against the provider's settlement response. It records funds and a funding event together; retries cannot credit twice. Late or mismatched amounts stay held for review. The client uses a fixed provider origin, bounded replies and timeouts; redirects and automatic quote retries are disabled.
 
@@ -142,7 +142,7 @@ With `DATABASE_URL` and `PATCHRIOT_1CLICK_API_KEY` in runtime secrets:
 cargo run --locked -p patchriot-core -- payments-reconcile-once
 ```
 
-This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Quote creation is an internal library operation; the browser cannot request one yet. Order admission, checkout, spending, payouts and held-fund release remain unexposed.
+This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Quote creation and paid admission are internal operations. Checkout, funding-event delivery, spending, payouts and held-fund release remain unexposed.
 
 ## Verify it
 
