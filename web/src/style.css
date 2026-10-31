@@ -6,6 +6,7 @@ button { cursor: pointer; }
 button:disabled { opacity: .55; cursor: wait; }
 button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 3px solid #537b1e; outline-offset: 4px; }
+.guide a { color: #39562c; text-underline-offset: 3px; }
 button { border: 0; background: none; color: inherit; }
 header, main, footer { width: min(1240px, calc(100% - 80px)); margin: 0 auto; }
 header { min-height: 104px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }

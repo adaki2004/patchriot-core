@@ -82,7 +82,7 @@ target/debug/patchriot-core invite member "A contributor"
 
 Open **http://127.0.0.1:7410** and enter the private invitation. Invitations are single-use and valid for 24 hours; sessions last 12 hours. On a confirmed session expiry, the browser closes private views and offers sign-in again. `invite-account <account-uuid>` renews access to an existing account. `disable-account <account-uuid>` revokes its sessions.
 
-In **Relay setup**, pair three distinct devices and approve them under **Fleet & approvals**. Then choose **Reviews → New example review**:
+In **Relay setup**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:
 
 - **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
 - **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role; the review expires after 35 minutes including waiting.

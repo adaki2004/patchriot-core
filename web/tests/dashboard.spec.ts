@@ -23,6 +23,35 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await expect(page.getByRole('heading', { name: 'Start with a small contribution.' })).toBeVisible();
 });
 
+test('relay setup distinguishes fixture identities from agents and makes private work a separate opt-in', async ({ page }) => {
+  await setup(page);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Relay setup', exact: true }).click();
+  const guide = page.getByRole('region', { name: 'Start with a small contribution.' });
+  const commands = guide.locator('pre');
+  await expect(guide.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
+  await expect(commands.filter({ hasText: ' init ' })).toContainText('--state-dir ~/.patchriot-fixture');
+  await expect(commands.filter({ hasText: ' init ' })).not.toContainText('--runtime hermes');
+  await expect(commands.filter({ hasText: ' connect ' })).toContainText('--fixtures');
+  await expect(commands.filter({ hasText: ' connect ' })).not.toContainText('--agents');
+  await expect(guide.getByText('Opt in to private website reviews', { exact: true })).toHaveCount(0);
+
+  await guide.getByRole('radio', { name: 'Local agent with Hermes', exact: false }).check();
+  await expect(commands.filter({ hasText: ' init ' })).toContainText('--state-dir ~/.patchriot-agent');
+  await expect(commands.filter({ hasText: ' init ' })).toContainText('--runtime hermes --runtime-version YOUR-HERMES-VERSION');
+  await expect(commands.filter({ hasText: ' init ' })).toContainText('--model YOUR-LOCAL-MODEL');
+  await expect(guide.locator('ol')).toContainText('--agents --agent-config .local/agent.json');
+  await expect(guide.locator('ol')).not.toContainText('--website-reviews');
+  await expect(guide.locator('ol')).not.toContainText('--fixtures');
+  await guide.getByText('Opt in to private website reviews', { exact: true }).click();
+  await expect(guide.locator('details[open]')).toContainText('a requester must select your device');
+  await expect(guide.locator('details[open] pre')).toContainText('--website-reviews');
+  // The build leaves a local executable; no unstated PATH installation is needed.
+  const text = await commands.allTextContents();
+  expect(text.filter(value => value !== 'cargo build --release --locked').every(value => value.startsWith('./target/release/patchriot-relay '))).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('an outage keeps the previous count and displays the failure', async ({ page }) => {
   await setup(page);
   let failing = false;

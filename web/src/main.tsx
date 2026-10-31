@@ -104,16 +104,25 @@ function Decision({ device, action, csrf, onDone, onClose }: { device: Device; a
 }
 
 function Guide() {
+  const [agent, setAgent] = useState(false);
+  const relay = './target/release/patchriot-relay';
+  const state = agent ? '~/.patchriot-agent' : '~/.patchriot-fixture';
+  const connect = `${relay} connect --state-dir ${state}${agent ? ' \\\n  --agents --agent-config .local/agent.json' : ' --fixtures'}`;
   return <section className="guide panel" aria-labelledby="setup-title">
     <p className="eyebrow">A MACHINE. A RELAY. YOUR CHOICE.</p><h2 id="setup-title">Start with a small contribution.</h2>
-    <p>Build the Rust relay, initialize a local identity, then pair it with your account. Read the relay README before running it—or ask your own agent to review it.</p>
+    <p>Read the <a href="https://github.com/adaki2004/patchriot-relay#readme" target="_blank" rel="noreferrer">relay source and setup instructions ↗</a> yourself—or ask your own security agent to review them. Pairing connects a device; it does not prove its safety.</p>
+    <fieldset className="review-mode"><legend>What will this relay run?</legend>
+      <label><input type="radio" name="setup-mode" checked={!agent} onChange={() => setAgent(false)} /><span><strong>Quick fixture check</strong><small>Start here. Built-in tests, no model or Docker needed.</small></span></label>
+      <label><input type="radio" name="setup-mode" checked={agent} onChange={() => setAgent(true)} /><span><strong>Local agent with Hermes</strong><small>Your local model and a pinned, isolated runtime.</small></span></label>
+    </fieldset>
     <ol className="steps">
-      <li><strong>Install and inspect.</strong><span>Keep the core and relay repositories beside each other. In the relay repository:</span><pre>cargo build --release --locked</pre></li>
-      <li><strong>Create your device identity.</strong><span>Get the dispatcher URL and deployment audience from the operator. Use the same compute group for devices sharing a machine.</span><pre>{'patchriot-relay init --state-dir ~/.patchriot \\\n  --dispatcher https://YOUR-DISPATCHER \\\n  --audience YOUR-DEPLOYMENT \\\n  --label my-relay --compute-group my-machine'}</pre></li>
-      <li><strong>Pair, then stay connected.</strong><span>Enter the pairing code under “Pair a relay”. An administrator approves the device before it joins the fleet.</span><pre>{'patchriot-relay pair --state-dir ~/.patchriot\npatchriot-relay connect --state-dir ~/.patchriot'}</pre></li>
-      <li><strong>Stay in control.</strong><span>Pause locally whenever needed. Keep the state directory private; it contains your device key.</span><pre>{'patchriot-relay pause --state-dir ~/.patchriot\npatchriot-relay resume --state-dir ~/.patchriot'}</pre></li>
+      <li><strong>Build and check locally.</strong><span>Use Rust 1.94.1 on Linux or macOS. Keep the core and relay repositories beside each other, then run these commands from the relay repository.</span><pre>cargo build --release --locked</pre>{agent && <span>First follow the relay README to build the container image, configure your local model and save its pinned settings in <code>.local/agent.json</code>. Do not put keys or private settings in Git.</span>}<pre>{agent ? `${relay} agent-check --config .local/agent.json` : `${relay} demo`}</pre><span>{agent ? 'Continue after the tool check passes and container cleanup is confirmed. This tests a supplied example, not independent security expertise.' : 'The original flaw should be reproduced, with the supplied fix and clean control passing.'}</span></li>
+      <li><strong>Create a separate device identity.</strong><span>Replace the placeholders with your dispatcher URL and deployment audience{agent ? ', inspected Hermes version and installed model name' : ''}. Use a new state directory for each device and the same compute group for devices sharing a machine.</span><pre>{`${relay} init --state-dir ${state} \\\n  --dispatcher https://YOUR-DISPATCHER \\\n  --audience YOUR-DEPLOYMENT \\\n  --label ${agent ? 'my-agent' : 'my-fixture'} --compute-group my-machine${agent ? ' \\\n  --runtime hermes --runtime-version YOUR-HERMES-VERSION \\\n  --model YOUR-LOCAL-MODEL' : ''}`}</pre></li>
+      <li><strong>Pair, get approval, then connect.</strong><span>Enter the five-minute code under “Pair a relay”. An administrator approves the device under “Fleet & approvals”. Keep the connection running in a terminal.</span><pre>{`${relay} pair --state-dir ${state}\n${connect}`}</pre></li>
+      <li><strong>Stay in control.</strong><span>Use a second terminal to inspect, pause or resume your relay. Keep the state directory private; it contains your device key.</span><pre>{`${relay} status --state-dir ${state}\n${relay} pause --state-dir ${state}\n${relay} resume --state-dir ${state}`}</pre></li>
     </ol>
-    <Notice>Use <code>--fixtures</code> for the quick built-in tests. For local agent checks, pair a Hermes device and use <code>--agents --agent-config PATH</code>; the relay README covers the isolated runtime and model setup. Both modes need three approved devices, running one role at a time on shared machines. Different relay processes on one machine remain shared infrastructure.</Notice>
+    <Notice>A review needs three approved devices in this mode. Once they are connected, choose <strong>Reviews → New example review → {agent ? 'Local agent check' : 'Quick fixture check'}</strong>. Shared machines run one role at a time. Three devices on one VPS are still one shared machine.</Notice>
+    {agent && <details className="execution-details"><summary>Opt in to private website reviews</summary><p>After testing, stop the connection and restart it with <code>--website-reviews</code>. An admin must separately allow private reviews, and a requester must select your device and consent to sharing their saved snapshot. You can see that plaintext.</p><pre>{`${connect} --website-reviews`}</pre></details>}
   </section>;
 }
 
