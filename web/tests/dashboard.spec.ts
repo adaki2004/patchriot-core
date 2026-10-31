@@ -17,7 +17,7 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.' })).toBeVisible();
   await expect(page.getByText('3 approved relays online')).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('Distinct operators');
-  await expect(page.getByText('customer assessments and paid reviews are not enabled.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Private access is explicit; checkout and active penetration tests follow.', { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Relay setup', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Start with a small contribution.' })).toBeVisible();

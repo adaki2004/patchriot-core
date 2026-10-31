@@ -8,6 +8,10 @@ use axum::{
 use patchriot_protocol::websites::{
     CancelSiteCheck, CreateSiteCheck, DecideSiteCheck, SiteCheckView, WebsiteSnapshot,
 };
+use patchriot_protocol::{
+    ReviewView,
+    website_reviews::{CreateWebsiteReview, WebsiteReviewPlan},
+};
 use reqwest::Method;
 use uuid::Uuid;
 
@@ -130,4 +134,37 @@ pub async fn evidence(
         bytes,
     )
         .into_response())
+}
+
+pub async fn review_plan(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Json<WebsiteReviewPlan>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    gateway::request::<(), _>(
+        &state,
+        Method::GET,
+        &format!("/internal/site-checks/{id}/review-plan"),
+        Some(&session),
+        None,
+    )
+    .await
+}
+
+pub async fn create_review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(input): Json<CreateWebsiteReview>,
+) -> Result<Json<ReviewView>, ApiError> {
+    let session = auth::require_write(&headers, &state).await?;
+    gateway::request(
+        &state,
+        Method::POST,
+        &format!("/internal/site-checks/{id}/review"),
+        Some(&session),
+        Some(&input),
+    )
+    .await
 }

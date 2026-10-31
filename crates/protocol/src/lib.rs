@@ -5,6 +5,7 @@
 //! pairing codes can be claimed once; heartbeat sequences cannot move backwards.
 //! A recent signature alone does not make an operation idempotent or authorized.
 
+pub mod website_reviews;
 pub mod websites;
 
 use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
@@ -193,6 +194,10 @@ pub struct DeviceView {
     pub declared_model: Option<String>,
     pub compute_group: String,
     pub approval: String,
+    #[serde(default)]
+    pub private_work_approved: bool,
+    #[serde(default)]
+    pub website_reviews: bool,
     pub state: String,
     pub last_seen_at: Option<i64>,
     pub sequence: u64,
@@ -229,6 +234,7 @@ pub enum ReviewMode {
     #[default]
     OwnedFixture,
     OwnedAgent,
+    WebsiteAgent,
 }
 
 impl ReviewMode {
@@ -240,6 +246,7 @@ impl ReviewMode {
         match self {
             Self::OwnedFixture => "owned_fixture",
             Self::OwnedAgent => "owned_agent",
+            Self::WebsiteAgent => "website_agent",
         }
     }
 }
@@ -248,6 +255,7 @@ impl ReviewMode {
 #[serde(rename_all = "snake_case")]
 pub enum FixtureScenario {
     AccessControlV1,
+    WebsiteSnapshotV1,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -272,6 +280,14 @@ impl ReviewRole {
 #[serde(deny_unknown_fields)]
 pub struct WorkPoll {
     pub sequence: u64,
+    /// Explicit opt-in to website_snapshot_v1. Omission keeps old signed payloads
+    /// unchanged and cannot grant access to customer evidence.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub website_reviews: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -283,6 +299,8 @@ pub struct WorkAssignment {
     pub expires_at: i64,
     #[serde(default, skip_serializing_if = "ReviewMode::is_fixture")]
     pub mode: ReviewMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub website: Option<website_reviews::WebsiteAssignment>,
 }
 
 /// A fresh sequence renews only the current, still-live lease. Retrying the same
@@ -394,6 +412,7 @@ pub struct CompleteWork {
 pub enum WorkResult {
     Fixture(FixtureResult),
     Agent(AgentResult),
+    Website(website_reviews::WebsiteAgentResult),
 }
 
 impl WorkResult {
@@ -401,6 +420,7 @@ impl WorkResult {
         match self {
             Self::Fixture(_) => ReviewMode::OwnedFixture,
             Self::Agent(_) => ReviewMode::OwnedAgent,
+            Self::Website(_) => ReviewMode::WebsiteAgent,
         }
     }
 
@@ -408,6 +428,7 @@ impl WorkResult {
         match self {
             Self::Fixture(result) => result.matches_fixture(),
             Self::Agent(result) => result.matches_fixture(),
+            Self::Website(_) => false,
         }
     }
 }
@@ -506,6 +527,8 @@ pub struct WorkAccepted {
     pub accepted: bool,
     pub replayed: bool,
     pub fixture_matches: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_complete: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -518,6 +541,8 @@ pub struct ReviewStepView {
     pub compute_group: Option<String>,
     pub result: Option<WorkResult>,
     pub fixture_matches: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_complete: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -531,6 +556,8 @@ pub struct ReviewView {
     pub deadline_at: i64,
     pub evidence_source: String,
     pub steps: Vec<ReviewStepView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub website: Option<website_reviews::WebsiteReviewContext>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

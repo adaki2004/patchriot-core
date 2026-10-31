@@ -104,3 +104,50 @@ test('snapshot coverage is explicit and expired evidence is not offered for down
   await expect(page.getByText('Saved bodies have expired', { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('website review requires three explicit devices and snapshot-specific sharing consent', async ({ page }) => {
+  await setup(page);
+  const devices = [1, 2, 3].map(i => ({ device_id: `00000000-0000-4000-8000-00000000000${i + 4}`, operator_id: account.id, operator_name: 'One operator', device_name: `CPU agent ${i}`, declared_model: 'test-model', compute_group: 'same-machine' }));
+  await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: { ...pending, state: 'collected', evidence_available: true, summary: { homepage_sha256: '2'.repeat(64), external_scripts: 1, inline_scripts: 1, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 5000, requests_made: 2, finished_at: 1793448000 } } }));
+  await page.route(`**/api/site-checks/${id}/review-plan`, route => route.fulfill({ json: { site_check_id: id, snapshot_sha256: '3'.repeat(64), candidates: devices } }));
+  let submitted: Record<string, unknown> | undefined;
+  const review = { id: '00000000-0000-4000-8000-000000000200', mode: 'website_agent', state: 'queued', steps: [], created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict', website: { site_check_id: id, snapshot_sha256: '3'.repeat(64), reviewers: devices } };
+  await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
+  await page.route(`**/api/site-checks/${id}/review`, route => {
+    submitted = route.request().postDataJSON();
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
+    return route.fulfill({ json: review });
+  });
+  await page.getByRole('button', { name: 'https://example.com/', exact: false }).click();
+  await page.getByRole('button', { name: 'Choose review agents →' }).click();
+  const start = page.getByRole('button', { name: 'Share snapshot & start review →' });
+  await expect(start).toBeDisabled();
+  for (const [i, role] of ['Investigator', 'Reproducer', 'Challenger'].entries()) await page.getByLabel(`${role} device`).selectOption(devices[i].device_id);
+  await expect(page.getByRole('dialog')).toContainText('3 devices · 1 operator · 1 declared compute group');
+  await expect(page.getByLabel('Reproducer device').locator(`option[value="${devices[0].device_id}"]`)).toHaveJSProperty('disabled', true);
+  await start.click();
+  expect(submitted).toBeUndefined();
+  await page.getByLabel('I allow these three devices and their named operators').check();
+  expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await start.click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(submitted).toMatchObject({ snapshot_sha256: '3'.repeat(64), device_ids: devices.map(d => d.device_id), accepts_operator_access: true });
+  await expect(page.getByRole('region', { name: 'Review report' })).toContainText('No browser execution or live exploit reproduction was performed.');
+});
+
+test('website reports keep model claims as text and do not label completion a safety verdict', async ({ page }) => {
+  await setup(page);
+  const result = { kind: 'website_agent_v1', snapshot_sha256: '1'.repeat(64), inspected_snapshot_sha256: '1'.repeat(64), raw_summary: '', execution: { state: 'completed', model: 'local-test-model', declared_model: 'local-test-model', model_digest: '2'.repeat(64), image_digest: `sha256:${'3'.repeat(64)}`, duration_ms: 2000, inference_calls: 2, terminal_calls: 1, cleanup_confirmed: true }, assessment: { summary: '<img src=x onerror=alert(1)> Saved text was inspected.', findings: [], limitations: ['No live tests.'] } };
+  const review = { id, mode: 'website_agent', state: 'completed', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result, fixture_matches: null, evidence_complete: true })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
+  await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({ json: review }));
+  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await page.getByRole('button', { name: 'Website snapshot review', exact: false }).click();
+  const detail = page.getByRole('region', { name: 'Review report' });
+  await expect(detail.getByRole('heading', { name: 'Reports received' })).toBeVisible();
+  await expect(detail).toContainText('Reasoning is unverified.');
+  await expect(detail).toContainText('No supported finding was reported. This does not establish that the site is safe.');
+  await expect(detail.locator('img, script')).toHaveCount(0);
+  await expect(detail).not.toContainText('Original flaw reproduced');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

@@ -165,6 +165,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/site-checks/{id}/decision", post(sites::decide))
         .route("/api/site-checks/{id}/cancel", post(sites::cancel))
         .route("/api/site-checks/{id}/evidence", get(sites::evidence))
+        .route("/api/site-checks/{id}/review-plan", get(sites::review_plan))
+        .route("/api/site-checks/{id}/review", post(sites::create_review))
         .route(
             "/api/{*path}",
             axum::routing::any(|| async { ApiError::new(StatusCode::NOT_FOUND, "not_found") }),

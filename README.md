@@ -5,7 +5,7 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Prototype:** pairing, approval, a browser dashboard, a public incident log, private website snapshots and three sequential checks of an owned example. Choose quick fixture tests or isolated local agents for the example. Website evidence collection works; agent assessments of customer targets and checkout follow.
+**Prototype:** pairing, approval, a browser dashboard, a public incident log, private website snapshots and isolated agent reviews of their saved text. An owned example lets operators test their setup first. Active penetration tests and checkout follow.
 
 ## What we're building
 
@@ -47,7 +47,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
 | NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
-| Website checks | Approved homepage/script snapshots and private downloads; agent review, baselines and recurring checks follow |
+| Website checks | Approved snapshots, explicit sharing and three offline agent roles; baselines and recurring checks follow |
 | Incident feed | Admin drafts, reviewed publication, source links and keyboard/touch browsing; research-job imports follow |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
@@ -97,9 +97,13 @@ Open **Website checks → New website snapshot**, enter the HTTPS homepage origi
 
 The dispatcher captures the homepage and up to four directly referenced scripts, with hashes, selected security headers and reasons for skipped content. It does not execute JavaScript, follow imports or redirects, log in or perform active probes. **Snapshot ready does not mean safe.** Agent assessment is a separate next step.
 
-Only the requester and admins can read or download evidence. Raw bodies are available for seven days; scope, status and summary remain in history. The free pilot permits two pending/active requests and three submissions per day per account, with ten submissions per day overall. One collection runs at a time. Approval lasts ten minutes; collection lasts at most 30 seconds. Cancel while waiting or collecting; an already sent GET cannot be undone.
+Only the requester and admins can read or download the collected evidence. Raw bodies are available for seven days; scope, status and summary remain in history. The free pilot permits two pending/active requests and three submissions per day per account, with ten submissions per day overall. One collection runs at a time. Approval lasts ten minutes; collection lasts at most 30 seconds. Cancel while waiting or collecting; an already sent GET cannot be undone.
 
-The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/evidence`. All require a session; writes also require CSRF protection, and decisions require an admin. No payment or agent job is created by this flow.
+To request **agent review**, open the snapshot and choose **Choose review agents**. Select three devices for investigator, reproducer and challenger, inspect their operator/model declarations, then consent to sharing this snapshot and earlier reports. Each device needs separate private-work approval and operator opt-in. Admins cannot give sharing consent on the requester's behalf. There are no automatic replacement devices.
+
+Agents receive the saved text in a network-isolated container. Later roles see earlier claims and can challenge them; static inspection cannot reproduce live exploits. Reports separate model claims from matching quotations and execution evidence. **Reports received means the workflow finished, not that the site is safe.** Missing tools, invalid output or invented quotations leave the report marked **Needs review**. Raw snapshots expire after seven days; reports can retain short quotations. Assigned operators can see plaintext, and revocation cannot recall data already seen.
+
+The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/evidence`; `/:id/review-plan` lists eligible devices and `/:id/review` records consent and starts the review. Sessions protect every route, writes require CSRF and scope decisions require an admin. Reviews use the existing three-active-review limit and 35-minute deadline. This pilot does not charge funds.
 
 ## The watch log
 

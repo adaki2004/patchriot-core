@@ -120,7 +120,7 @@ pub async fn decision(
     Json(input): Json<DeviceDecision>,
 ) -> Result<Json<DeviceView>, ApiError> {
     let session = auth::require_write(&headers, &state).await?;
-    if input.action == "approve" && session.role != "admin" {
+    if ["approve", "approve_private"].contains(&input.action.as_str()) && session.role != "admin" {
         return Err(ApiError::new(StatusCode::FORBIDDEN, "admin_required"));
     }
     request(

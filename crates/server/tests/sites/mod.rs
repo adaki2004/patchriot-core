@@ -8,6 +8,7 @@ async fn site_routes_require_sessions_csrf_and_admin_decisions() {
         "/api/site-checks".into(),
         format!("/api/site-checks/{id}"),
         format!("/api/site-checks/{id}/evidence"),
+        format!("/api/site-checks/{id}/review-plan"),
     ] {
         assert_eq!(
             test.request("GET", &path, Value::Null, &[]).await.0,
@@ -15,6 +16,7 @@ async fn site_routes_require_sessions_csrf_and_admin_decisions() {
         );
     }
     let (cookie, session) = test.login("member").await;
+    assert_eq!(test.request("POST", &format!("/api/site-checks/{id}/review"), json!({"request_id":Uuid::new_v4(),"snapshot_sha256":"1".repeat(64),"device_ids":[],"accepts_operator_access":true}), &[("cookie",&cookie),("origin",ORIGIN)]).await.0, StatusCode::FORBIDDEN);
     let body = json!({"request_id":Uuid::new_v4(),"scope":{"homepage":"https://example.com/","script_origins":[]},"authorized":true,"authority_note":"I operate this owned fixture."});
     assert_eq!(
         test.request(

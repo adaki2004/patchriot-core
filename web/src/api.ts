@@ -17,6 +17,8 @@ export type Device = {
   declared_model: string | null;
   compute_group: string;
   approval: 'pending' | 'approved' | 'revoked';
+  private_work_approved?: boolean;
+  website_reviews?: boolean;
   state: string;
   last_seen_at: number | null;
 };

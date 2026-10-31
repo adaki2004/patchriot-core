@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
+import { WebsiteReviewSetup } from './WebsiteReview';
+import { ReviewDetail } from './Reviews';
 
 type Scope = { homepage: string; script_origins: string[] };
 type Summary = { homepage_sha256: string; external_scripts: number; inline_scripts: number; skipped_scripts: number; script_limit_reached: boolean; captured_response_bytes: number; requests_made: number; finished_at: number };
@@ -56,11 +58,12 @@ function NewSite({ csrf, onCreated, onClose }: { csrf: string; onCreated: (site:
   </dialog>;
 }
 
-function SiteDetail({ id, csrf, admin, onClose, onChange }: { id: string; csrf: string; admin: boolean; onClose: () => void; onChange: () => void }) {
+function SiteDetail({ id, csrf, admin, accountId, onReview, onClose, onChange }: { id: string; csrf: string; admin: boolean; accountId: string; onReview: (id: string) => void; onClose: () => void; onChange: () => void }) {
   const panel = useRef<HTMLElement>(null);
   const detail = useLive<Site>(`/site-checks/${id}`);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
   const site = detail.data;
   useEffect(() => { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView({ block: 'start' }); }, [id]);
   useEffect(() => { if (site) onChange(); }, [site?.state, site?.evidence_available, onChange]);
@@ -90,19 +93,22 @@ function SiteDetail({ id, csrf, admin, onClose, onChange }: { id: string; csrf: 
       {site.error && <p className="notice error">Collection stopped: {site.error.replaceAll('_', ' ')}. No security verdict was produced.</p>}
       {site.summary && <>
         <div className="site-metrics" aria-label="Snapshot coverage"><div><strong>{site.summary.external_scripts}</strong><span>External scripts</span></div><div><strong>{site.summary.inline_scripts}</strong><span>Inline scripts</span></div><div><strong>{site.summary.skipped_scripts}</strong><span>Skipped scripts</span></div><div><strong>{Math.ceil(site.summary.captured_response_bytes / 1024)} KiB</strong><span>Saved responses</span></div></div>
-        <p className="notice"><strong>Collected does not mean safe.</strong> This is saved HTTP evidence, with no browser execution or agent assessment yet. Scripts loaded later by the page are outside this snapshot. The download lists fetched and skipped scripts, their hashes and selected response headers.{site.summary.script_limit_reached ? ' The page exceeded the 40-script reference limit.' : ''}</p>
+        <p className="notice"><strong>Collected does not mean safe.</strong> This is saved HTTP evidence, with no browser execution. Scripts loaded later by the page are outside this snapshot. The download lists fetched and skipped scripts, their hashes and selected response headers.{site.summary.script_limit_reached ? ' The page exceeded the 40-script reference limit.' : ''}</p>
         <p className="fine">Captured {date(site.summary.finished_at)} · {site.summary.requests_made} HTTP requests{site.evidence_available && site.evidence_expires_at ? ` · Download until ${date(site.evidence_expires_at)}` : ' · Saved bodies have expired'}</p>
         <details className="execution-details"><summary>Evidence fingerprint</summary><p className="fine">Homepage SHA-256: <code>{site.summary.homepage_sha256}</code></p><p className="fine">Approved scope SHA-256: <code>{site.scope_sha256}</code></p></details>
+        {site.evidence_available && site.requester_id === accountId && <div className="site-review-cta"><h3>Have agents review the snapshot.</h3><p>Choose three approved devices and consent to sharing this evidence. Reports appear under Reviews.</p><button className="primary" onClick={() => setReviewing(true)}>Choose review agents →</button></div>}
       </>}
       {admin && site.state === 'pending_approval' && <form className="site-form site-decision" onSubmit={decide}><fieldset disabled={busy}><h3>Check authority before allowing requests.</h3><label>Decision<select name="decision" defaultValue="approve"><option value="approve">Approve this exact scope</option><option value="reject">Reject this request</option></select></label><label>Decision note<textarea name="reason" minLength={12} maxLength={1200} rows={2} required placeholder="How was permission checked, or why is it refused?" /></label><label className="check"><input type="checkbox" required /><span>I reviewed the listed origins and the requester’s authority.</span></label><button className="primary" disabled={busy}>{busy ? 'Recording…' : 'Record decision'}</button></fieldset></form>}
     </>}
+    {reviewing && <WebsiteReviewSetup siteId={id} csrf={csrf} onCreated={onReview} onClose={() => setReviewing(false)} />}
   </section>;
 }
 
-export function Sites({ csrf, admin }: { csrf: string; admin: boolean }) {
+export function Sites({ csrf, admin, accountId }: { csrf: string; admin: boolean; accountId: string }) {
   const sites = useLive<Site[]>('/site-checks');
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [review, setReview] = useState<string | null>(null);
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Website checks</h1><p className="subtle">Capture an approved site’s homepage and scripts. Inspect what was actually collected.</p></div><button className="primary" onClick={() => setCreating(true)}>New website snapshot +</button></section>
     {sites.error && <div className="notice error" role="alert">{sites.error} <button className="inline" onClick={sites.refresh}>Retry</button></div>}
@@ -110,7 +116,8 @@ export function Sites({ csrf, admin }: { csrf: string; admin: boolean }) {
       {sites.data?.length === 0 && <div className="empty"><h2>Know what your site serves.</h2><p>Start with the public homepage and the scripts it includes. Permission comes first; a snapshot gives you evidence to review.</p></div>}
       {sites.data?.map(site => <button className={`review-item site-item ${selected === site.id ? 'selected' : ''}`} key={site.id} onClick={() => setSelected(site.id)}><span><strong>{site.scope.homepage}</strong><small>{date(site.created_at)} · {site.id.slice(0, 8)}</small></span><span>{label(site.state)} <span aria-hidden="true">↗</span></span></button>)}
     </section>
-    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} onClose={() => setSelected(null)} onChange={sites.refresh} />}
+    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} accountId={accountId} onReview={setReview} onClose={() => setSelected(null)} onChange={sites.refresh} />}
+    {review && <ReviewDetail key={review} id={review} csrf={csrf} onClose={() => setReview(null)} onChange={sites.refresh} />}
     <p className="fine">Private, free pilot. Up to two pending/active requests and three submissions per day per account. Raw evidence expires after seven days; scope and status remain in your history.</p>
     {creating && <NewSite csrf={csrf} onCreated={site => { sites.refresh(); setSelected(site.id); }} onClose={() => setCreating(false)} />}
   </>;

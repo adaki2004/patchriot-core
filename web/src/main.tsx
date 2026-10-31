@@ -71,11 +71,13 @@ function Pair({ account, csrf, onPaired, onClose }: { account: Account; csrf: st
       {error && <Notice error>{error}</Notice>}
       <button className="primary full" disabled={busy}>{busy ? 'Pairing…' : 'Pair relay →'}</button>
     </form>
-    <p className="fine">This build runs owned examples only. Pairing does not enable customer-code execution.</p>
+    <p className="fine">Pairing enables presence only. Private website reviews need separate approval, operator opt-in and the requester’s permission.</p>
   </dialog>;
 }
 
-function Decision({ device, action, csrf, onDone, onClose }: { device: Device; action: 'approve' | 'revoke'; csrf: string; onDone: () => void; onClose: () => void }) {
+type DecisionAction = 'approve' | 'revoke' | 'approve_private' | 'revoke_private';
+const decisionLabels: Record<DecisionAction, string> = { approve: 'Approve relay', revoke: 'Revoke relay', approve_private: 'Allow private reviews', revoke_private: 'Remove private access' };
+function Decision({ device, action, csrf, onDone, onClose }: { device: Device; action: DecisionAction; csrf: string; onDone: () => void; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
@@ -90,12 +92,13 @@ function Decision({ device, action, csrf, onDone, onClose }: { device: Device; a
   }
   return <dialog ref={dialog} onCancel={onClose} aria-labelledby="decision-title">
     <button className="close" onClick={onClose} aria-label="Close decision">×</button>
-    <p className="eyebrow">DEVICE ACCESS</p><h2 id="decision-title">{action === 'approve' ? 'Approve' : 'Revoke'} {device.label}?</h2>
-    <p>{action === 'approve' ? 'Allow this device to join the prototype fleet. This does not verify its model, sandbox or operator identity.' : 'Its key will stop being accepted. Reconnecting will require a new device key and approval.'}</p>
+    <p className="eyebrow">DEVICE ACCESS</p><h2 id="decision-title">{decisionLabels[action]}: {device.label}?</h2>
+    <p>{action === 'approve_private' ? 'Permit this device to handle private website snapshots. Check the operator and isolation setup first. A requester must still choose this device and agree to share their data.' : action === 'revoke_private' ? 'Stop private reviews involving this device and remove its evidence access. It can still run owned examples. Data already seen by its operator cannot be recalled.' : action === 'approve' ? 'Allow this device to join the prototype fleet. This does not verify its model, sandbox or operator identity.' : 'Its key will stop being accepted. Reconnecting will require a new device key and approval.'}</p>
     <form onSubmit={submit}>
-      <label>Reason (optional)<textarea value={reason} onChange={e => setReason(e.target.value)} maxLength={300} rows={3} /></label>
+      <label>{action === 'approve_private' ? 'What did you check?' : 'Reason (optional)'}<textarea value={reason} onChange={e => setReason(e.target.value)} required={action === 'approve_private'} minLength={action === 'approve_private' ? 12 : undefined} maxLength={300} rows={3} /></label>
+      {action === 'approve_private' && <label className="check"><input type="checkbox" required /><span>I reviewed this operator and the isolated runtime for this private pilot.</span></label>}
       {error && <Notice error>{error}</Notice>}
-      <button className={action === 'revoke' ? 'danger full' : 'primary full'} disabled={busy}>{busy ? 'Saving…' : action === 'approve' ? 'Approve relay' : 'Revoke relay'}</button>
+      <button className={action.startsWith('revoke') ? 'danger full' : 'primary full'} disabled={busy}>{busy ? 'Saving…' : decisionLabels[action]}</button>
     </form>
   </dialog>;
 }
@@ -120,7 +123,7 @@ function App() {
   const [login, setLogin] = useState(false);
   const [pairing, setPairing] = useState(false);
   const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'sites' | 'guide' | 'incidents' | 'incident-desk'>('overview');
-  const [decision, setDecision] = useState<{ device: Device; action: 'approve' | 'revoke' } | null>(null);
+  const [decision, setDecision] = useState<{ device: Device; action: DecisionAction } | null>(null);
   const [notice, setNotice] = useState('');
   const fleet = useLive<Fleet>('/fleet');
   const devices = useLive<Device[]>('/devices', Boolean(session?.account));
@@ -155,7 +158,7 @@ function App() {
         <section className="stats" aria-label="Live fleet counts"><div><span className="stat-value">{fleet.data?.online_devices ?? '—'}</span><span>Online relays</span></div><div><span className="stat-value">{fleet.data?.online_operators ?? '—'}</span><span>Distinct operators</span></div><div><span className="stat-value">{fleet.data?.online_compute_groups ?? '—'}</span><span>Declared compute groups</span></div><p>Live counts, not a decentralization claim. Several relays can belong to one operator or share one machine.</p></section>
         <section className="section-heading"><div><p className="eyebrow">EVIDENCE OVER ASSURANCES</p><h2>Find it. Reproduce it. Challenge it.</h2></div><span className="subtle">The review workflow we’re building</span></section>
         <div className="roles"><article><span className="role-number">01 / INVESTIGATE</span><h3>Follow the weak link.</h3><p>Inspect authorized code and websites. Turn a suspicion into a precise claim with evidence.</p></article><article><span className="role-number">02 / REPRODUCE</span><h3>Make the finding stand up.</h3><p>Run the same conditions against the same target. A confident answer is not a reproduction.</p></article><article><span className="role-number">03 / CHALLENGE</span><h3>Check the fix, too.</h3><p>Question the assumptions. Test the proposed patch and keep disagreements in the report.</p></article></div>
-        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Onboarding and owned examples.</strong> Pair a relay, approve it and run fixture tests or local agent checks. Customer assessments and paid reviews are not enabled.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
+        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Evidence you can inspect.</strong> Pair an agent, run an owned example or review an approved website snapshot. Private access is explicit; checkout and active penetration tests follow.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
         <IncidentLog />
       </>}
       {view === 'devices' && account && <>
@@ -163,11 +166,11 @@ function App() {
         {devices.error && <Notice error>{devices.error} <button className="inline" onClick={devices.refresh}>Retry</button></Notice>}
         <section className="panel fleet-panel"><div className="table-toolbar"><strong>{devices.data ? `${devices.data.length} ${isAdmin ? 'registered' : 'paired'} relays` : 'Loading relays…'}</strong><button className="quiet" onClick={devices.refresh}>Refresh ↻</button></div>
           {devices.data?.length === 0 && <div className="empty"><Mark /><h2>Your first relay starts here.</h2><p>Initialize the relay on a computer you control. Enter its pairing code, then wait for approval.</p><button className="text-button" onClick={() => setView('guide')}>Open setup instructions →</button></div>}
-          {Boolean(devices.data?.length) && <div className="table-scroll"><table><thead><tr><th>Relay / operator</th><th>Agent / model</th><th>Access</th><th>Presence</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{devices.data!.map(device => <tr key={device.id}><td><strong>{device.label}</strong><small>{device.operator_name}</small></td><td><strong>{device.runtime === 'owned_fixture' ? 'Owned fixture' : 'Hermes'}</strong><small>Version {device.runtime_version}</small>{device.declared_model && <small className="model-name">Declared model: {device.declared_model}</small>}<small>Compute: {device.compute_group}</small></td><td><span className={`badge ${device.approval}`}>{device.approval === 'pending' ? 'Awaiting approval' : device.approval}</span></td><td><span className={`presence ${device.state}`}>{device.state.replaceAll('_', ' ')}</span><small>{device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleTimeString() : 'No heartbeat yet'}</small></td><td className="row-actions">{isAdmin && device.approval === 'pending' && <button className="approve" onClick={() => setDecision({ device, action: 'approve' })}>Approve</button>}{device.approval !== 'revoked' && <button className="quiet" onClick={() => setDecision({ device, action: 'revoke' })}>Revoke</button>}</td></tr>)}</tbody></table></div>}
+          {Boolean(devices.data?.length) && <div className="table-scroll"><table><thead><tr><th>Relay / operator</th><th>Agent / model</th><th>Access</th><th>Presence</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{devices.data!.map(device => <tr key={device.id}><td><strong>{device.label}</strong><small>{device.operator_name}</small></td><td><strong>{device.runtime === 'owned_fixture' ? 'Owned fixture' : 'Hermes'}</strong><small>Version {device.runtime_version}</small>{device.declared_model && <small className="model-name">Declared model: {device.declared_model}</small>}<small>Compute: {device.compute_group}</small></td><td><span className={`badge ${device.approval}`}>{device.approval === 'pending' ? 'Awaiting approval' : device.approval}</span>{device.runtime === 'hermes' && <small>{device.private_work_approved ? 'Private reviews allowed' : 'Demo work only'} · {device.website_reviews ? 'Website opt-in on' : 'Website opt-in off'}</small>}</td><td><span className={`presence ${device.state}`} >{device.state.replaceAll('_', ' ')}</span><small>{device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleTimeString() : 'No heartbeat yet'}</small></td><td className="row-actions">{isAdmin && device.approval === 'pending' && <button className="approve" onClick={() => setDecision({ device, action: 'approve' })}>Approve</button>}{device.approval === 'approved' && device.runtime === 'hermes' && (device.private_work_approved ? <button className="quiet" onClick={() => setDecision({ device, action: 'revoke_private' })}>Remove private access</button> : isAdmin && <button className="quiet" onClick={() => setDecision({ device, action: 'approve_private' })}>Allow private reviews</button>)}{device.approval !== 'revoked' && <button className="quiet" onClick={() => setDecision({ device, action: 'revoke' })}>Revoke</button>}</td></tr>)}</tbody></table></div>}
         </section><p className="fine">Online means the relay sent a recent heartbeat. Agent versions and model names are operator declarations. Pause and resume from the machine; presence expires after 30 seconds.</p>
       </>}
       {view === 'reviews' && account && session?.csrf_token && <Reviews csrf={session.csrf_token} />}
-      {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} />}
+      {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} accountId={account.id} />}
       {view === 'guide' && <Guide />}
       {view === 'incidents' && <IncidentLog />}
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}
@@ -175,7 +178,7 @@ function App() {
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>
     {login && <Login onLogin={loadSession} onClose={() => setLogin(false)} />}
     {pairing && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => changed('Relay paired. Check its approval and live status in My relays.')} onClose={() => setPairing(false)} />}
-    {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(decision.action === 'approve' ? 'Relay approved. It will appear online after its next heartbeat.' : 'Relay revoked. Its key is no longer accepted.')} onClose={() => setDecision(null)} />}
+    {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(`${decisionLabels[decision.action]}: saved.`)} onClose={() => setDecision(null)} />}
   </>;
 }
 
