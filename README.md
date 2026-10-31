@@ -45,7 +45,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Accounts and dashboard | Invitation login, private sessions, patcher/admin views; Google login and stronger authentication follow |
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
-| Isolation and agents | Owned process controls and separate Linux sandbox diagnostics; real agent integration follows |
+| Isolation and agents | Linux sandbox diagnostics and a manual Hermes check with a local CPU model; model jobs through the queue follow |
 | NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
 | Website checks | One-off owned-site checks, then approved baselines and recurring checks |
 | Incident feed | Admin drafts, reviewed publication, source links and keyboard/touch browsing; research-job imports follow |
