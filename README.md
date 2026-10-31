@@ -89,9 +89,20 @@ In **Relay setup**, pair three distinct devices and approve them under **Fleet &
 
 Both examples are free. The private report separates tool observations from the model's explanation and includes actual operator/device counts. Download its JSON or cancel from the report. This checks a supplied example; it does not demonstrate independent discovery or prove model identity.
 
-Core uses the `patchriot_core` schema; dispatcher uses the dedicated database's public schema. Configure separate database roles before public deployment. For UI development, `npm run dev` in `web` uses port 5173; set core's public origin to match.
+Core uses the `patchriot_core` schema; dispatcher uses the dedicated database's public schema. Configure separate database roles before public deployment: grant each role database access and ownership of its own pre-created schema. Core can start and run migrations without database-wide `CREATE` permission. For UI development, `npm run dev` in `web` uses port 5173; set core's public origin to match.
 
 Ctrl+C and, on Unix, SIGTERM stop accepting connections and let active requests finish. Give the process time to exit before forcing it to stop during deployment.
+
+<details>
+<summary><strong>Run as a Linux service</strong></summary>
+
+[deploy/patchriot-core.service](deploy/patchriot-core.service) runs the private pilot as a dedicated `patchriot-core` user. Build a release for the server's architecture, install it at `/opt/patchriot/bin/patchriot-core` and copy the built `web/dist` contents to `/opt/patchriot/web`. Keep these files administrator-owned and readable by the service.
+
+Store the variables above in `/etc/patchriot/core.env`, readable only by root; set `PATCHRIOT_WEB_ROOT=/opt/patchriot/web` and keep `PATCHRIOT_CORE_BIND` on loopback. Start the local database and dispatcher first. Install the unit in `/etc/systemd/system`, run `systemctl daemon-reload`, then `systemctl start patchriot-core`. Inspect it with `systemctl status patchriot-core` and `journalctl -u patchriot-core`. Enable it at boot after testing.
+
+The unit limits the service to 512 MiB, two CPUs, a read-only system and loopback networking. For a database on a private container address, add only that address through a local `IPAddressAllow` service override. Use an authenticated tunnel for the private site. External identity or payment services need an explicit network-policy change; credentials stay in runtime configuration. `systemctl stop` allows 45 seconds for active requests to drain.
+
+</details>
 
 ## Website evidence
 
@@ -133,7 +144,7 @@ This checks up to ten due invoices. The web server does not start polling. `GET 
 
 ## Verify it
 
-Set `PATCHRIOT_TEST_DATABASE_URL` to a local test database whose role can create schemas.
+Set `PATCHRIOT_TEST_DATABASE_URL` to a dedicated local test database. Its test administrator needs permission to create schemas, temporary databases and roles; the startup test checks a separate, restricted service role and removes its generated database and role afterward. Do not use these test-administrator permissions for the running service.
 
 ```sh
 cargo fmt --all --check

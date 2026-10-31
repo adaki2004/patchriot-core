@@ -127,9 +127,18 @@ pub async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
         })
         .connect(url)
         .await?;
-    sqlx::query("CREATE SCHEMA IF NOT EXISTS patchriot_core")
-        .execute(&pool)
-        .await?;
+    // PostgreSQL checks database CREATE permission even with IF NOT EXISTS.
+    // A provisioned service role only needs to own its existing schema.
+    let schema_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname = 'patchriot_core')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    if !schema_exists {
+        sqlx::query("CREATE SCHEMA IF NOT EXISTS patchriot_core")
+            .execute(&pool)
+            .await?;
+    }
     sqlx::migrate!("./migrations").run(&pool).await?;
     Ok(pool)
 }

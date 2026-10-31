@@ -1,0 +1,45 @@
+[Unit]
+Description=Patchriot private pilot website and accounts
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=patchriot-core
+Group=patchriot-core
+WorkingDirectory=/opt/patchriot
+EnvironmentFile=/etc/patchriot/core.env
+ExecStart=/opt/patchriot/bin/patchriot-core serve
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=45
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=512M
+CPUQuota=200%
+TasksMax=128
+# This pilot talks only to a local database and dispatcher. Public access goes
+# through an authenticated tunnel or a separately configured HTTPS proxy.
+IPAddressDeny=any
+IPAddressAllow=localhost
+
+[Install]
+WantedBy=multi-user.target
