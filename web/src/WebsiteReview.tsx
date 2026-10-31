@@ -64,13 +64,13 @@ export function WebsiteEvidence({ result, complete }: { result: WebsiteResult; c
       : complete ? 'Report received with matching snapshot and citations. Reasoning is unverified.' : 'Missing or inconsistent evidence. Inspect the report before acting.';
   return <>
     <p className={`result-line ${complete ? '' : 'mismatch'}`}>{status}</p>
-    <p className="model-name"><strong>{run.model}</strong><small>{Math.round(run.duration_ms / 1000)} seconds · {run.inference_calls} model calls · {run.terminal_calls} completed terminal calls</small></p>
+    <p className="model-name"><strong>{run.model}</strong><small>{Math.round(run.duration_ms / 1000)} seconds</small></p>
     {result.assessment && <div className="website-assessment"><p>{result.assessment.summary}</p>
       {result.assessment.findings.map((finding, index) => <article className="website-finding" key={index}><h4>{finding.title}</h4><span className="badge pending">{support[finding.support]}</span><p>{finding.explanation}</p><p><strong>Suggested next step:</strong> {finding.suggested_action}</p><details><summary>Quoted evidence</summary>{finding.citations.map((citation, i) => <div key={i}><blockquote>{citation.quote}</blockquote><p className="fine">Resource SHA-256: <code>{citation.resource_sha256}</code></p></div>)}</details></article>)}
       {result.assessment.findings.length === 0 && <p className="fine">No supported finding was reported. This does not establish that the site is safe.</p>}
       <p className="fine">LIMITATIONS REPORTED BY THE AGENT</p><ul>{result.assessment.limitations.map((item, i) => <li key={i}>{item}</li>)}</ul>
     </div>}
     {result.raw_summary && <><p className="fine">MODEL RESPONSE / DID NOT MATCH THE REPORT FORMAT</p><pre className="agent-summary">{result.raw_summary}</pre></>}
-    <details className="execution-details"><summary>Execution details</summary><dl><dt>Run state</dt><dd>{run.state.replaceAll('_', ' ')}</dd><dt>Container cleanup</dt><dd>{run.cleanup_confirmed ? 'Reported complete' : 'Not confirmed'}</dd><dt>Snapshot SHA-256</dt><dd><code>{result.snapshot_sha256}</code></dd><dt>Model digest</dt><dd><code>{run.model_digest}</code></dd><dt>Agent image</dt><dd><code>{run.image_digest}</code></dd></dl></details>
+    <details className="execution-details"><summary>Execution details</summary><dl><dt>Run state</dt><dd>{run.state.replaceAll('_', ' ')}</dd><dt>Snapshot read</dt><dd>{result.inspected_snapshot_sha256 === result.snapshot_sha256 ? 'Recorded for this snapshot' : 'Not confirmed'}</dd><dt>Model calls</dt><dd>{run.inference_calls}</dd><dt>Completed terminal calls</dt><dd>{run.terminal_calls}</dd><dt>Container cleanup</dt><dd>{run.cleanup_confirmed ? 'Reported complete' : 'Not confirmed'}</dd><dt>Snapshot SHA-256</dt><dd><code>{result.snapshot_sha256}</code></dd><dt>Model digest</dt><dd><code>{run.model_digest}</code></dd><dt>Agent image</dt><dd><code>{run.image_digest}</code></dd></dl><p className="fine">Terminal counts include the snapshot reader, which the runtime may run before inference. These records are reported by the operator.</p></details>
   </>;
 }

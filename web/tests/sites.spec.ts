@@ -149,13 +149,18 @@ test('website reports keep model claims as text and do not label completion a sa
   await expect(detail).toContainText('No supported finding was reported. This does not establish that the site is safe.');
   await expect(detail.locator('img, script')).toHaveCount(0);
   await expect(detail).not.toContainText('Original flaw reproduced');
+  const execution = detail.locator('.execution-details').first();
+  await expect(execution.getByText('Recorded for this snapshot', { exact: true })).not.toBeVisible();
+  await execution.getByText('Execution details', { exact: true }).click();
+  await expect(execution.getByText('Recorded for this snapshot', { exact: true })).toBeVisible();
+  await expect(execution).toContainText('which the runtime may run before inference');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('recorded website timeouts show what stopped instead of implying a completed assessment', async ({ page }) => {
   await setup(page);
   const result = { kind: 'website_agent_v1', snapshot_sha256: '1'.repeat(64), inspected_snapshot_sha256: null, raw_summary: '', assessment: null, execution: { state: 'timed_out', model: 'local-test-model', declared_model: 'local-test-model', model_digest: '2'.repeat(64), image_digest: `sha256:${'3'.repeat(64)}`, duration_ms: 51000, inference_calls: 1, terminal_calls: 0, cleanup_confirmed: true } };
-  const review = { id, mode: 'website_agent', state: 'needs_review', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result: { ...result, execution: { ...result.execution, duration_ms: i === 0 ? 51000 : 0, inference_calls: i === 0 ? 1 : 0 } }, fixture_matches: null, evidence_complete: false })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
+  const review = { id, mode: 'website_agent', state: 'needs_review', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result: { ...result, inspected_snapshot_sha256: i === 0 ? result.snapshot_sha256 : i === 1 ? null : '4'.repeat(64), execution: { ...result.execution, duration_ms: i === 0 ? 51000 : 0, inference_calls: i === 0 ? 1 : 0, terminal_calls: i === 0 ? 1 : 0 } }, fixture_matches: null, evidence_complete: false })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
   await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({ json: review }));
   await page.getByRole('button', { name: 'Reviews', exact: true }).click();
@@ -167,6 +172,13 @@ test('recorded website timeouts show what stopped instead of implying a complete
   await expect(detail.getByText('The time limit was reached before a model call started. No security assessment was made.')).toHaveCount(2);
   await expect(detail.getByText('Reported', { exact: true })).toHaveCount(0);
   await expect(detail).not.toContainText('No supported finding was reported.');
+  for (const [i, state] of ['Recorded for this snapshot', 'Not confirmed', 'Not confirmed'].entries()) {
+    const execution = detail.locator('.execution-details').nth(i);
+    await execution.getByText('Execution details', { exact: true }).click();
+    await expect(execution.locator('dt').filter({ hasText: /^Snapshot read$/ }).locator('+ dd')).toHaveText(state);
+  }
+  await expect(detail.getByRole('heading', { name: 'Needs review' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 test('snapshot comparison is an explicit private read and displays gaps without declaring removal', async ({ page }) => {
