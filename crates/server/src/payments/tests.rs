@@ -1,4 +1,7 @@
 use super::*;
+
+#[path = "checkout_tests.rs"]
+mod checkout;
 use axum::{
     Router,
     extract::Query,

@@ -32,14 +32,53 @@ pub(crate) async fn request_with_limit<T: Serialize, R: DeserializeOwned>(
     body: Option<&T>,
     maximum: usize,
 ) -> Result<Json<R>, ApiError> {
+    request_as(
+        state,
+        method,
+        path,
+        session.map(|session| (session.id, session.role.as_str())),
+        body,
+        maximum,
+    )
+    .await
+}
+
+/// Internal checkout work acts as the account saved on the order. It does not
+/// manufacture a browser session or gain staff access to another owner's work.
+pub(crate) async fn request_for_account<T: Serialize, R: DeserializeOwned>(
+    state: &AppState,
+    method: reqwest::Method,
+    path: &str,
+    account: Uuid,
+    body: Option<&T>,
+) -> Result<Json<R>, ApiError> {
+    request_as(
+        state,
+        method,
+        path,
+        Some((account, "member")),
+        body,
+        256 * 1024,
+    )
+    .await
+}
+
+async fn request_as<T: Serialize, R: DeserializeOwned>(
+    state: &AppState,
+    method: reqwest::Method,
+    path: &str,
+    actor: Option<(Uuid, &str)>,
+    body: Option<&T>,
+    maximum: usize,
+) -> Result<Json<R>, ApiError> {
     let mut req = state
         .client
         .request(method, format!("{}{path}", state.config.dispatcher_url));
-    if let Some(session) = session {
+    if let Some((account, role)) = actor {
         req = req
             .bearer_auth(&state.config.internal_key)
-            .header("x-patchriot-account", session.id.to_string())
-            .header("x-patchriot-role", &session.role);
+            .header("x-patchriot-account", account.to_string())
+            .header("x-patchriot-role", role);
     }
     if let Some(body) = body {
         req = req.json(body);

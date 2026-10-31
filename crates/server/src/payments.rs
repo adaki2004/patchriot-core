@@ -15,12 +15,15 @@ use uuid::Uuid;
 
 use crate::{ApiError, AppState, auth};
 
+pub mod checkout;
+
 const API_ORIGIN: &str = "https://1click.chaindefuser.com";
 const RESPONSE_LIMIT: usize = 128 * 1024;
 
 /// Amounts are smallest-unit integers, never USD estimates or floating point.
 /// A live checkout must set these terms from a server-approved service and
 /// treasury configuration before requesting the provider quote.
+#[derive(Clone, Deserialize, Serialize)]
 pub struct InvoiceTerms {
     pub account_id: Uuid,
     pub request_id: Uuid,
@@ -213,15 +216,27 @@ pub async fn record_quote(
     terms: &InvoiceTerms,
     response: &QuoteResponse,
 ) -> Result<Uuid, PaymentError> {
+    let mut tx = pool.begin().await?;
+    let id = record_quote_in(&mut tx, terms, response).await?;
+    tx.commit().await?;
+    Ok(id)
+}
+
+/// Checkout saves the invoice and attaches it to its order in one transaction,
+/// before returning any deposit instructions to the requester.
+async fn record_quote_in(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    terms: &InvoiceTerms,
+    response: &QuoteResponse,
+) -> Result<Uuid, PaymentError> {
     let (deadline, address, memo) = validate_quote(terms, response)?;
     let request = &response.quote_request;
     let quote = &response.quote;
     let id = Uuid::new_v4();
-    let mut tx = pool.begin().await?;
     let enabled: Option<bool> =
         sqlx::query_scalar("SELECT NOT disabled FROM accounts WHERE id = $1 FOR SHARE")
             .bind(terms.account_id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&mut **tx)
             .await?;
     if enabled != Some(true) {
         return Err(PaymentError::InvalidQuote);
@@ -230,7 +245,7 @@ pub async fn record_quote(
         .bind(id).bind(terms.account_id).bind(terms.request_id).bind(&terms.destination_asset)
         .bind(&terms.recipient).bind(terms.required_amount).bind(&response.correlation_id)
         .bind(address).bind(memo).bind(request).bind(quote).bind(deadline)
-        .fetch_optional(&mut *tx).await?;
+        .fetch_optional(&mut **tx).await?;
     let result = if let Some(id) = inserted {
         id
     } else {
@@ -239,7 +254,7 @@ pub async fn record_quote(
         )
         .bind(terms.account_id)
         .bind(terms.request_id)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await?;
         let existing = existing.ok_or(PaymentError::ConflictingInvoice)?;
         if existing.asset != terms.destination_asset
@@ -253,7 +268,6 @@ pub async fn record_quote(
         }
         existing.id
     };
-    tx.commit().await?;
     Ok(result)
 }
 

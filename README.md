@@ -46,7 +46,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| NEAR Intents | Provider quote client, quote storage, settlement poller and ledger; admitted checkout and payouts follow |
+| NEAR Intents | Saved orders, review admission, provider quotes, settlement poller and ledger; browser checkout and payouts follow |
 | Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
 | Incident feed | Admin drafts, research JSON import, reviewed publication, source links and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
@@ -130,7 +130,9 @@ Saving an edit keeps the previous public version unchanged. Publish the correcti
 
 ## Payments: record funds before starting work
 
-The planned checkout uses **NEAR Intents / 1Click** to fund an admitted review. Dispatcher can reserve the exact snapshot, selected agents and price in **awaiting_payment**, without assigning work. The [payment module](crates/server/src/payments.rs) can request an [exact-output quote](https://docs.near-intents.org/api-reference/oneclick/request-a-swap-quote) using server-approved payment and refund terms. It rejects changed terms, expired quotes and missing deposit instructions. Core must connect these steps and save the quote before showing an address to pay.
+Checkout preparation uses **NEAR Intents / 1Click** to fund an admitted review. The internal [checkout module](crates/server/src/payments/checkout.rs) saves the snapshot, selected agents, consent, price and payment/refund terms before requesting admission. Dispatcher reserves that work in **awaiting_payment** without assigning it. Core then requests an [exact-output quote](https://docs.near-intents.org/api-reference/oneclick/request-a-swap-quote) and saves the invoice and order binding together before returning deposit instructions.
+
+Retries reuse the original terms and saved quote. Concurrent preparation is rejected; changed terms need a new request ID. A refresh rechecks admission, and expired quotes or closed reviews cannot produce new deposit instructions. Database transactions end before network calls; late replies must still match the current operation and an enabled account.
 
 Reconciliation checks the saved quote against the provider's settlement response. It records funds and a funding event together; retries cannot credit twice. Late or mismatched amounts stay held for review. The client uses a fixed provider origin, bounded replies and timeouts; redirects and automatic quote retries are disabled.
 
@@ -142,7 +144,7 @@ With `DATABASE_URL` and `PATCHRIOT_1CLICK_API_KEY` in runtime secrets:
 cargo run --locked -p patchriot-core -- payments-reconcile-once
 ```
 
-This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Quote creation and paid admission are internal operations. Checkout, funding-event delivery, spending, payouts and held-fund release remain unexposed.
+This checks up to ten due invoices. The web server does not start polling. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, funding-event delivery, spending, payouts and held-fund release remain unexposed.
 
 ## Verify it
 
