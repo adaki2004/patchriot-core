@@ -14,6 +14,9 @@ use uuid::Uuid;
 
 const ORIGIN: &str = "https://patchriot.example";
 
+#[path = "sites/mod.rs"]
+mod sites;
+
 struct TestApp {
     app: Router,
     pool: PgPool,

@@ -78,6 +78,7 @@ function Detail({ id, csrf, onClose, onChange }: { id: string; csrf: string; onC
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const review = detail.data;
+  useEffect(() => { if (review) onChange(); }, [review?.state, onChange]);
   useEffect(() => {
     panel.current?.focus({ preventScroll: true });
     panel.current?.scrollIntoView({ block: 'start' });
@@ -113,7 +114,7 @@ export function Reviews({ csrf }: { csrf: string }) {
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   return <>
-    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Start with an owned example. No customer targets or paid work are enabled.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>
+    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Three-role checks of the supplied example. For your own site, open Website checks.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>
     {reviews.error && <div className="notice error" role="alert">{reviews.error} <button className="inline" onClick={reviews.refresh}>Retry</button></div>}
     <section className="panel"><div className="table-toolbar"><strong>{reviews.data ? `${reviews.data.length} ${reviews.data.length === 1 ? 'review' : 'reviews'}` : 'Loading reviews…'}</strong><button className="quiet" onClick={reviews.refresh}>Refresh reviews ↻</button></div>
       {reviews.data?.length === 0 && <div className="empty"><h2>Make the evidence visible.</h2><p>Run quick fixture tests or let local agents inspect the supplied bug and fix.</p></div>}

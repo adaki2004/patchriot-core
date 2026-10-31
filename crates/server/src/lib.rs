@@ -6,6 +6,7 @@ mod auth;
 mod gateway;
 mod incidents;
 pub mod payments;
+mod sites;
 
 use axum::{
     Json, Router,
@@ -159,6 +160,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/reviews/{id}", get(gateway::review))
         .route("/api/reviews/{id}/cancel", post(gateway::cancel_review))
         .route("/api/reviews/{id}/report", get(gateway::report))
+        .route("/api/site-checks", get(sites::list).post(sites::create))
+        .route("/api/site-checks/{id}", get(sites::detail))
+        .route("/api/site-checks/{id}/decision", post(sites::decide))
+        .route("/api/site-checks/{id}/cancel", post(sites::cancel))
+        .route("/api/site-checks/{id}/evidence", get(sites::evidence))
         .route(
             "/api/{*path}",
             axum::routing::any(|| async { ApiError::new(StatusCode::NOT_FOUND, "not_found") }),

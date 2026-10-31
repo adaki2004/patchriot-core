@@ -12,12 +12,25 @@ use patchriot_protocol::{
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
-async fn request<T: Serialize, R: DeserializeOwned>(
+pub(crate) async fn request<T: Serialize, R: DeserializeOwned>(
     state: &AppState,
     method: reqwest::Method,
     path: &str,
     session: Option<&auth::Session>,
     body: Option<&T>,
+) -> Result<Json<R>, ApiError> {
+    request_with_limit(state, method, path, session, body, 256 * 1024).await
+}
+
+/// Only trusted route handlers choose a larger response bound, for an explicit
+/// private evidence download. Normal list and status responses remain small.
+pub(crate) async fn request_with_limit<T: Serialize, R: DeserializeOwned>(
+    state: &AppState,
+    method: reqwest::Method,
+    path: &str,
+    session: Option<&auth::Session>,
+    body: Option<&T>,
+    maximum: usize,
 ) -> Result<Json<R>, ApiError> {
     let mut req = state
         .client
@@ -52,7 +65,7 @@ async fn request<T: Serialize, R: DeserializeOwned>(
         .await
         .map_err(|_| ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "dispatcher_unavailable"))?
     {
-        if bytes.len() + chunk.len() > 256 * 1024 {
+        if bytes.len() + chunk.len() > maximum {
             return Err(ApiError::new(
                 StatusCode::BAD_GATEWAY,
                 "dispatcher_response_too_large",

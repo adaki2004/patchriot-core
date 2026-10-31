@@ -3,6 +3,67 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use uuid::Uuid;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CreateSiteCheck {
+    pub request_id: Uuid,
+    pub scope: WebsiteScope,
+    pub authorized: bool,
+    pub authority_note: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SiteDecision {
+    Approve,
+    Reject,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DecideSiteCheck {
+    pub action: SiteDecision,
+    pub scope_sha256: String,
+    pub reason: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CancelSiteCheck {}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SiteCheckView {
+    pub id: Uuid,
+    pub request_id: Uuid,
+    pub requester_id: Uuid,
+    pub scope: WebsiteScope,
+    pub scope_sha256: String,
+    pub authority_note: String,
+    pub state: String,
+    pub created_at: i64,
+    pub deadline_at: i64,
+    pub decided_by: Option<Uuid>,
+    pub decision_note: Option<String>,
+    pub attempts: i32,
+    pub error: Option<String>,
+    pub summary: Option<WebsiteSummary>,
+    pub evidence_available: bool,
+    pub evidence_expires_at: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WebsiteSummary {
+    pub homepage_sha256: String,
+    pub external_scripts: u16,
+    pub inline_scripts: u16,
+    pub skipped_scripts: u16,
+    pub script_limit_reached: bool,
+    pub captured_response_bytes: u64,
+    pub requests_made: u16,
+    pub finished_at: i64,
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]

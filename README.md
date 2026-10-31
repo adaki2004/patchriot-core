@@ -5,7 +5,7 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Prototype:** pairing, approval, a browser dashboard, a public incident log and three sequential checks of an owned example. Choose quick fixture tests or isolated local agents. Customer assessments and checkout are not enabled.
+**Prototype:** pairing, approval, a browser dashboard, a public incident log, private website snapshots and three sequential checks of an owned example. Choose quick fixture tests or isolated local agents for the example. Website evidence collection works; agent assessments of customer targets and checkout follow.
 
 ## What we're building
 
@@ -47,7 +47,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
 | NEAR Intents | Quote storage, settlement poller and ledger tested locally; live checkout and payouts follow |
-| Website checks | One-off owned-site checks, then approved baselines and recurring checks |
+| Website checks | Approved homepage/script snapshots and private downloads; agent review, baselines and recurring checks follow |
 | Incident feed | Admin drafts, reviewed publication, source links and keyboard/touch browsing; research-job imports follow |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
@@ -90,6 +90,16 @@ In **Relay setup**, pair three distinct devices and approve them under **Fleet &
 Both examples are free. The private report separates tool observations from the model's explanation and includes actual operator/device counts. Download its JSON or cancel from the report. This checks a supplied example; it does not demonstrate independent discovery or prove model identity.
 
 Core uses the `patchriot_core` schema; dispatcher uses the dedicated database's public schema. Configure separate database roles before public deployment. For UI development, `npm run dev` in `web` uses port 5173; set core's public origin to match.
+
+## Website evidence
+
+Open **Website checks → New website snapshot**, enter the HTTPS homepage origin, optionally add up to three script origins, and explain your permission to review the site. An admin must approve the exact scope before any collection. A checkbox alone is not proof of ownership.
+
+The dispatcher captures the homepage and up to four directly referenced scripts, with hashes, selected security headers and reasons for skipped content. It does not execute JavaScript, follow imports or redirects, log in or perform active probes. **Snapshot ready does not mean safe.** Agent assessment is a separate next step.
+
+Only the requester and admins can read or download evidence. Raw bodies are available for seven days; scope, status and summary remain in history. The free pilot permits two pending/active requests and three submissions per day per account, with ten submissions per day overall. One collection runs at a time. Approval lasts ten minutes; collection lasts at most 30 seconds. Cancel while waiting or collecting; an already sent GET cannot be undone.
+
+The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/evidence`. All require a session; writes also require CSRF protection, and decisions require an admin. No payment or agent job is created by this flow.
 
 ## The watch log
 
