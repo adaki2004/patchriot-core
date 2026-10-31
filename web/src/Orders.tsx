@@ -71,9 +71,9 @@ function OrderDetail({ id, csrf, initialQuote, paymentEnabled, onClose, onChange
         {(requested || order.cancellation) && <div className="notice" role="status">{order.cancellation?.confirmed_at ? order.cancellation.review_state === 'cancelled' ? 'The review has stopped. Cancellation does not return funds.' : 'The review had already ended when cancellation was checked. Its actual result is preserved.' : 'Your cancellation is saved. Confirmation that the review stopped is still pending.'} Do not send another payment.</div>}
         {order.requires_attention && <div className="notice error" role="status">This order needs a manual check. Any recorded funds remain recorded; no refund is issued by cancelling work.</div>}
         {!order.cancellation && !requested && <p className="fine">{order.state === 'activated' ? 'Payment authorized this review to start. Open the report for its current progress and result.' : 'Only use current payment instructions. A saved or expired order is not permission to send a new transfer.'}</p>}
-        {sent && <p className="notice" role="status">Waiting for confirmation. Your click does not confirm payment; the server checks settlement. Do not send another transfer.</p>}
+        {sent && order.payment && ['pending', 'processing'].includes(order.payment.state) && <p className="notice" role="status">Waiting for confirmation. Your click does not confirm payment; the server checks settlement. Do not send another transfer.</p>}
         {currentQuote && <DepositInstructions key={currentQuote.invoice_id} quote={currentQuote} onSent={() => { setSent(true); setQuote(null); detail.refresh(); }} />}
-        {!currentQuote && quote && <p className="fine">Payment instructions are hidden until the order is confirmed payable. Do not use a previous address or quote.</p>}
+        {!currentQuote && quote && <p className="fine">Payment instructions are hidden. Do not use a previous address or quote.</p>}
         <div className="review-actions">
           <button className="quiet" onClick={() => { setError(''); detail.refresh(); }}>Refresh order ↻</button>
           {canPay && !currentQuote && <button className="primary" onClick={() => void resume()}>{order.state === 'preparing' ? 'Resume checkout →' : 'Show current payment instructions →'}</button>}

@@ -77,8 +77,11 @@ impl Network {
                     calls.lock().unwrap().push(("admission".into(), body.clone(), headers["x-patchriot-account"].to_str().unwrap().into()));
                     if denied.load(Ordering::SeqCst) { return (StatusCode::FORBIDDEN, Json(json!({"error":"scope_not_owned"}))); }
                     let consent=&body["consent"];
+                    // The real dispatcher assigns a review ID distinct from the
+                    // caller's retry key. Keep it stable across fixture retries.
+                    let review_id=Uuid::from_u128(Uuid::parse_str(consent["request_id"].as_str().unwrap()).unwrap().as_u128() ^ 1);
                     (StatusCode::OK,Json(json!({
-                        "id":consent["request_id"],"request_id":consent["request_id"],"scenario":"website_snapshot_v1","mode":"website_agent","state":"awaiting_payment",
+                        "id":review_id,"request_id":consent["request_id"],"scenario":"website_snapshot_v1","mode":"website_agent","state":"awaiting_payment",
                         "created_at":Utc::now().timestamp(),"deadline_at":body["payment_expires_at"],"steps":[],"evidence_source":"synthetic fixture",
                         "website":{"site_check_id":site,"snapshot_sha256":consent["snapshot_sha256"],"reviewers":consent["device_ids"].as_array().unwrap().iter().map(|id|json!({"device_id":id,"operator_id":Uuid::new_v4(),"operator_name":"Fixture operator","device_name":"Fixture device","declared_model":"fixture-model","compute_group":"fixture-host"})).collect::<Vec<_>>()},
                         "payment":{"price":body["price"],"expires_at":body["payment_expires_at"],"invoice_id":null,"funded_at":null}
@@ -308,6 +311,8 @@ async fn browser_quote_uses_server_price_and_saves_before_showing_exact_deposit_
     let path = format!("/api/site-checks/{site}/checkout");
     let (status, quote) = browser.call("POST", &path, body.clone()).await;
     assert_eq!(status, StatusCode::OK, "{quote}");
+    assert_eq!(quote["request_id"], body["consent"]["request_id"]);
+    assert_ne!(quote["review_id"], quote["request_id"]);
     assert_eq!(quote["input"]["amount"], "1000000000000000000000000");
     assert_eq!(quote["output"]["amount"], "1000000");
     assert_eq!(quote["input"]["token"]["decimals"], 24);

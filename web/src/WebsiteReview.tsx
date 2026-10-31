@@ -44,7 +44,7 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClos
       const consent = { request_id: requestId.current, snapshot_sha256: plan.data.snapshot_sha256, device_ids: selected, accepts_operator_access: accepted };
       if (mode === 'paid' && offer) {
         const quote = checkedDeposit(await write<Deposit>(`/site-checks/${siteId}/checkout`, csrf, { consent, offer_id: offer.id, origin_asset: asset, refund_address: refund.trim() }));
-        if (quote.review_id !== consent.request_id || quote.input.token.asset_id !== asset || quote.refund_address !== refund.trim() || quote.output.token.asset_id !== offer.price.asset || quote.output.amount !== offer.price.amount) throw new Error('The quote does not match your request. Do not send a transfer. Check Orders before trying again.');
+        if (quote.request_id !== consent.request_id || quote.input.token.asset_id !== asset || quote.refund_address !== refund.trim() || quote.output.token.asset_id !== offer.price.asset || quote.output.amount !== offer.price.amount) throw new Error('The quote does not match your request. Do not send a transfer. Check Orders before trying again.');
         onCheckout(quote);
       } else if (mode === 'pilot') {
         const review = await write<{ id: string }>(`/site-checks/${siteId}/review`, csrf, consent);

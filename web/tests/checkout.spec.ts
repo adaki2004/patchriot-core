@@ -14,9 +14,9 @@ type Submission = { consent: { request_id: string; device_ids: string[]; snapsho
 
 async function setup(page: Page) {
   const deadline = new Date(Date.now() + 300_000).toISOString();
-  const quote: Deposit = { order_id: orderId, review_id: reviewId, invoice_id: orderId, input: { token: input, amount: '1000000000000000000000001' }, output: { token: output, amount: '1000000' }, deposit_address: 'deposit.checkout-fixture.near', deposit_memo: 'fixture-memo', refund_address: 'customer.fixture.near', expires_at: deadline };
+  const quote: Deposit = { order_id: orderId, request_id: siteId, review_id: reviewId, invoice_id: orderId, input: { token: input, amount: '1000000000000000000000001' }, output: { token: output, amount: '1000000' }, deposit_address: 'deposit.checkout-fixture.near', deposit_memo: 'fixture-memo', refund_address: 'customer.fixture.near', expires_at: deadline };
   const state = {
-    settings: { mode: 'paid', offer } as CheckoutSettings, settingsError: false, statusError: 0, quoteError: false, quote,
+    settings: { mode: 'paid', offer } as CheckoutSettings, settingsError: false, statusError: 0, quoteError: false, wrongRequest: false, quote,
     submissions: [] as Submission[], resumed: 0, freeSubmissions: 0,
     order: { id: orderId, review_id: reviewId, state: 'awaiting_payment', price: offer.price, created_at: new Date().toISOString(), expires_at: deadline, payment: { state: 'pending', received_amount: null as string | null, deadline }, cancellation: null as null | { requested_at: string; confirmed_at: string | null; review_state: string | null }, requires_attention: false, can_cancel: true },
   };
@@ -33,7 +33,7 @@ async function setup(page: Page) {
   await page.route(`**/api/site-checks/${siteId}/checkout`, route => {
     const body: Submission = route.request().postDataJSON();
     expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
-    state.submissions.push(body); state.order.review_id = body.consent.request_id; state.quote.review_id = body.consent.request_id;
+    state.submissions.push(body); state.quote.request_id = state.wrongRequest ? siteId : body.consent.request_id;
     return route.fulfill(state.quoteError ? { status: 503, json: { error: 'checkout_unavailable' } } : { json: state.quote });
   });
   await page.route('**/api/orders', route => route.fulfill({ json: [state.order] }));
@@ -90,6 +90,8 @@ test('paid review shows the price before an exact network-specific deposit and n
   expect(state.submissions).toHaveLength(1);
   expect(Object.keys(state.submissions[0]).sort()).toEqual(['consent', 'offer_id', 'origin_asset', 'refund_address']);
   expect(state.submissions[0].consent.device_ids).toEqual(devices.map(d => d.device_id));
+  expect(state.quote.request_id).toBe(state.submissions[0].consent.request_id);
+  expect(state.quote.review_id).not.toBe(state.quote.request_id);
   expect(state.freeSubmissions).toBe(0);
   expect(state.resumed).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -106,6 +108,14 @@ test('a lost preparation reply keeps the same request and warns before creating 
   await expect(page.getByRole('region', { name: 'Payment instructions' })).toBeVisible();
   expect(state.submissions).toHaveLength(2);
   expect(state.submissions[0]).toEqual(state.submissions[1]);
+});
+
+test('a quote for another request is rejected even when price and refund address match', async ({ page }) => {
+  const state = await setup(page); state.wrongRequest = true;
+  await prepare(page);
+  await expect(page.getByRole('alert')).toContainText('quote does not match your request');
+  await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toBeVisible();
 });
 
 test('an unavailable or closed checkout cannot fall back to a free review', async ({ page }) => {
@@ -180,6 +190,12 @@ test('a pending order resumes explicitly and a sent hint cannot mark it as funde
   await expect(page.getByRole('region', { name: 'Order details' })).toContainText('Your click does not confirm payment');
   await expect(page.getByRole('region', { name: 'Order details' })).toContainText('No payment confirmed');
   await expect(page.getByRole('button', { name: 'Show current payment instructions →', exact: true })).toHaveCount(0);
+  state.order.payment.state = 'settled'; state.order.payment.received_amount = '1000000'; state.order.state = 'activated';
+  const detail = page.getByRole('region', { name: 'Order details' });
+  await detail.getByRole('button', { name: 'Refresh order ↻', exact: true }).click();
+  await expect(detail).toContainText('Funds recorded');
+  await expect(detail.getByText('Waiting for confirmation.', { exact: false })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
 });
 
 test('malformed payment amounts are not rounded or shown as deposit instructions', async ({ page }) => {

@@ -23,6 +23,7 @@ pub(crate) struct CreateCheckout {
 #[derive(Serialize)]
 pub(crate) struct DepositView {
     order_id: Uuid,
+    request_id: Uuid,
     review_id: Uuid,
     invoice_id: Uuid,
     input: TokenAmount,
@@ -224,6 +225,7 @@ fn view(terms: CheckoutTerms, quote: CheckoutQuote) -> Result<DepositView, ApiEr
         .map_err(|e| error(CheckoutError::Payment(e)))?;
     Ok(DepositView {
         order_id: quote.order_id,
+        request_id: terms.consent.request_id,
         review_id: quote.review_id,
         invoice_id: quote.invoice_id,
         input: TokenAmount {

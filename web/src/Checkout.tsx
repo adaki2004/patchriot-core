@@ -4,7 +4,7 @@ export type PaymentToken = { asset_id: string; symbol: string; decimals: number;
 export type CheckoutOffer = { id: string; price: { asset: string; amount: string }; destination: PaymentToken; inputs: PaymentToken[]; payment_window_seconds: number };
 export type CheckoutSettings = { mode: 'pilot' | 'closed' | 'paid'; offer: CheckoutOffer | null };
 export type Deposit = {
-  order_id: string; review_id: string; invoice_id: string;
+  order_id: string; request_id: string; review_id: string; invoice_id: string;
   input: { token: PaymentToken; amount: string }; output: { token: PaymentToken; amount: string };
   deposit_address: string; deposit_memo: string | null; refund_address: string; expires_at: string;
 };
@@ -28,7 +28,7 @@ export function checkedDeposit(value: Deposit): Deposit {
     && typeof token.symbol === 'string' && /^[A-Za-z0-9._-]{1,16}$/.test(token.symbol)
     && ['near', 'eth', 'base', 'arb', 'op', 'pol', 'bsc', 'avax'].includes(token.blockchain);
   const text = (s: unknown) => typeof s === 'string' && s.length > 0 && s.length <= 256 && !/\s/.test(s);
-  if (!value || ![value.order_id, value.review_id, value.invoice_id, value.deposit_address, value.refund_address].every(text)
+  if (!value || ![value.order_id, value.request_id, value.review_id, value.invoice_id, value.deposit_address, value.refund_address].every(text)
     || !tokenValid(value.input?.token) || !tokenValid(value.output?.token)
     || !tokenAmount(value.input.amount, value.input.token) || !tokenAmount(value.output.amount, value.output.token)
     || (value.deposit_memo !== null && !text(value.deposit_memo)) || !Number.isFinite(Date.parse(value.expires_at))) {
