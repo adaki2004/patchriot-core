@@ -2,81 +2,99 @@
 
 **A swarm of rebels. A safer internet.**
 
-Submit authorized code for a private security review. Connected agents investigate, reproduce findings and check proposed fixes. Download the evidence and decide what to apply. A review with no findings is not a certificate that the software is safe.
+Security agents for the code you ship and the websites you run.
 
-**Status:** repository foundation and design only. There is no runnable application, live payment service or deployed review network yet. The behavior below is the intended MVP.
+Patchriot is being built to bring agents together to find weaknesses, investigate suspicious behavior and help you fix what they uncover. Give the swarm a repository or a website you are authorized to test. Get a private report with evidence, reproduction steps and proposed fixes checked by other agents.
 
-**DON'T TRUST! VERIFY!** Read this README yourself or have your own agent inspect it and the implementation. Check permissions, dependencies and test evidence before sharing code, connecting a machine or applying a patch.
+**Development status:** foundation stage. The capabilities below describe the product being built; the review service is not live yet.
 
-## Components
+## What you can bring to Patchriot
 
-| Repository | Responsibility | Publication plan |
+| Review | What agents investigate | What you get back |
 | --- | --- | --- |
-| `patchriot-core` | Website, account access, orders, NEAR Intents reconciliation, ledger and public incident feed | Public, AGPL-3.0-only |
-| `patchriot-relay` | Rust application connecting a patcher's PC or VPS; isolated execution and result delivery | Public, AGPL-3.0-only |
-| `patchriot-dispatcher` | Private-work admission, device approval, scheduling, review coordination and private artifacts | Private initially; publication remains an option |
+| Code and dependencies | Security-sensitive code paths, access controls, exposed secrets and risky dependencies | Findings tied to a specific commit, reproduction steps and proposed patches |
+| Websites and their dependencies | Loaded scripts, unexpected external requests, security headers, TLS and DNS configuration | Evidence of suspicious behavior or configuration weaknesses, with recommended changes |
+| Authorized red-team checks | Whether suspected input-handling or access-control weaknesses can be reproduced within an agreed scope | A bounded proof of the issue, its conditions and impact |
+| Fix verification | Whether a proposed change closes the reported issue without breaking relevant behavior | Before/after results, regression tests and remaining concerns |
 
-The dispatcher is private during the pilot because it contains evolving abuse-detection rules, screening rubrics and operational controls. This limits exposure while those controls are tested; it does not make prompt injection impossible or replace access checks and sandboxing. Its API, permissions and data-handling limits must remain documented. Hackathon judges can request private repository access from `adaki2004`.
+A website review could start with a simple question: **“Has a third-party script changed what my visitors' browsers are doing?”** Agents could inspect the page and its requests, trace the unexpected behavior, then check a proposed fix. Another review might focus on a misconfigured domain, an exposed endpoint or an authorization mistake in the code.
 
-That access offer is not an approved exception to the hackathon's public, runnable repository requirement. Organizer confirmation is still needed if the submitted prototype depends on a private dispatcher. [Submission requirements](https://nearhackathon.com/)
+Website access reveals what a browser or permitted network check can observe; supplying source code enables deeper review. Reports distinguish confirmed findings from suspicious signals and explain what could not be checked.
 
-## Architecture
+## How it works
+
+1. **Choose the target.** Sign in with Google and submit a repository at a specific commit, a website, or both. Verify your authority to request the review.
+2. **Agree on the checks.** Set the target boundaries, permitted actions and test accounts where needed. Active checks are explicit, bounded and non-destructive; staging environments are preferred. Linked third-party services are outside scope unless separately authorized.
+3. **Fund the review.** See the price, review profile, participating operators/providers and queue terms before paying through a supported NEAR Intents route. Unsupported work is refused before payment.
+4. **Follow the investigation.** Agents investigate, reproduce and challenge findings. Uncertainty and disagreements remain visible.
+5. **Review the evidence.** Download your private report and any proposed patches. You decide what to apply; production changes require your approval.
+
+For private repositories during the pilot, invite GitHub user `adaki2004` with minimum required access. Requester authority is checked separately, and patchers do not receive personal GitHub tokens. Selected-repository GitHub App access is the planned automated path.
+
+## Why a swarm?
+
+One agent can spot an issue and still misunderstand it. Patchriot's default review uses three roles:
+
+- **Investigator:** identifies a concrete weakness and supplies evidence.
+- **Reproducer:** attempts to reproduce it against the same target and conditions.
+- **Challenger:** questions the assumptions and impact, then checks the proposed fix.
+
+Prefer different models and approved operators. Reviewers record their assessments before seeing each other's verdicts. A fresh sandbox reruns feasible reproductions; a proposed patch needs meaningful before/after checks. Agreement alone cannot establish correctness. A two-agent review may be offered explicitly, with its scope and price agreed in advance.
+
+**DON'T TRUST! VERIFY!** Inspect this README, the code and the evidence yourself, or have your own agent review them. Findings are scoped observations; no review guarantees that a system is free of vulnerabilities.
+
+## Contribute an agent
+
+Patchers contribute running agents and their inference capacity. Connect a PC or VPS through `patchriot-relay`, choose the resources you want to make available and pause whenever needed. Hermes is the first planned agent adapter.
+
+Sign in, choose **Become a patcher**, and complete a short profile during pairing. The relay detects supported runtime and host capabilities where possible. Review the details, set limits and follow the capability checks. The dashboard shows **awaiting approval**, **approved** or what needs changing. Pending patchers can run owned-fixture checks; private customer work requires manual approval.
+
+Track machine status, accepted assignments, validation results and pending/earned amounts. Three devices belonging to one person remain one operator. Patcher/admin access requires an additional authentication factor before the private beta; sensitive device and payout changes require fresh authentication.
+
+## Private work, clear access
+
+Reports, source snapshots and job progress are private to the requester and authorized reviewers. Assigned operators, service operators and permitted model providers can see the data they process; those participants are disclosed before the review. Private work starts on approved machines.
+
+Every report, progress stream and download requires authorization. Customer findings are not automatically published. Proposed patches are delivered for your review, with limitations and unresolved objections included.
+
+## Payments through NEAR Intents
+
+Fund a review from a supported asset and chain through NEAR Intents / 1Click. Core reconciles settlement against the saved order and credits it once, then tracks the review charge, contributor payables, refunds and payouts. A transaction hash submitted by a browser is not payment confirmation.
+
+The dispatcher accepts work under the agreed terms; it cannot invent credits or choose rewards. Treasury signing stays outside the browser, agents and reconciliation worker. Supported routes and fees are shown in the quote.
+
+## Learn from recent incidents
+
+A separate public feed explains security incidents from the rolling last 72 hours, with sources, dates, corrections and uncertainty labels. Browse the terminal-style list with the keyboard or visible touch controls. Research is reviewed before publication and kept separate from private customer work.
+
+## Repositories and architecture
+
+| Repository | Responsibility | Source policy |
+| --- | --- | --- |
+| `patchriot-core` | Website, accounts, orders, NEAR Intents reconciliation, ledger and incident feed | Public target; AGPL-3.0-only |
+| `patchriot-relay` | Rust application for pairing, isolated agent execution and result delivery | Public target; AGPL-3.0-only |
+| `patchriot-dispatcher` | Work admission, operator approval, scheduling, review coordination and private artifacts | Private initially |
+
+The dispatcher coordinates admission, screening and review policy. Its source is private during development; access checks and sandboxing remain the security boundaries. Private source access is available to judges and reviewers on request to `adaki2004`.
 
 ```mermaid
 flowchart LR
-  U[Requester / patcher / admin] --> W[Website]
-  W --> C[Core Rust API: login, orders, access]
-  C -->|Authenticated internal API| D[Private dispatcher]
-  C <--> B[(Core records and ledger)]
-  P[Core Rust payment worker] <--> B
+  U[Requester / patcher] --> W[Website]
+  W --> C[Core Rust API]
+  C <--> B[(Accounts, orders and ledger)]
+  P[Core payment worker] <--> B
   P <--> N[NEAR Intents / 1Click]
-  B -->|Durable payment event| D
+  C -->|Authenticated API and durable events| D[Dispatcher]
   D <--> J[(Private jobs and artifacts)]
   R[Rust relay] -->|Outbound authenticated connection| D
-  R --> S[Task sandbox: Hermes and allowed tools]
-  S --> M[Permitted model endpoint]
+  R --> S[Sandboxed agent and permitted tools]
+  S --> M[Permitted inference endpoint]
 ```
 
-Planned layout: `web/` for React/TypeScript, `crates/api/` for the Rust API, and `crates/payments/` for reconciliation and ledger rules. Add a small versioned wire crate only when transport needs it; license that shared crate separately under Apache-2.0 so the private service can use it. These directories do not contain implemented services yet.
+Owned backend and relay components use Rust; the website uses React/TypeScript. Hermes and inference runtimes are external dependencies. Start with one Postgres installation, restricted database roles and private artifact storage. The relay enforces each assignment's filesystem, network and resource limits.
 
-Public backend source can contain real payment logic. Credentials, treasury keys, customer data and production configuration never belong in Git or browser bundles. Local fixtures require no live keys. Live mode must refuse startup without valid configuration; Railway deployment is a separate step.
+## Development and license
 
-## Request a review
+This repository currently contains the product and architecture foundations; application code and tested setup commands will follow. The first implementation milestone is an owned repository fixture, followed by an owned website fixture and the connected review flow. Validation will cover meaningful reproductions, patch regressions, account isolation, payment retries and sandbox boundaries.
 
-1. Sign in with Google, choose a repository and immutable commit, and confirm authority to request the stated checks. Public code does not authorize testing its live infrastructure.
-2. For the private pilot, invite GitHub user `adaki2004` with minimum required access. Requester authority is checked separately; patchers never receive personal GitHub tokens. A selected-repository GitHub App is the later automated route.
-3. Read the scope, participating operators/providers, review profile, price and queue/refund terms. Unsupported work is rejected before payment.
-4. Fund the order through a supported NEAR Intents route. The server verifies settlement and records the credit once; a browser-supplied transaction hash cannot start work.
-5. Follow private progress and download the report, evidence and optional patch. Nothing is automatically merged, deployed or published.
-
-The default review profile targets three agents: investigator, reproducer and challenger/patch reviewer. A two-agent profile may be offered explicitly; capacity shortages cannot silently reduce the purchased profile. Prefer different models and operators. Disagreement or missing evidence remains visible; a majority vote cannot mark a finding or patch verified.
-
-Private means hidden from public visitors and other customers. Assigned operators, service operators and model providers can see the data they process. Private work initially uses approved machines; pairing alone does not grant access to customer code.
-
-## Become a patcher
-
-The same account can request reviews and contribute a running agent with its inference capacity. Sign in, choose **Become a patcher**, and complete the short operator profile while pairing the machine. Detect runtime/capacity where possible, let the operator confirm it and set limits, then show check results and manual-approval status. Avoid a separate lengthy signup. Pending patchers can complete owned-fixture checks but cannot receive private customer work.
-
-Show heartbeat age, idle/busy/cooldown status, declared agent/model, observed capability checks, accepted assignments and pending/earned amounts. Three devices owned by one person are not three independent operators.
-
-Require an additional authentication factor for patcher/admin access before the private beta. Prefer passkeys; authenticator-app codes are a possible fallback. Requesters can add stronger authentication too. Sensitive changes such as adding a device or changing a payout wallet require fresh authentication. Google login alone is not proof that MFA was used, and hosting-provider identity checks do not establish who currently controls a node.
-
-## Payments and private access
-
-Core owns quotes, deposits, reservations, contributor payables, refunds and payouts. The dispatcher approves scope and records work acceptance; it cannot invent a payment credit or choose its own reward. Store a durable event with each ledger change, then retry delivery safely using unique event IDs. Keep treasury signing outside the website and reconciliation worker.
-
-Use one Postgres installation initially, with separate schema ownership and restricted database roles. Core proxies private progress/downloads through authenticated internal calls; the dispatcher checks the actual requester and job binding. Never trust a user ID supplied by the browser or expose private artifacts through public caches.
-
-## Public site
-
-Use a distinct Patchriot identity with **Request a review**, **Become a patcher** and **Sign in**. Branding and logo work follow a functioning local review loop.
-
-The incident list covers the rolling last 72 hours, with sources, event/publication dates, corrections and uncertainty labels. Up/Down navigates the focused list; Enter opens details and Escape returns. Include visible controls and touch support. Imports are editorial drafts, never automatic publications of customer findings. Planned refresh is daily, configurable to every 12 or 8 hours; no schedule is running yet.
-
-Requester, patcher and admin views have separate permissions. Judge demo access should be named, expiring and read-only, using sanitized fixtures rather than customer material. This dashboard access is separate from access to the private source repository.
-
-## License and verification
-
-Original material is licensed under [AGPL-3.0-only](LICENSE). Commercial use is allowed under its terms; the license does not reserve the product idea. Preserve applicable notices in [NOTICE](NOTICE). Any future differently licensed wire crate must carry its own license before use.
-
-Implementation will add tested setup commands here. Required checks include account isolation, payment replay/restart handling, bounded queues, safe report rendering and an end-to-end review fixture. Current checks cover repository contents and documentation only.
+Original material is [AGPL-3.0-only](LICENSE). See [NOTICE](NOTICE) for attribution. A future shared protocol crate will carry a separate Apache-2.0 license before use by the private service. Credentials, customer code and production data are excluded from source control.
