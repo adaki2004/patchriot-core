@@ -1,5 +1,5 @@
-//! Exact-output 1Click quotes and settlement accounting. There is no
-//! browser-facing write endpoint. Quote requests use server-approved terms,
+//! Exact-output 1Click quotes and settlement accounting. Browser access is
+//! limited to private status and cancellation. Quotes use server-approved terms,
 //! never JSON supplied by a requester, relay, webhook or agent.
 //!
 //! A provider SUCCESS is trusted only after binding it to the saved quote. It is
@@ -18,6 +18,7 @@ use crate::{ApiError, AppState, auth};
 pub mod cancellation;
 pub mod checkout;
 pub mod funding;
+pub(crate) mod orders;
 
 const API_ORIGIN: &str = "https://1click.chaindefuser.com";
 const RESPONSE_LIMIT: usize = 128 * 1024;

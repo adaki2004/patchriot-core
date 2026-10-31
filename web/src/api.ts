@@ -31,6 +31,7 @@ const messages: Record<string, string> = {
   dispatcher_unavailable: 'The dispatcher is unavailable. The last response is shown below; it may be out of date.',
   database_unavailable: 'Account storage is unavailable. Please try again shortly.',
   request_conflict: 'This request changed or a previous action already succeeded. Refresh the view before trying again.',
+  checkout_preparing: 'This order is still being prepared. Refresh shortly before requesting cancellation.',
   not_found: 'This item is unavailable, expired or not shared with your account.',
   invalid_request: 'Check the entered details and the limits shown in the form, then try again.',
   action_not_allowed: 'Your account cannot perform this action.',

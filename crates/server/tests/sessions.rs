@@ -17,6 +17,9 @@ const ORIGIN: &str = "https://patchriot.example";
 #[path = "sites/mod.rs"]
 mod sites;
 
+#[path = "orders/mod.rs"]
+mod orders;
+
 struct TestApp {
     app: Router,
     pool: PgPool,

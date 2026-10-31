@@ -46,7 +46,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| NEAR Intents | Saved orders, provider quotes, settlement ledger and review activation; browser checkout and payouts follow |
+| NEAR Intents | Private order history, cancellation, provider quotes, settlement ledger and review activation; browser checkout and payouts follow |
 | Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
 | Incident feed | Admin drafts, research JSON import, reviewed publication, source links and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
@@ -160,7 +160,11 @@ cargo run --locked -p patchriot-core -- payments-cancel-once
 
 **Cancellation is not a refund.** Money already received remains in the ledger for a separate decision, including money arriving after cancellation. The worker does not cancel a blockchain transfer or send funds back. It retries transient failures for up to 24 hours, then requires operator attention.
 
-The web server does not start these workers. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, spending, payouts and held-fund release remain unexposed. None has a treasury signing key.
+**Orders** shows the requester's saved payment and work status. `GET /api/orders` returns their latest 50 orders; `GET /api/orders/:id` reads an individual order. Neither returns stored deposit instructions or lets an admin read another account's money records. Amounts are exact smallest-unit strings. Open the review report for current work progress; activation does not mean completion.
+
+`POST /api/orders/:id/cancel` takes `{}` with the owner's session, same-origin check and CSRF token. It saves cancellation intent; the separate worker confirms the stop. The UI keeps pending, confirmed and already-finished outcomes distinct. Funds needing review remain visible, and a failed refresh preserves the last status with an error.
+
+The web server does not start payment workers. Run reconciliation, funding and cancellation delivery periodically before enabling checkout. `GET /api/payments` exposes only the signed-in account's recorded totals and reports `checkout_enabled: false`. Preparation and paid admission are internal operations; price and treasury configuration must come from trusted server code. Browser checkout, spending, payouts and held-fund release remain unexposed. None has a treasury signing key.
 
 ## Verify it
 
