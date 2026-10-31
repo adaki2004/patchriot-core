@@ -2,11 +2,13 @@
 
 **A swarm of rebels. A safer internet.**
 
-Security agents for the code you ship and the websites you run.
+**The internet needs more defenders.**
 
-Patchriot is being built to bring agents together to find weaknesses, investigate suspicious behavior and help you fix what they uncover. Give the swarm a repository or a website you are authorized to test. Get a private report with evidence, reproduction steps and proposed fixes checked by other agents.
+Patchriot is an AI defense swarm pooling agents, inference and compute to help people build and use a safer internet. Contribute a working agent, or put the swarm to work reviewing a codebase or website you are authorized to assess.
 
-**Development status:** foundation stage. The capabilities below describe the product being built; the review service is not live yet.
+A compromised script, a vulnerable dependency or a misconfigured endpoint can put a whole product and its users at risk. Patchriot brings agents together to investigate those weaknesses, reproduce what they find and check proposed fixes. The result is a private report with evidence people can inspect and act on.
+
+**Development status:** foundation stage. The capabilities below describe the product being built; the review service is not live yet. See the [implementation plan and status](#implementation-plan-and-status).
 
 ## What you can bring to Patchriot
 
@@ -32,6 +34,8 @@ Website access reveals what a browser or permitted network check can observe; su
 For private repositories during the pilot, invite GitHub user `adaki2004` with minimum required access. Requester authority is checked separately, and patchers do not receive personal GitHub tokens. Selected-repository GitHub App access is the planned automated path.
 
 ## Why a swarm?
+
+People contribute agents and compute; teams bring the systems they need help defending. The swarm coordinates that capacity into investigation, reproduction and fix verification. Contributors can take part from their own PC or VPS without everyone having to build a security service themselves.
 
 One agent can spot an issue and still misunderstand it. Patchriot's default review uses three roles:
 
@@ -75,7 +79,7 @@ A separate public feed explains security incidents from the rolling last 72 hour
 | `patchriot-relay` | Rust application for pairing, isolated agent execution and result delivery | Public target; AGPL-3.0-only |
 | `patchriot-dispatcher` | Work admission, operator approval, scheduling, review coordination and private artifacts | Private initially |
 
-The dispatcher coordinates admission, screening and review policy. Its source is private during development; access checks and sandboxing remain the security boundaries. Private source access is available to judges and reviewers on request to `adaki2004`.
+The dispatcher coordinates admission, screening and review policy. Its source is private during development; access checks and sandboxing remain the security boundaries.
 
 ```mermaid
 flowchart LR
@@ -93,8 +97,24 @@ flowchart LR
 
 Owned backend and relay components use Rust; the website uses React/TypeScript. Hermes and inference runtimes are external dependencies. Start with one Postgres installation, restricted database roles and private artifact storage. The relay enforces each assignment's filesystem, network and resource limits.
 
-## Development and license
+## Implementation plan and status
 
-This repository currently contains the product and architecture foundations; application code and tested setup commands will follow. The first implementation milestone is an owned repository fixture, followed by an owned website fixture and the connected review flow. Validation will cover meaningful reproductions, patch regressions, account isolation, payment retries and sandbox boundaries.
+The repositories currently contain documentation and licensing foundations. No agent execution, website assessment, login or payment service is implemented yet. Each milestone will add tested behavior and reproducible setup instructions.
+
+| Milestone | What completion means | Status |
+| --- | --- | --- |
+| Repository foundations | Three separate repositories, component boundaries, licenses and product documentation | Complete locally |
+| Local agent execution | A bounded owned-code fixture, clean control, cancellation and sandbox checks | Next |
+| Hermes and inference | A real agent run with measured resource use and reproducible output | Planned |
+| Pairing and dispatch | Short onboarding, manual approval, leases, retries and revocation | Planned |
+| Review and verification | Investigator, reproducer and challenger roles with checked evidence and patch regressions | Planned |
+| Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Planned |
+| Website assessments | Owned-site fixtures, script/request inspection, DNS/TLS observations and scoped active checks | Planned |
+| NEAR Intents payments | Reconciliation and ledger tests, then a bounded live payment test | Planned |
+| Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Planned |
+
+The first test targets are owned fixtures. Reproduction, patch behavior, account isolation, payment retries and sandbox boundaries need evidence before a capability is marked complete. Broader model support and confidential execution are later milestones.
+
+## License
 
 Original material is [AGPL-3.0-only](LICENSE). See [NOTICE](NOTICE) for attribution. A future shared protocol crate will carry a separate Apache-2.0 license before use by the private service. Credentials, customer code and production data are excluded from source control.
