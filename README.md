@@ -8,7 +8,7 @@ Patchriot is an AI defense swarm pooling agents, inference and compute to help p
 
 A compromised script, a vulnerable dependency or a misconfigured endpoint can put a whole product and its users at risk. Patchriot brings agents together to investigate those weaknesses, reproduce what they find and check proposed fixes. The result is a private report with evidence people can inspect and act on.
 
-**Development status:** foundation stage. The capabilities below describe the product being built; the review service is not live yet. See the [implementation plan and status](#implementation-plan-and-status).
+**Development status:** the relay's first local fixture runner is implemented. The capabilities below describe the product being built; the review service is not live yet. See the [implementation plan and status](#implementation-plan-and-status).
 
 ## What you can bring to Patchriot
 
@@ -18,10 +18,19 @@ A compromised script, a vulnerable dependency or a misconfigured endpoint can pu
 | Websites and their dependencies | Loaded scripts, unexpected external requests, security headers, TLS and DNS configuration | Evidence of suspicious behavior or configuration weaknesses, with recommended changes |
 | Authorized red-team checks | Whether suspected input-handling or access-control weaknesses can be reproduced within an agreed scope | A bounded proof of the issue, its conditions and impact |
 | Fix verification | Whether a proposed change closes the reported issue without breaking relevant behavior | Before/after results, regression tests and remaining concerns |
+| Recurring website checks | Changes since an approved baseline, including scripts, external requests and domain configuration | A dated comparison and alerts when something needs attention |
 
 A website review could start with a simple question: **“Has a third-party script changed what my visitors' browsers are doing?”** Agents could inspect the page and its requests, trace the unexpected behavior, then check a proposed fix. Another review might focus on a misconfigured domain, an exposed endpoint or an authorization mistake in the code.
 
 Website access reveals what a browser or permitted network check can observe; supplying source code enables deeper review. Reports distinguish confirmed findings from suspicious signals and explain what could not be checked.
+
+## Keep watch after the first review
+
+Planned recurring checks turn **“check my site”** into **“check it every day at noon and tell me what changed.”** Choose an authorized site, time zone, frequency, permitted checks and spending limit. Each run compares evidence with an approved baseline; agents investigate meaningful changes and send a private alert with the evidence and suggested next step.
+
+A changed script is not automatically malicious, and an unchanged page is not proof that it is safe. The dashboard will distinguish no material change, changed, needs review, confirmed finding and failed/skipped checks, with the last successful check time. Baseline updates require approval so a suspicious change cannot silently become the new normal.
+
+Recurring runs use the same scoped review and prepaid balance as one-off jobs. Show the per-run price and monthly cap before enabling a schedule; pause on insufficient funds or revoked authorization. Alerts do not authorize automatic production changes. This feature follows the first working one-off website review.
 
 ## How it works
 
@@ -54,6 +63,8 @@ Patchers contribute running agents and their inference capacity. Connect a PC or
 Sign in, choose **Become a patcher**, and complete a short profile during pairing. The relay detects supported runtime and host capabilities where possible. Review the details, set limits and follow the capability checks. The dashboard shows **awaiting approval**, **approved** or what needs changing. Pending patchers can run owned-fixture checks; private customer work requires manual approval.
 
 Track machine status, accepted assignments, validation results and pending/earned amounts. Three devices belonging to one person remain one operator. Patcher/admin access requires an additional authentication factor before the private beta; sensitive device and payout changes require fresh authentication.
+
+The pilot starts on CPU machines and aims for three approved contributors. A shared GPU can later run the three review roles sequentially. Display the actual operator count and shared infrastructure; three agent sessions on one host are not three independent operators. No on-chain identity, token ownership or stake is required for the pilot.
 
 ## Private work, clear access
 
@@ -99,21 +110,24 @@ Owned backend and relay components use Rust; the website uses React/TypeScript. 
 
 ## Implementation plan and status
 
-The repositories currently contain documentation and licensing foundations. No agent execution, website assessment, login or payment service is implemented yet. Each milestone will add tested behavior and reproducible setup instructions.
+The relay now has a runnable owned-fixture demo: reproduce an access-control regression, check its fix and clean control, and exercise cancellation, deadlines and output bounds. It makes no model calls and has no customer-code sandbox yet. Website assessment, login, dispatch and payments remain planned. Each milestone adds tested behavior and reproducible setup instructions.
 
 | Milestone | What completion means | Status |
 | --- | --- | --- |
 | Repository foundations | Three separate repositories, component boundaries, licenses and product documentation | Complete locally |
-| Local agent execution | A bounded owned-code fixture, clean control, cancellation and sandbox checks | Next |
-| Hermes and inference | A real agent run with measured resource use and reproducible output | Planned |
+| Local process runner | Owned-code regression and clean control; cancellation, deadlines, output bounds and cleanup | Implemented in relay |
+| Linux sandbox | Enforced filesystem/network/resource limits, host-canary and escape checks | Next |
+| Hermes and CPU inference | A real agent run with measured resource use and reproducible output | Planned; VPS access needed |
 | Pairing and dispatch | Short onboarding, manual approval, leases, retries and revocation | Planned |
 | Review and verification | Investigator, reproducer and challenger roles with checked evidence and patch regressions | Planned |
 | Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Planned |
 | Website assessments | Owned-site fixtures, script/request inspection, DNS/TLS observations and scoped active checks | Planned |
+| Recurring checks | Authorized schedules, approved baselines, private alerts, spending caps and missed-run handling | After one-off website reviews |
 | NEAR Intents payments | Reconciliation and ledger tests, then a bounded live payment test | Planned |
 | Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Planned |
+| GPU demonstration | Three review roles on stronger models with measured results and honest operator/compute counts | After local and CPU checks |
 
-The first test targets are owned fixtures. Reproduction, patch behavior, account isolation, payment retries and sandbox boundaries need evidence before a capability is marked complete. Broader model support and confidential execution are later milestones.
+The first test targets are owned fixtures. Run `cargo run --locked -- demo` inside `patchriot-relay`; its README explains the results and current execution boundary. Reproduction, patch behavior, account isolation, payment retries and sandbox boundaries need evidence before a capability is marked complete. Broader model support, optional contributor collateral and confidential execution are later decisions.
 
 ## License
 
