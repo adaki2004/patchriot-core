@@ -8,7 +8,7 @@ Patchriot is an AI defense swarm pooling agents, inference and compute to help p
 
 A compromised script, a vulnerable dependency or a misconfigured endpoint can put a whole product and its users at risk. Patchriot brings agents together to investigate those weaknesses, reproduce what they find and check proposed fixes. The result is a private report with evidence people can inspect and act on.
 
-**Development status:** the local prototype has a browser dashboard, invitation sessions, signed relay pairing, manual approval, presence/revocation and a three-role owned-fixture review with private evidence downloads. Customer assessments and paid reviews are not enabled. The capabilities below describe the product being built; see the [implementation plan and status](#implementation-plan-and-status).
+**Development status:** the local prototype has a browser dashboard, invitation sessions, signed relay pairing, manual approval, presence/revocation and a three-role owned-fixture review with private evidence downloads. The payment foundation records quotes and reconciles settlement into a private ledger; its tests use a local provider fixture. Customer assessments and checkout are not enabled. The capabilities below describe the product being built; see the [implementation plan and status](#implementation-plan-and-status).
 
 ## What you can bring to Patchriot
 
@@ -74,9 +74,15 @@ Every report, progress stream and download requires authorization. Customer find
 
 ## Payments through NEAR Intents
 
-Fund a review from a supported asset and chain through NEAR Intents / 1Click. Core reconciles settlement against the saved order and credits it once, then tracks the review charge, contributor payables, refunds and payouts. A transaction hash submitted by a browser is not payment confirmation.
+The planned checkout lets a requester fund an admitted review through NEAR Intents / 1Click. Core records the payment, then tracks the review charge, contributor payables, refunds and payouts. A transaction hash submitted by a browser is not payment confirmation.
 
 The dispatcher accepts work under the agreed terms; it cannot invent credits or choose rewards. Treasury signing stays outside the browser, agents and reconciliation worker. Supported routes and fees are shown in the quote.
+
+The implemented foundation stores exact-output quotes from trusted core code. A bounded poller checks the [1Click status API](https://docs.near-intents.org/api-reference/oneclick/check-swap-execution-status), including the deposit memo when present. It binds the reply to the saved quote and checks the destination, integer amount, timestamp and settlement evidence before recording funds. Ledger entries and funding events commit together; duplicate polls cannot credit twice. Late or mismatched amounts go into held funds without a funding event. Pending transfers, partial deposits, refunds, failures and provider outages do not count as payment. The poller trusts 1Click's settlement report; it does not independently verify blockchain finality.
+
+With `DATABASE_URL` and `PATCHRIOT_1CLICK_API_KEY` supplied through runtime secrets, `cargo run --locked -p patchriot-core -- payments-reconcile-once` checks up to ten due invoices. Polling is not started by the web server. Quotes remain under observation for seven days after their deadline, then unresolved cases require review. `GET /api/payments` shows only the signed-in account's recorded funds, in smallest-unit integer strings, and reports `checkout_enabled: false`.
+
+This slice has no public invoice writer, live quote creation, spending, payout or held-fund release. The order adapter must first admit a supported service, pin its price and treasury recipient, request a quote directly and save it before displaying deposit instructions. Funding-event consumption must be idempotent. The owned fixture remains free; no live payment or customer workload is exercised by the tests.
 
 ## Learn from recent incidents
 
@@ -124,7 +130,7 @@ The browser dashboard connects to the Rust core API and private dispatcher. Post
 | Accounts and private delivery | Google sign-in, stronger patcher/admin authentication and isolated reports/downloads | Invitation sessions, account isolation and fixture report downloads implemented; federation and MFA follow |
 | Website assessments | Owned-site fixtures, script/request inspection, DNS/TLS observations and scoped active checks | Planned |
 | Recurring checks | Authorized schedules, approved baselines, private alerts, spending caps and missed-run handling | After one-off website reviews |
-| NEAR Intents payments | Reconciliation and ledger tests, then a bounded live payment test | Planned |
+| NEAR Intents payments | Reconciliation and ledger tests, then a bounded live payment test | Quote persistence, bounded status polling and ledger implemented with local provider fixtures; checkout and live test follow |
 | Website and incident feed | Review and patcher interfaces, sourced incident summaries and an end-to-end walkthrough | Fixture-review and patcher/admin interfaces implemented; incident feed follows |
 | GPU demonstration | Three review roles on stronger models with measured results and honest operator/compute counts | After local and CPU checks |
 

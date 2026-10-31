@@ -4,6 +4,7 @@
 
 mod auth;
 mod gateway;
+pub mod payments;
 
 use axum::{
     Json, Router,
@@ -140,6 +141,7 @@ pub fn router(state: AppState) -> Router {
             }),
         )
         .route("/api/session", get(auth::session))
+        .route("/api/payments", get(payments::summary))
         .route("/api/auth/redeem", post(auth::redeem))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/fleet", get(gateway::fleet))

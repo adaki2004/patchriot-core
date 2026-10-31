@@ -10,6 +10,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|_| "database connection or migration failed")?;
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args == ["payments-reconcile-once"] {
+        let key = std::env::var("PATCHRIOT_1CLICK_API_KEY")
+            .map_err(|_| "PATCHRIOT_1CLICK_API_KEY is required")?;
+        let provider = patchriot_core::payments::OneClick::new(&key)?;
+        let result = patchriot_core::payments::reconcile_once(&pool, &provider).await?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
     if args.first().is_some_and(|a| a == "invite-account") {
         if args.len() != 2 {
             return Err("usage: patchriot-core invite-account <account-uuid>".into());
@@ -50,7 +58,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if !args.is_empty() && args != ["serve"] {
-        return Err("expected serve, invite, invite-account or disable-account".into());
+        return Err(
+            "expected serve, invite, invite-account, disable-account or payments-reconcile-once"
+                .into(),
+        );
     }
     let config = Config::new(
         std::env::var("PATCHRIOT_PUBLIC_ORIGIN")

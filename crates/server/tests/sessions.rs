@@ -145,6 +145,72 @@ impl TestApp {
 }
 
 #[tokio::test]
+async fn payment_totals_are_private_and_do_not_enable_checkout() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (cookie, session) = test.login("member").await;
+    let account: Uuid = session["account"]["id"].as_str().unwrap().parse().unwrap();
+    let deadline = chrono::Utc::now() + chrono::Duration::minutes(5);
+    let request = json!({"dry":false,"swapType":"EXACT_OUTPUT","depositType":"ORIGIN_CHAIN","refundType":"ORIGIN_CHAIN","depositMode":"SIMPLE","recipientType":"INTENTS","destinationAsset":"nep141:fixture.near","originAsset":"nep141:fixture.input.near","recipient":"treasury.fixture.near","refundTo":"refund.fixture.near","amount":"1000000","deadline":deadline});
+    let terms = patchriot_core::payments::InvoiceTerms {
+        account_id: account,
+        request_id: Uuid::new_v4(),
+        destination_asset: "nep141:fixture.near".into(),
+        recipient: "treasury.fixture.near".into(),
+        required_amount: 1_000_000,
+        quote_request: request.clone(),
+    };
+    let quote = patchriot_core::payments::QuoteResponse {
+        correlation_id: Uuid::new_v4().to_string(),
+        quote_request: request,
+        quote: json!({"amountOut":"1000000","amountIn":"1000000","depositAddress":"deposit.fixture.near","deadline":deadline}),
+    };
+    let invoice = patchriot_core::payments::record_quote(&test.pool, &terms, &quote)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO payment_ledger (id,invoice_id,account_id,asset,amount,debit,credit) VALUES ($1,$2,$3,'nep141:fixture.near',1000000,'treasury_asset','customer_funds')")
+        .bind(Uuid::new_v4()).bind(invoice).bind(account).execute(&test.pool).await.unwrap();
+    let (code, _, body) = test
+        .request("GET", "/api/payments", Value::Null, &[("cookie", &cookie)])
+        .await;
+    assert_eq!(code, StatusCode::OK);
+    assert_eq!(
+        body,
+        json!({"checkout_enabled":false,"totals":[{"asset":"nep141:fixture.near","credit":"customer_funds","amount":"1000000"}]})
+    );
+    let (other, _) = test.login("admin").await;
+    let (_, _, body) = test
+        .request(
+            "GET",
+            "/api/payments",
+            Value::Null,
+            &[
+                ("cookie", &other),
+                ("x-patchriot-account", &account.to_string()),
+            ],
+        )
+        .await;
+    assert_eq!(body["totals"], json!([]));
+    assert_eq!(
+        test.request("GET", "/api/payments", Value::Null, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            "/api/payments",
+            json!({"amount":1000000}),
+            &[("cookie", &cookie)]
+        )
+        .await
+        .0,
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn invitations_are_one_use_even_when_redeemed_concurrently_and_secrets_are_hashed() {
     let test = TestApp::new("http://127.0.0.1:1").await;
     let code = create_invite(&test.pool, "Alice", "member").await.unwrap();
