@@ -217,6 +217,29 @@ pub struct FleetSummary {
 pub struct CreateReview {
     pub request_id: Uuid,
     pub scenario: FixtureScenario,
+    #[serde(default, skip_serializing_if = "ReviewMode::is_fixture")]
+    pub mode: ReviewMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewMode {
+    #[default]
+    OwnedFixture,
+    OwnedAgent,
+}
+
+impl ReviewMode {
+    pub fn is_fixture(&self) -> bool {
+        *self == Self::OwnedFixture
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::OwnedFixture => "owned_fixture",
+            Self::OwnedAgent => "owned_agent",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -256,6 +279,29 @@ pub struct WorkAssignment {
     pub role: ReviewRole,
     pub scenario: FixtureScenario,
     pub expires_at: i64,
+    #[serde(default, skip_serializing_if = "ReviewMode::is_fixture")]
+    pub mode: ReviewMode,
+}
+
+/// A fresh sequence renews only the current, still-live lease. Retrying the same
+/// sequence reads its existing expiry; it cannot add execution time.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RenewWork {
+    pub lease_id: Uuid,
+    pub sequence: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WorkRenewed {
+    pub lease_id: Uuid,
+    pub sequence: u64,
+    pub expires_at: i64,
+    pub deadline_at: i64,
+    /// Remaining lifetime measured by the server, rounded down. The client uses
+    /// a monotonic clock starting BEFORE this request and stops before it expires.
+    pub valid_for_seconds: u64,
+    pub replayed: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -336,7 +382,121 @@ impl FixtureResult {
 #[serde(deny_unknown_fields)]
 pub struct CompleteWork {
     pub lease_id: Uuid,
-    pub result: FixtureResult,
+    pub result: WorkResult,
+}
+
+/// Untagged only to preserve the original fixture wire format. Both variants
+/// reject unknown fields; agent evidence has its own mandatory version marker.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum WorkResult {
+    Fixture(FixtureResult),
+    Agent(AgentResult),
+}
+
+impl WorkResult {
+    pub fn mode(&self) -> ReviewMode {
+        match self {
+            Self::Fixture(_) => ReviewMode::OwnedFixture,
+            Self::Agent(_) => ReviewMode::OwnedAgent,
+        }
+    }
+
+    pub fn matches_fixture(&self) -> bool {
+        match self {
+            Self::Fixture(result) => result.matches_fixture(),
+            Self::Agent(result) => result.matches_fixture(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentResultKind {
+    OwnedAgentV1,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentOutcome {
+    Passed,
+    Failed,
+    TimedOut,
+    Cancelled,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct AgentFixtureCheck {
+    pub owner_reads: bool,
+    pub blocks_other_user: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct AgentFixtureObservation {
+    pub original: AgentFixtureCheck,
+    pub patched: AgentFixtureCheck,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentResult {
+    pub kind: AgentResultKind,
+    pub outcome: AgentOutcome,
+    pub declared_model: String,
+    pub model: String,
+    pub model_digest: String,
+    pub image_digest: String,
+    pub duration_ms: u64,
+    pub inference_calls: u16,
+    pub terminal_calls: u16,
+    pub cleanup_confirmed: bool,
+    /// Parsed from a terminal tool result, never inferred from model prose.
+    pub observation: Option<AgentFixtureObservation>,
+    pub summary: String,
+}
+
+impl AgentResult {
+    pub fn valid(&self) -> bool {
+        fn label(value: &str) -> bool {
+            !value.trim().is_empty() && value.len() <= 160 && !value.chars().any(char::is_control)
+        }
+        fn digest(value: &str) -> bool {
+            value.len() == 64 && value.bytes().all(|c| c.is_ascii_hexdigit())
+        }
+        label(&self.declared_model)
+            && label(&self.model)
+            && digest(&self.model_digest)
+            && self
+                .image_digest
+                .strip_prefix("sha256:")
+                .is_some_and(digest)
+            && self.duration_ms <= 660_000
+            && self.inference_calls <= 4
+            && self.terminal_calls <= 16
+            && self.summary.len() <= 4_000
+            && !self
+                .summary
+                .chars()
+                .any(|c| c.is_control() && c != '\n' && c != '\t')
+    }
+
+    /// These are operator-reported observations of our known example, not an
+    /// attestation of model identity or an independent security verdict.
+    pub fn matches_fixture(&self) -> bool {
+        self.valid()
+            && self.outcome == AgentOutcome::Passed
+            && self.cleanup_confirmed
+            && self.inference_calls > 0
+            && self.terminal_calls > 0
+            && self.observation.as_ref().is_some_and(|evidence| {
+                evidence.original.owner_reads
+                    && !evidence.original.blocks_other_user
+                    && evidence.patched.owner_reads
+                    && evidence.patched.blocks_other_user
+            })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -354,7 +514,7 @@ pub struct ReviewStepView {
     pub device_id: Option<Uuid>,
     pub operator_id: Option<Uuid>,
     pub compute_group: Option<String>,
-    pub result: Option<FixtureResult>,
+    pub result: Option<WorkResult>,
     pub fixture_matches: Option<bool>,
 }
 
@@ -423,6 +583,81 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn existing_fixture_requests_and_outbox_keep_their_wire_format() {
+        let id = Uuid::new_v4();
+        let original = serde_json::json!({"request_id":id,"scenario":"access_control_v1"});
+        let request: CreateReview = serde_json::from_value(original.clone()).unwrap();
+        assert_eq!(request.mode, ReviewMode::OwnedFixture);
+        assert_eq!(serde_json::to_value(request).unwrap(), original);
+        let assignment = serde_json::json!({"lease_id":id,"review_id":id,"scenario":"access_control_v1","role":"investigator","expires_at":2000});
+        let parsed: WorkAssignment = serde_json::from_value(assignment.clone()).unwrap();
+        assert_eq!(parsed.mode, ReviewMode::OwnedFixture);
+        assert_eq!(serde_json::to_value(parsed).unwrap(), assignment);
+        let outbox = serde_json::json!({"lease_id":id,"result":{"runs":[]}});
+        let parsed: CompleteWork = serde_json::from_value(outbox.clone()).unwrap();
+        assert!(matches!(parsed.result, WorkResult::Fixture(_)));
+        assert_eq!(serde_json::to_value(parsed).unwrap(), outbox);
+        assert!(
+            serde_json::from_value::<CompleteWork>(
+                serde_json::json!({"lease_id":id,"result":{"runs":[],"kind":"owned_agent_v1"}})
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn agent_evidence_needs_observed_checks_not_a_confident_answer() {
+        let mut result = AgentResult {
+            kind: AgentResultKind::OwnedAgentV1,
+            outcome: AgentOutcome::Passed,
+            declared_model: "local-model".into(),
+            model: "local-profile".into(),
+            model_digest: "a".repeat(64),
+            image_digest: format!("sha256:{}", "b".repeat(64)),
+            duration_ms: 500_000,
+            inference_calls: 2,
+            terminal_calls: 1,
+            cleanup_confirmed: true,
+            observation: None,
+            summary: "The patch fixes the access-control problem.".into(),
+        };
+        assert!(result.valid());
+        assert!(!result.matches_fixture());
+        result.observation = Some(AgentFixtureObservation {
+            original: AgentFixtureCheck {
+                owner_reads: true,
+                blocks_other_user: false,
+            },
+            patched: AgentFixtureCheck {
+                owner_reads: true,
+                blocks_other_user: true,
+            },
+        });
+        assert!(result.matches_fixture());
+        result.terminal_calls = 0;
+        assert!(!result.matches_fixture());
+        result.terminal_calls = 1;
+        result.cleanup_confirmed = false;
+        assert!(!result.matches_fixture());
+        result.cleanup_confirmed = true;
+        result.outcome = AgentOutcome::TimedOut;
+        assert!(!result.matches_fixture());
+        result.outcome = AgentOutcome::Passed;
+        result
+            .observation
+            .as_mut()
+            .unwrap()
+            .patched
+            .blocks_other_user = false;
+        assert!(!result.matches_fixture());
+        result.summary = "x".repeat(4_001);
+        assert!(!result.valid());
+        result.summary.clear();
+        result.model_digest = "not-a-digest".into();
+        assert!(!result.valid());
     }
 
     #[test]
