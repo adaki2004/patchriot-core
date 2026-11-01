@@ -81,17 +81,18 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClos
 export function WebsiteEvidence({ result, complete }: { result: WebsiteResult; complete: boolean | null | undefined }) {
   const run = result.execution;
   const support = { observed_in_snapshot: 'Observed in saved text', needs_live_test: 'Needs a live test', not_supported: 'Claim not supported' };
+  const citedFindings = result.assessment?.findings.some(finding => finding.citations.length > 0);
   const status = run.state === 'timed_out'
     ? run.inference_calls === 0 ? 'The time limit was reached before a model call started. No security assessment was made.' : 'This role reached its time limit. Its assessment is incomplete.'
     : run.state === 'failed' || run.state === 'cancelled'
       ? 'This agent run did not finish. Any text below is an unverified partial result.'
-      : complete ? 'Report received with matching snapshot and citations. Reasoning is unverified.' : 'Missing or inconsistent evidence. Inspect the report before acting.';
+      : complete ? `Report received with matching snapshot${citedFindings ? ' and citations' : ''}. Reasoning is unverified.` : 'Missing or inconsistent evidence. Inspect the report before acting.';
   return <>
     <p className={`result-line ${complete ? '' : 'mismatch'}`}>{status}</p>
     <p className="model-name"><strong>{run.model}</strong><small>{Math.round(run.duration_ms / 1000)} seconds</small></p>
     {result.assessment && <div className="website-assessment"><p>{result.assessment.summary}</p>
       {result.assessment.findings.map((finding, index) => <article className="website-finding" key={index}><h4>{finding.title}</h4><span className="badge pending">{support[finding.support]}</span><p>{finding.explanation}</p><p><strong>Suggested next step:</strong> {finding.suggested_action}</p><details><summary>Quoted evidence</summary>{finding.citations.map((citation, i) => <div key={i}><blockquote>{citation.quote}</blockquote><p className="fine">Resource SHA-256: <code>{citation.resource_sha256}</code></p></div>)}</details></article>)}
-      {result.assessment.findings.length === 0 && <p className="fine">No supported finding was reported. This does not establish that the site is safe.</p>}
+      {result.assessment.findings.length === 0 && <p className="fine">The agent listed no findings. This does not establish that the site is safe.</p>}
       <p className="fine">LIMITATIONS REPORTED BY THE AGENT</p><ul>{result.assessment.limitations.map((item, i) => <li key={i}>{item}</li>)}</ul>
     </div>}
     {result.raw_summary && <><p className="fine">MODEL RESPONSE / DID NOT MATCH THE REPORT FORMAT</p><pre className="agent-summary">{result.raw_summary}</pre></>}

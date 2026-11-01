@@ -148,7 +148,9 @@ test('website reports keep model claims as text and do not label completion a sa
   const detail = page.getByRole('region', { name: 'Review report' });
   await expect(detail.getByRole('heading', { name: 'Reports received' })).toBeVisible();
   await expect(detail).toContainText('Reasoning is unverified.');
-  await expect(detail).toContainText('No supported finding was reported. This does not establish that the site is safe.');
+  await expect(detail).toContainText('Report received with matching snapshot. Reasoning is unverified.');
+  await expect(detail).not.toContainText('matching snapshot and citations');
+  await expect(detail).toContainText('The agent listed no findings. This does not establish that the site is safe.');
   await expect(detail.locator('img, script')).toHaveCount(0);
   await expect(detail).not.toContainText('Original flaw reproduced');
   const execution = detail.locator('.execution-details').first();
@@ -173,7 +175,7 @@ test('recorded website timeouts show what stopped instead of implying a complete
   await expect(detail).toContainText('This role reached its time limit. Its assessment is incomplete.');
   await expect(detail.getByText('The time limit was reached before a model call started. No security assessment was made.')).toHaveCount(2);
   await expect(detail.getByText('Reported', { exact: true })).toHaveCount(0);
-  await expect(detail).not.toContainText('No supported finding was reported.');
+  await expect(detail).not.toContainText('The agent listed no findings.');
   for (const [i, state] of ['Recorded for this snapshot', 'Not confirmed', 'Not confirmed'].entries()) {
     const execution = detail.locator('.execution-details').nth(i);
     await execution.getByText('Execution details', { exact: true }).click();
