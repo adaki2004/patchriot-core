@@ -112,11 +112,11 @@ export function Sites({ csrf, admin, accountId, selected, onSelect, onReview, on
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Website checks</h1><p className="subtle">Capture an approved site’s homepage and scripts. Inspect what was actually collected.</p></div><button className="primary" onClick={() => setCreating(true)}>New website snapshot +</button></section>
     {sites.error && <div className="notice error" role="alert">{sites.error} <button className="inline" onClick={sites.refresh}>Retry</button></div>}
+    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} accountId={accountId} sites={sites.data ?? []} onReview={onReview} onCheckout={onCheckout} onClose={() => onSelect(null)} onChange={sites.refresh} />}
     <section className="panel"><div className="table-toolbar"><strong>{sites.data ? `${sites.data.length} recent ${sites.data.length === 1 ? 'snapshot' : 'snapshots'}` : 'Loading snapshots…'}</strong><button className="quiet" onClick={sites.refresh}>Refresh websites ↻</button></div>
       {sites.data?.length === 0 && <div className="empty"><h2>Know what your site serves.</h2><p>Start with the public homepage and the scripts it includes. Permission comes first; a snapshot gives you evidence to review.</p></div>}
       {sites.data?.map(site => <button className={`review-item site-item ${selected === site.id ? 'selected' : ''}`} key={site.id} onClick={() => onSelect(site.id)}><span><strong>{site.scope.homepage}</strong><small>{date(site.created_at)} · {site.id.slice(0, 8)}</small></span><span>{label(site.state)} <span aria-hidden="true">↗</span></span></button>)}
     </section>
-    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} accountId={accountId} sites={sites.data ?? []} onReview={onReview} onCheckout={onCheckout} onClose={() => onSelect(null)} onChange={sites.refresh} />}
     <p className="fine">Snapshot collection is free during the pilot. Up to two pending/active snapshots and three submissions per day per account. Agent-review pricing is shown before you start. Raw evidence expires after seven days; scope and status remain in your history.</p>
     {creating && <NewSite csrf={csrf} onCreated={site => { sites.refresh(); onSelect(site.id); }} onClose={() => setCreating(false)} />}
   </>;

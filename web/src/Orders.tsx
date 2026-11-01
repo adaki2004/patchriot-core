@@ -43,7 +43,7 @@ function OrderDetail({ id, csrf, initialQuote, paymentEnabled, report, onReport,
     && Date.parse(order.expires_at) > now && (!order.payment || Date.parse(order.payment.deadline) > now);
   const currentQuote = canPay && quote && quote.order_id === id && quote.review_id === order.review_id
     && quote.output.token.asset_id === order.price.asset && quote.output.amount === order.price.amount && Date.parse(quote.expires_at) > now ? quote : null;
-  useEffect(() => { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView({ block: 'start' }); }, []);
+  useEffect(() => { if (!report) { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView({ block: 'start' }); } }, [report]);
   useEffect(() => { if (order) onChange(); }, [order?.state, order?.payment?.state, order?.cancellation?.confirmed_at, order?.requires_attention, onChange]);
   async function cancel() {
     if (!window.confirm('Request cancellation? This closes checkout and asks the agents to stop. Work already done and transfers already sent cannot be undone. This does not issue a refund.')) return;
@@ -103,12 +103,12 @@ export function Orders({ csrf, selected, onSelect, report, onReport, initialQuot
     {orders.error && <div className="notice error" role="alert">{orders.error}<br />The last saved list remains visible; it may be out of date.</div>}
     {checkout.error && <div className="notice error" role="alert">Payment instructions are unavailable. Your saved order records remain visible.</div>}
     {checkout.data?.mode === 'closed' && <p className="notice">New payments are paused. Do not send a transfer using an earlier quote.</p>}
+    {selected && <OrderDetail key={selected} id={selected} csrf={csrf} initialQuote={initialQuote?.order_id === selected ? initialQuote : null} paymentEnabled={checkout.data?.mode === 'paid' && !checkout.error} report={report} onReport={onReport} onClose={() => { onSelect(null); onClearQuote(); }} onChange={orders.refresh} />}
     <section className="panel" aria-label="Order history">
       {orders.data === null && <div className="empty"><p>{orders.error ? 'Order history could not be loaded.' : 'Loading orders…'}</p></div>}
       {orders.data?.length === 0 && <div className="empty"><h2>No paid orders yet.</h2><p>{checkout.data?.mode === 'pilot' ? 'The current pilot reviews are free. Paid checkout is not enabled.' : 'Website review orders will appear here after checkout is prepared.'}</p></div>}
       {orders.data?.map(order => <button key={order.id} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => onSelect(order.id)}><span><strong>Website review · {order.id.slice(0, 8)}</strong><small>{new Date(order.created_at).toLocaleString()} · {paymentLabel(order)}</small></span><span className={`badge ${order.requires_attention ? 'revoked' : 'pending'}`}>{orderLabel(order)}</span></button>)}
     </section>
     {orders.data?.length === 50 && <p className="fine">Showing your 50 most recent orders.</p>}
-    {selected && <OrderDetail key={selected} id={selected} csrf={csrf} initialQuote={initialQuote?.order_id === selected ? initialQuote : null} paymentEnabled={checkout.data?.mode === 'paid' && !checkout.error} report={report} onReport={onReport} onClose={() => { onSelect(null); onClearQuote(); }} onChange={orders.refresh} />}
   </>;
 }

@@ -58,6 +58,19 @@ test('a review bookmark survives reload and browser history without submitting w
   expect(calls.writes).toEqual([]);
 });
 
+test('late history loading cannot move a bookmarked report below the screen', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/reviews', async route => {
+    await new Promise(resolve => setTimeout(resolve, 250));
+    await route.fulfill({ json: Array.from({ length: 30 }, (_, index) => ({ id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`, mode: 'website_agent', state: 'needs_review', created_at: 1793448000, deadline_at: 1793450100, steps: [] })) });
+  });
+  await page.goto(`/#/reviews/${reviewId}`);
+  const heading = page.getByRole('region', { name: 'Review report' }).getByRole('heading', { name: 'Needs review', exact: true });
+  await expect(heading).toBeInViewport();
+  await expect(page.getByText('30 reviews', { exact: true })).toBeVisible();
+  await expect(heading).toBeInViewport();
+});
+
 test('an anonymous bookmark waits for sign-in and a denied read exposes no report', async ({ page }) => {
   const calls = await setup(page, false);
   await page.goto(`/#/reviews/${reviewId}`);

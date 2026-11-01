@@ -128,11 +128,11 @@ export function Reviews({ csrf, selected, onSelect, onOpenOrders }: { csrf: stri
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Inspect agent reports and example checks. Start reviews of your own site under Website checks.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>
     {reviews.error && <div className="notice error" role="alert">{reviews.error} <button className="inline" onClick={reviews.refresh}>Retry</button></div>}
+    {selected && <ReviewDetail key={selected} id={selected} csrf={csrf} onClose={() => onSelect(null)} onChange={reviews.refresh} onOpenOrders={onOpenOrders} />}
     <section className="panel"><div className="table-toolbar"><strong>{reviews.data ? `${reviews.data.length} ${reviews.data.length === 1 ? 'review' : 'reviews'}` : 'Loading reviews…'}</strong><button className="quiet" onClick={reviews.refresh}>Refresh reviews ↻</button></div>
       {reviews.data?.length === 0 && <div className="empty"><h2>Make the evidence visible.</h2><p>Run quick fixture tests or let local agents inspect the supplied bug and fix.</p></div>}
       {Boolean(reviews.data?.length) && <div className="review-list">{reviews.data!.map(review => <button className={`review-item ${selected === review.id ? 'selected' : ''}`} key={review.id} onClick={() => onSelect(review.id)}><span><strong>{review.mode === 'website_agent' ? 'Website snapshot review' : 'Access-control example'}</strong><small>{review.mode === 'owned_fixture' ? 'Fixture tests' : 'Local agents'} · {new Date(review.created_at * 1000).toLocaleString()} · {review.id.slice(0, 8)}</small></span><span>{reviewLabel(review)} <span aria-hidden="true">↗</span></span></button>)}</div>}
     </section>
-    {selected && <ReviewDetail key={selected} id={selected} csrf={csrf} onClose={() => onSelect(null)} onChange={reviews.refresh} onOpenOrders={onOpenOrders} />}
     <p className="fine">At most three active reviews per account. Each run needs three approved devices in its chosen mode. The relay setup guide explains how to contribute.</p>
     {creating && <NewReview csrf={csrf} onCreated={review => { reviews.refresh(); onSelect(review.id); }} onClose={() => setCreating(false)} />}
   </>;
