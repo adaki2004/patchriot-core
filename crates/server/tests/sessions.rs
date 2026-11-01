@@ -26,6 +26,73 @@ mod review_codes;
 #[path = "access/mod.rs"]
 mod access;
 
+#[tokio::test]
+async fn pairing_setup_and_agent_metadata_require_an_enabled_account() {
+    let downstream = Router::new().fallback(|headers: HeaderMap, uri: axum::http::Uri| async move {
+        assert!(headers.contains_key("authorization"));
+        assert!(headers.contains_key("x-patchriot-account"));
+        if uri.path() == "/internal/pairing-info" {
+            Json(json!({"audience":"fixture-deployment", "private_key":"must not be forwarded"}))
+        } else {
+            Json(json!([{"id":Uuid::nil(),"reported_os":"linux","runtime":"hermes","runtime_version":"example","declared_model":"local","state":"online","last_seen_at":1,"operator_name":"private name","compute_group":"private hostname","task":"private customer data"}]))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let mut test = TestApp::new(&url).await;
+    for path in ["/api/agents", "/api/pairing-info"] {
+        assert_eq!(
+            test.request("GET", path, Value::Null, &[]).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    let (cookie, session) = test.login("member").await;
+    let headers = [("cookie", cookie.as_str())];
+    assert_eq!(
+        test.request("GET", "/api/pairing-info", Value::Null, &headers)
+            .await
+            .2["error"],
+        "pairing_setup_unavailable"
+    );
+    let config = Config::new(
+        ORIGIN.into(),
+        url,
+        format!("test-service-{}", Uuid::new_v4()),
+        None,
+    )
+    .unwrap()
+    .with_relay_origin(Some("https://relay.example".into()))
+    .unwrap();
+    test.app = router(AppState::new(test.pool.clone(), config).unwrap());
+    let (status, _, setup) = test
+        .request("GET", "/api/pairing-info", Value::Null, &headers)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        setup,
+        json!({"audience":"fixture-deployment", "relay_origin":"https://relay.example"})
+    );
+    let (status, _, agents) = test
+        .request("GET", "/api/agents", Value::Null, &headers)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(agents[0].as_object().unwrap().len(), 7);
+    for private in ["operator_name", "compute_group", "task"] {
+        assert!(agents[0].get(private).is_none());
+    }
+    let account: Uuid = serde_json::from_value(session["account"]["id"].clone()).unwrap();
+    disable_account(&test.pool, account).await.unwrap();
+    for path in ["/api/agents", "/api/pairing-info"] {
+        assert_eq!(
+            test.request("GET", path, Value::Null, &headers).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    server.abort();
+    test.finish().await;
+}
+
 struct TestApp {
     app: Router,
     pool: PgPool,
@@ -810,6 +877,17 @@ fn service_configuration_rejects_insecure_or_credentialed_destinations() {
             .is_err()
         );
         assert!(Config::new(ORIGIN.into(), bad.into(), key.clone(), None).is_err());
+        assert!(
+            Config::new(
+                ORIGIN.into(),
+                "http://127.0.0.1:7411".into(),
+                key.clone(),
+                None
+            )
+            .unwrap()
+            .with_relay_origin(Some(bad.into()))
+            .is_err()
+        );
     }
     assert!(
         Config::new(
@@ -920,6 +998,7 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
         runtime: RuntimeKind::Hermes,
         runtime_version: "\"".repeat(80),
         declared_model: Some("\"".repeat(160)),
+        reported_os: None,
         compute_group: "\"".repeat(80),
         slots: 1,
     };
@@ -934,6 +1013,7 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
             runtime: intro.runtime,
             runtime_version: intro.runtime_version.clone(),
             declared_model: intro.declared_model.clone(),
+            reported_os: None,
             compute_group: intro.compute_group.clone(),
             approval: "approved".into(),
             private_work_approved: true,

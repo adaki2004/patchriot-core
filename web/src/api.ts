@@ -15,6 +15,7 @@ export type Device = {
   runtime: 'owned_fixture' | 'hermes';
   runtime_version: string;
   declared_model: string | null;
+  reported_os?: string | null;
   compute_group: string;
   approval: 'pending' | 'approved' | 'revoked';
   private_work_approved?: boolean;
@@ -25,6 +26,7 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
   invalid_credentials: 'The username or password is incorrect, or this account is unavailable.',
   invalid_username: 'Use 3–40 letters, numbers, dots, hyphens or underscores. Start with a letter or number.',
   username_unavailable: 'That username is already taken. Choose another.',

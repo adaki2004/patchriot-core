@@ -141,7 +141,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|_| "PATCHRIOT_INTERNAL_KEY is required")?,
         std::env::var_os("PATCHRIOT_WEB_ROOT").map(PathBuf::from),
     )?;
-    let mut state = AppState::new(pool, config)?;
+    let relay_origin = match std::env::var("PATCHRIOT_RELAY_ORIGIN") {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(_) => return Err("invalid PATCHRIOT_RELAY_ORIGIN".into()),
+    };
+    let mut state = AppState::new(pool, config.with_relay_origin(relay_origin)?)?;
     if args == ["payments-fund-once"] {
         let result = patchriot_core::payments::funding::deliver_once(&state).await?;
         println!("{}", serde_json::to_string(&result)?);

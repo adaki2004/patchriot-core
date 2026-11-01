@@ -6,8 +6,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use patchriot_protocol::{
-    CancelReview, ClaimPairing, CreateReview, DeviceDecision, DeviceView, FleetSummary,
-    PairingStatus, ReviewView,
+    AgentSummary, CancelReview, ClaimPairing, CreateReview, DeviceDecision, DeviceView,
+    FleetSummary, PairingDeployment, PairingStatus, ReviewView,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
@@ -167,6 +167,50 @@ pub async fn devices(
         LIST_RESPONSE_MAX_BYTES,
     )
     .await
+}
+
+pub async fn agents(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<AgentSummary>>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    request_with_limit::<(), _>(
+        &state,
+        reqwest::Method::GET,
+        "/internal/agents",
+        Some(&session),
+        None,
+        LIST_RESPONSE_MAX_BYTES,
+    )
+    .await
+}
+
+#[derive(Serialize)]
+pub(crate) struct PairingInfo {
+    relay_origin: String,
+    audience: String,
+}
+
+pub async fn pairing_info(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<PairingInfo>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    let relay_origin = state.config.relay_origin.clone().ok_or_else(|| {
+        ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "pairing_setup_unavailable")
+    })?;
+    let Json(deployment) = request::<(), PairingDeployment>(
+        &state,
+        reqwest::Method::GET,
+        "/internal/pairing-info",
+        Some(&session),
+        None,
+    )
+    .await?;
+    Ok(Json(PairingInfo {
+        relay_origin,
+        audience: deployment.audience,
+    }))
 }
 
 pub async fn claim(

@@ -40,41 +40,52 @@ pub struct AppState {
 pub struct Config {
     pub public_origin: String,
     pub dispatcher_url: String,
+    /// Public relay endpoint, configured separately from the private gateway URL.
+    pub relay_origin: Option<String>,
     pub internal_key: String,
     pub web_root: Option<PathBuf>,
     pub secure_cookies: bool,
 }
 
 impl Config {
+    fn origin(value: &str) -> Result<url::Url, &'static str> {
+        let url = url::Url::parse(value).map_err(|_| "invalid service URL")?;
+        let local = match url.host() {
+            Some(url::Host::Domain("localhost")) => true,
+            Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+            _ => false,
+        };
+        if !(url.scheme() == "https" || url.scheme() == "http" && local)
+            || url.host().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.path() != "/"
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(
+                "service URLs require HTTPS except explicit loopback, and cannot contain credentials, paths or queries",
+            );
+        }
+        Ok(url)
+    }
+
+    pub fn with_relay_origin(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        self.relay_origin = value
+            .map(|value| Self::origin(&value).map(|url| url.origin().ascii_serialization()))
+            .transpose()?;
+        Ok(self)
+    }
+
     pub fn new(
         public_origin: String,
         dispatcher_url: String,
         internal_key: String,
         web_root: Option<PathBuf>,
     ) -> Result<Self, &'static str> {
-        fn origin(value: &str) -> Result<url::Url, &'static str> {
-            let url = url::Url::parse(value).map_err(|_| "invalid service URL")?;
-            let local = match url.host() {
-                Some(url::Host::Domain("localhost")) => true,
-                Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-                Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-                _ => false,
-            };
-            if !(url.scheme() == "https" || url.scheme() == "http" && local)
-                || !url.username().is_empty()
-                || url.password().is_some()
-                || url.path() != "/"
-                || url.query().is_some()
-                || url.fragment().is_some()
-            {
-                return Err(
-                    "service URLs require HTTPS except explicit loopback, and cannot contain credentials, paths or queries",
-                );
-            }
-            Ok(url)
-        }
-        let public = origin(&public_origin)?;
-        let dispatcher = origin(&dispatcher_url)?;
+        let public = Self::origin(&public_origin)?;
+        let dispatcher = Self::origin(&dispatcher_url)?;
         if internal_key.len() < 32
             || internal_key.len() > 256
             || internal_key.chars().any(char::is_whitespace)
@@ -85,6 +96,7 @@ impl Config {
             secure_cookies: public.scheme() == "https",
             public_origin: public.origin().ascii_serialization(),
             dispatcher_url: dispatcher.origin().ascii_serialization(),
+            relay_origin: None,
             internal_key,
             web_root,
         })
@@ -205,6 +217,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/fleet", get(gateway::fleet))
         .route("/api/devices", get(gateway::devices))
+        .route("/api/agents", get(gateway::agents))
+        .route("/api/pairing-info", get(gateway::pairing_info))
         .route("/api/pairings/claim", post(gateway::claim))
         .route("/api/devices/{id}/decision", post(gateway::decision))
         .route(

@@ -8,6 +8,7 @@ async function setup(page: Page, signedIn = false) {
   await page.route('**/api/session', route => route.fulfill({ json: { account: signedIn ? account : null, csrf_token: signedIn ? 'test-csrf' : null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: fleet }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
+  await page.route('**/api/pairing-info', route => route.fulfill({ json: { relay_origin: 'https://relay.example', audience: 'test-deployment' } }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.route('**/api/review-codes', route => route.fulfill({ json: [] }));
 }
@@ -42,18 +43,22 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await expect(page.getByLabel('Live fleet counts')).toContainText('Distinct operators');
   await expect(page.getByText('Private access is explicit; active penetration tests follow.', { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: 'Relay setup', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Start with a small contribution.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Relay setup', exact: true })).toHaveCount(0);
+  await page.goto('/#/guide');
+  await expect(page.getByRole('heading', { name: 'This page is private.' })).toBeVisible();
+  await expect(page.locator('.guide pre')).toHaveCount(0);
 });
 
 test('relay setup distinguishes fixture identities from agents and makes private work a separate opt-in', async ({ page }) => {
-  await setup(page);
+  await setup(page, true);
   await page.goto('/');
   await page.getByRole('button', { name: 'Relay setup', exact: true }).click();
-  const guide = page.getByRole('region', { name: 'Start with a small contribution.' });
+  const guide = page.getByRole('region', { name: 'Connect a machine you control.' });
   const commands = guide.locator('pre');
   await expect(guide.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
   await expect(commands.filter({ hasText: ' init ' })).toContainText('--state-dir ~/.patchriot-fixture');
+  await expect(commands.filter({ hasText: ' init ' })).toContainText("--dispatcher 'https://relay.example'");
+  await expect(commands.filter({ hasText: ' init ' })).toContainText("--audience 'test-deployment'");
   await expect(commands.filter({ hasText: ' init ' })).not.toContainText('--runtime hermes');
   await expect(commands.filter({ hasText: ' connect ' })).toContainText('--fixtures');
   await expect(commands.filter({ hasText: ' connect ' })).not.toContainText('--agents');
@@ -69,9 +74,9 @@ test('relay setup distinguishes fixture identities from agents and makes private
   await guide.getByText('Opt in to private website reviews', { exact: true }).click();
   await expect(guide.locator('details[open]')).toContainText('a requester must confirm the proposed team');
   await expect(guide.locator('details[open] pre')).toContainText('--website-reviews');
-  // The build leaves a local executable; no unstated PATH installation is needed.
+  // The unpacked release is executable without an unstated PATH installation.
   const text = await commands.allTextContents();
-  expect(text.filter(value => value !== 'cargo build --release --locked').every(value => value.startsWith('./target/release/patchriot-relay '))).toBe(true);
+  expect(text.every(value => value.startsWith('./patchriot-relay '))).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
@@ -90,6 +95,20 @@ test('an outage keeps the previous count and displays the failure', async ({ pag
   failing = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('setup does not invent a deployment endpoint and the agent directory shows only safe fields', async ({ page }) => {
+  await setup(page, true);
+  await page.route('**/api/pairing-info', route => route.fulfill({ status: 503, json: { error: 'pairing_setup_unavailable' } }));
+  await page.route('**/api/agents', route => route.fulfill({ json: [{ id: '00000000-0000-4000-8000-000000000002', reported_os: null, runtime: 'hermes', runtime_version: 'example', declared_model: 'local-model', state: 'offline', last_seen_at: null }] }));
+  await page.goto('/#/guide');
+  await expect(page.getByRole('alert')).toContainText('not configured');
+  await expect(page.locator('pre').filter({ hasText: ' init ' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Agents', exact: true }).click();
+  await expect(page.getByText('Not reported', { exact: true })).toBeVisible();
+  await expect(page.getByText('local-model', { exact: true })).toBeVisible();
+  await expect(page.getByText('offline', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
 for (const phase of ['headers', 'body']) test(`a read timeout during ${phase} preserves the workspace and can recover`, async ({ page }) => {

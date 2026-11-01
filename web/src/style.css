@@ -226,3 +226,10 @@ nav > button, .nav-note { flex-shrink: 0; white-space: nowrap; }
 
 .proposed-reviewer { display: grid; gap: .25rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
 .proposed-reviewer small { color: var(--muted); line-height: 1.6; }
+.agent-directory { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 1rem; margin: 1.5rem 0; }
+.agent-panel { padding: clamp(1.25rem, 3vw, 2rem); }
+.agent-entry { border: 1px solid var(--line, #ddd); padding: 1.25rem; min-width: 0; }
+.agent-entry > div { display: flex; justify-content: space-between; align-items: start; gap: 1rem; }
+.agent-entry dl { display: grid; grid-template-columns: auto 1fr; gap: .6rem 1rem; font-size: .85rem; }
+.agent-entry dt { color: var(--muted, #666); }
+.agent-entry dd { margin: 0; overflow-wrap: anywhere; }

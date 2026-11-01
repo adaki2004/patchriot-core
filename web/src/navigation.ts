@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-const views = ['overview', 'devices', 'reviews', 'orders', 'sites', 'guide', 'incidents', 'incident-desk', 'payment-desk', 'access-desk'] as const;
+const views = ['overview', 'devices', 'agents', 'reviews', 'orders', 'sites', 'guide', 'incidents', 'incident-desk', 'payment-desk', 'access-desk'] as const;
 export type View = typeof views[number];
 type Route = { view: View; id: string | null; report: boolean };
 const home: Route = { view: 'overview', id: null, report: false };
