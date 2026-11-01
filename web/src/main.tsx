@@ -11,6 +11,8 @@ import { PaymentDesk } from './PaymentDesk';
 import { Sites } from './Sites';
 import type { Deposit } from './Checkout';
 import { IncidentDesk, IncidentLog } from './Incidents';
+import { useNavigation } from './navigation';
+import type { View } from './navigation';
 
 function Mark() {
   return <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M3 3h26v17L16 33 3 20V3Z" fill="none" stroke="currentColor" strokeWidth="3" /><path d="m10 19 5-9h7l-5 7h6L12 28l3-9h-5Z" fill="currentColor" /></svg>;
@@ -122,7 +124,7 @@ function Guide() {
       <li><strong>Build and check locally.</strong><span>Use Rust 1.94.1 on Linux or macOS. Keep the core and relay repositories beside each other, then run these commands from the relay repository.</span><pre>cargo build --release --locked</pre>{agent && <span>First follow the relay README to build the container image, configure your local model and save its pinned settings in <code>.local/agent.json</code>. Do not put keys or private settings in Git.</span>}<pre>{agent ? `${relay} agent-check --config .local/agent.json` : `${relay} demo`}</pre><span>{agent ? 'Continue after the tool check passes and container cleanup is confirmed. This tests a supplied example, not independent security expertise.' : 'The original flaw should be reproduced, with the supplied fix and clean control passing.'}</span></li>
       <li><strong>Create a separate device identity.</strong><span>Replace the placeholders with your dispatcher URL and deployment audience{agent ? ', inspected Hermes version and installed model name' : ''}. Use a new state directory for each device and the same compute group for devices sharing a machine.</span><pre>{`${relay} init --state-dir ${state} \\\n  --dispatcher https://YOUR-DISPATCHER \\\n  --audience YOUR-DEPLOYMENT \\\n  --label ${agent ? 'my-agent' : 'my-fixture'} --compute-group my-machine${agent ? ' \\\n  --runtime hermes --runtime-version YOUR-HERMES-VERSION \\\n  --model YOUR-LOCAL-MODEL' : ''}`}</pre></li>
       <li><strong>Pair, get approval, then connect.</strong><span>Enter the five-minute code under “Pair a relay”. An administrator approves the device under “Fleet & approvals”. Keep the connection running in a terminal.</span><pre>{`${relay} pair --state-dir ${state}\n${connect}`}</pre></li>
-      <li><strong>Stay in control.</strong><span>Use a second terminal to inspect, pause or resume your relay. Keep the state directory private; it contains your device key.</span><pre>{`${relay} status --state-dir ${state}\n${relay} pause --state-dir ${state}\n${relay} resume --state-dir ${state}`}</pre></li>
+      <li><strong>Stay in control.</strong><span>Use a second terminal under the same Unix account to inspect, pause or resume your relay. Use that account for a systemd service too. Keep the state directory private; it contains your device key.</span><pre>{`${relay} status --state-dir ${state}\n${relay} pause --state-dir ${state}\n${relay} resume --state-dir ${state}`}</pre></li>
     </ol>
     <Notice>A review needs three approved devices in this mode. Once they are connected, choose <strong>Reviews → New example review → {agent ? 'Local agent check' : 'Quick fixture check'}</strong>. Shared machines run one role at a time. Three devices on one VPS are still one shared machine.</Notice>
     {agent && <details className="execution-details"><summary>Opt in to private website reviews</summary><p>After testing, stop the connection and restart it with <code>--website-reviews</code>. An admin must separately allow private reviews, and a requester must select your device and consent to sharing their saved snapshot. You can see that plaintext.</p><pre>{`${connect} --website-reviews`}</pre></details>}
@@ -135,18 +137,22 @@ function App() {
   const [login, setLogin] = useState(false);
   const [pairing, setPairing] = useState(false);
   const [checkout, setCheckout] = useState<Deposit | null>(null);
-  const [view, setView] = useState<'overview' | 'devices' | 'reviews' | 'orders' | 'sites' | 'guide' | 'incidents' | 'incident-desk' | 'payment-desk'>('overview');
+  const { route, navigate } = useNavigation();
+  const view = route.view;
+  const setView = useCallback((next: View) => navigate(next), [navigate]);
   const [decision, setDecision] = useState<{ device: Device; action: DecisionAction } | null>(null);
   const [notice, setNotice] = useState('');
   const fleet = useLive<Fleet>('/fleet');
   const devices = useLive<Device[]>('/devices', Boolean(session?.account));
   const account = session?.account;
   const isAdmin = account?.role === 'admin';
+  const privateView = !['overview', 'guide', 'incidents'].includes(view);
+  const adminView = view === 'incident-desk' || view === 'payment-desk';
   const endSession = useCallback((message = '') => {
     sessionChanged();
-    setSession({ account: null, csrf_token: null }); setView('overview');
+    setSession({ account: null, csrf_token: null }); navigate('overview', null, false, true);
     setPairing(false); setDecision(null); setLogin(false); setCheckout(null); setSessionError(''); setNotice(message);
-  }, []);
+  }, [navigate]);
   useEffect(() => {
     const expired = () => endSession('Your session has ended. Sign in again to continue.');
     window.addEventListener(sessionExpiredEvent, expired);
@@ -163,15 +169,17 @@ function App() {
   }
   function changed(message: string) { devices.refresh(); fleet.refresh(); setNotice(message); }
   return <>
-    <a className="skip" href="#main">Skip to content</a>
+    <a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     <header>
       <button className="brand" aria-label="Patchriot home" onClick={() => setView('overview')}><Mark /><span>patchriot<span className="brand-dot">.</span></span></button>
       <div className="header-right"><span className="version">v0.0.1 / PRIVATE ALPHA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button>}</div>
     </header>
-    <main id="main">
+    <main id="main" tabIndex={-1}>
       <nav aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button>}{account && <button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button>{isAdmin && <button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button>}{isAdmin && <button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
       {sessionError && <Notice error>{sessionError} <button className="inline" onClick={() => void loadSession().catch(() => {})}>Retry</button></Notice>}
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
+      {privateView && !account && <section className="panel empty" aria-label="Private workspace access"><h1 className="page-title">{session ? 'This page is private.' : 'Checking your session…'}</h1><p>{session ? 'Sign in with the account that has access. A saved link does not share its contents.' : 'Your workspace will open after your session is checked.'}</p>{session && <button className="primary" onClick={() => setLogin(true)}>Sign in to open this page →</button>}</section>}
+      {adminView && account && !isAdmin && <section className="panel empty"><h1 className="page-title">Administrator access required.</h1><p>This account cannot open the admin desk.</p></section>}
       {view === 'overview' && <>
         <section className="hero">
           <div className="hero-copy"><p className="eyebrow"><span className="tiny-mark">+</span> A SWARM OF REBELS. A SAFER INTERNET.</p><h1>More defenders.<br /><span>Fewer blind spots.</span></h1><p className="hero-description">One weak link can put everyone at risk. Bring agents together to investigate it, reproduce the evidence and check the fix.</p><div className="hero-actions"><button className="primary" onClick={() => account ? setPairing(true) : setLogin(true)}>{account ? 'Pair a relay' : 'Join the private alpha'} <span>↗</span></button><button className="text-button" onClick={() => setView('guide')}>How to contribute <span>→</span></button></div><p className="fine hero-footnote">Built for scoped, authorized reviews. You decide what gets fixed.</p></div>
@@ -192,9 +200,9 @@ function App() {
           {Boolean(devices.data?.length) && <div className="table-scroll"><table><thead><tr><th>Relay / operator</th><th>Agent / model</th><th>Access</th><th>Presence</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{devices.data!.map(device => <tr key={device.id}><td><strong>{device.label}</strong><small>{device.operator_name}</small></td><td><strong>{device.runtime === 'owned_fixture' ? 'Owned fixture' : 'Hermes'}</strong><small>Version {device.runtime_version}</small>{device.declared_model && <small className="model-name">Declared model: {device.declared_model}</small>}<small>Compute: {device.compute_group}</small></td><td><span className={`badge ${device.approval}`}>{device.approval === 'pending' ? 'Awaiting approval' : device.approval}</span>{device.runtime === 'hermes' && <small>{device.private_work_approved ? 'Private reviews allowed' : 'Demo work only'} · {device.website_reviews ? 'Website opt-in on' : 'Website opt-in off'}</small>}</td><td><span className={`presence ${device.state}`} >{device.state.replaceAll('_', ' ')}</span><small>{device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleTimeString() : 'No heartbeat yet'}</small></td><td className="row-actions">{isAdmin && device.approval === 'pending' && <button className="approve" onClick={() => setDecision({ device, action: 'approve' })}>Approve</button>}{device.approval === 'approved' && device.runtime === 'hermes' && (device.private_work_approved ? <button className="quiet" onClick={() => setDecision({ device, action: 'revoke_private' })}>Remove private access</button> : isAdmin && <button className="quiet" onClick={() => setDecision({ device, action: 'approve_private' })}>Allow private reviews</button>)}{device.approval !== 'revoked' && <button className="quiet" onClick={() => setDecision({ device, action: 'revoke' })}>Revoke</button>}</td></tr>)}</tbody></table></div>}
         </section><p className="fine">Online means the relay sent a recent heartbeat. Agent versions and model names are operator declarations. Pause and resume from the machine; presence expires after 30 seconds.</p>
       </>}
-      {view === 'reviews' && account && session?.csrf_token && <Reviews csrf={session.csrf_token} onOpenOrders={() => setView('orders')} />}
-      {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} initialQuote={checkout} onClearQuote={() => setCheckout(null)} />}
-      {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} accountId={account.id} onCheckout={quote => { setCheckout(quote); setView('orders'); }} />}
+      {view === 'reviews' && account && session?.csrf_token && <Reviews csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('reviews', id)} onOpenOrders={() => setView('orders')} />}
+      {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('orders', id)} report={route.report} onReport={open => navigate('orders', route.id, open)} initialQuote={checkout} onClearQuote={() => setCheckout(null)} />}
+      {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} accountId={account.id} selected={route.id} onSelect={id => navigate('sites', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'guide' && <Guide />}
       {view === 'incidents' && <IncidentLog />}
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}

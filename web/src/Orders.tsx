@@ -28,13 +28,12 @@ function paymentLabel(order: Order) {
   return ({ pending: 'No payment confirmed', processing: 'Transfer being processed', incomplete: 'Transfer incomplete', expired: 'Payment window ended', failed: 'Transfer failed', refunded: 'Provider reports refund', settled: 'Funds recorded', held: 'Funds held for review', needs_review: 'Payment needs review' } as Record<string, string>)[order.payment.state] ?? 'Payment needs review';
 }
 
-function OrderDetail({ id, csrf, initialQuote, paymentEnabled, onClose, onChange }: { id: string; csrf: string; initialQuote?: Deposit | null; paymentEnabled: boolean; onClose: () => void; onChange: () => void }) {
+function OrderDetail({ id, csrf, initialQuote, paymentEnabled, report, onReport, onClose, onChange }: { id: string; csrf: string; initialQuote?: Deposit | null; paymentEnabled: boolean; report: boolean; onReport: (open: boolean) => void; onClose: () => void; onChange: () => void }) {
   const panel = useRef<HTMLElement>(null);
   const detail = useLive<Order>(`/orders/${id}`);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [requested, setRequested] = useState(false);
-  const [report, setReport] = useState(false);
   const [quote, setQuote] = useState<Deposit | null>(initialQuote ?? null);
   const [sent, setSent] = useState(false);
   const now = useNow();
@@ -64,7 +63,7 @@ function OrderDetail({ id, csrf, initialQuote, paymentEnabled, onClose, onChange
   }
   return <>
     <section ref={panel} tabIndex={-1} className="review-detail panel order-detail" aria-label="Order details">
-      <div className="section-heading"><div><p className="eyebrow">PAYMENT & WORK / PRIVATE</p><h2>{requested && !order?.cancellation ? 'Cancellation requested' : order ? orderLabel(order) : 'Loading order…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close order ×</button></div>
+      <div className="section-heading"><div><p className="eyebrow">PAYMENT & WORK / PRIVATE</p><h2>{requested && !order?.cancellation ? 'Cancellation requested' : order ? orderLabel(order) : detail.error ? 'Order unavailable' : 'Loading order…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close order ×</button></div>
       {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error}<br />The last saved status is shown; it may be out of date. Refresh before taking another action.</div>}
       {order && <>
         <div className="order-facts"><div><span>Payment</span><strong>{paymentLabel(order)}</strong></div><div><span>Created</span><strong>{new Date(order.created_at).toLocaleString()}</strong></div></div>
@@ -77,7 +76,7 @@ function OrderDetail({ id, csrf, initialQuote, paymentEnabled, onClose, onChange
         <div className="review-actions">
           <button className="quiet" onClick={() => { setError(''); detail.refresh(); }}>Refresh order ↻</button>
           {canPay && !currentQuote && <button className="primary" onClick={() => void resume()}>{order.state === 'preparing' ? 'Resume checkout →' : 'Show current payment instructions →'}</button>}
-          {order.review_id && <button className="text-button" onClick={() => setReport(true)}>Open review report →</button>}
+          {order.review_id && <button className="text-button" onClick={() => onReport(true)}>Open review report →</button>}
           {order.can_cancel && !requested && <button className="quiet" onClick={() => void cancel()} disabled={busy || !!detail.error}>{busy ? 'Saving request…' : 'Request cancellation'}</button>}
         </div>
         <details className="execution-details"><summary>Payment record</summary><dl>
@@ -89,14 +88,13 @@ function OrderDetail({ id, csrf, initialQuote, paymentEnabled, onClose, onChange
         {detail.updated && <p className="fine">Last checked {detail.updated.toLocaleTimeString()}</p>}
       </>}
     </section>
-    {report && order?.review_id && <ReviewDetail key={order.review_id} id={order.review_id} csrf={csrf} onClose={() => setReport(false)} onChange={detail.refresh} onOpenOrders={() => { setReport(false); panel.current?.focus(); }} />}
+    {report && order?.review_id && <ReviewDetail key={order.review_id} id={order.review_id} csrf={csrf} onClose={() => onReport(false)} onChange={detail.refresh} onOpenOrders={() => { onReport(false); panel.current?.focus(); }} />}
   </>;
 }
 
-export function Orders({ csrf, initialQuote, onClearQuote }: { csrf: string; initialQuote?: Deposit | null; onClearQuote: () => void }) {
+export function Orders({ csrf, selected, onSelect, report, onReport, initialQuote, onClearQuote }: { csrf: string; selected: string | null; onSelect: (id: string | null) => void; report: boolean; onReport: (open: boolean) => void; initialQuote?: Deposit | null; onClearQuote: () => void }) {
   const orders = useLive<Order[]>('/orders');
   const checkout = useLive<CheckoutSettings>('/checkout');
-  const [selected, setSelected] = useState<string | null>(initialQuote?.order_id ?? null);
   // The fresh response is consumed once. Returning to Orders must recheck the
   // saved quote explicitly, especially after the customer says they sent it.
   useEffect(() => { if (initialQuote) onClearQuote(); }, [initialQuote, onClearQuote]);
@@ -108,9 +106,9 @@ export function Orders({ csrf, initialQuote, onClearQuote }: { csrf: string; ini
     <section className="panel" aria-label="Order history">
       {orders.data === null && <div className="empty"><p>{orders.error ? 'Order history could not be loaded.' : 'Loading orders…'}</p></div>}
       {orders.data?.length === 0 && <div className="empty"><h2>No paid orders yet.</h2><p>{checkout.data?.mode === 'pilot' ? 'The current pilot reviews are free. Paid checkout is not enabled.' : 'Website review orders will appear here after checkout is prepared.'}</p></div>}
-      {orders.data?.map(order => <button key={order.id} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => setSelected(order.id)}><span><strong>Website review · {order.id.slice(0, 8)}</strong><small>{new Date(order.created_at).toLocaleString()} · {paymentLabel(order)}</small></span><span className={`badge ${order.requires_attention ? 'revoked' : 'pending'}`}>{orderLabel(order)}</span></button>)}
+      {orders.data?.map(order => <button key={order.id} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => onSelect(order.id)}><span><strong>Website review · {order.id.slice(0, 8)}</strong><small>{new Date(order.created_at).toLocaleString()} · {paymentLabel(order)}</small></span><span className={`badge ${order.requires_attention ? 'revoked' : 'pending'}`}>{orderLabel(order)}</span></button>)}
     </section>
     {orders.data?.length === 50 && <p className="fine">Showing your 50 most recent orders.</p>}
-    {selected && <OrderDetail key={selected} id={selected} csrf={csrf} initialQuote={initialQuote?.order_id === selected ? initialQuote : null} paymentEnabled={checkout.data?.mode === 'paid' && !checkout.error} onClose={() => { setSelected(null); onClearQuote(); }} onChange={orders.refresh} />}
+    {selected && <OrderDetail key={selected} id={selected} csrf={csrf} initialQuote={initialQuote?.order_id === selected ? initialQuote : null} paymentEnabled={checkout.data?.mode === 'paid' && !checkout.error} report={report} onReport={onReport} onClose={() => { onSelect(null); onClearQuote(); }} onChange={orders.refresh} />}
   </>;
 }

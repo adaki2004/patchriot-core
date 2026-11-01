@@ -4,7 +4,6 @@ import { write } from './api';
 import { useLive } from './useLive';
 import { WebsiteReviewSetup } from './WebsiteReview';
 import type { Deposit } from './Checkout';
-import { ReviewDetail } from './Reviews';
 import { SiteComparison } from './SiteComparison';
 
 type Scope = { homepage: string; script_origins: string[] };
@@ -85,7 +84,7 @@ function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onCheckout, o
     catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
   return <section ref={panel} tabIndex={-1} className="review-detail panel site-detail" aria-label="Website evidence">
-    <div className="section-heading"><div><p className="eyebrow">LIMITED WEBSITE SNAPSHOT</p><h2>{site ? label(site.state) : 'Loading scope…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close snapshot ×</button></div>
+    <div className="section-heading"><div><p className="eyebrow">LIMITED WEBSITE SNAPSHOT</p><h2>{site ? label(site.state) : detail.error ? 'Snapshot unavailable' : 'Loading scope…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close snapshot ×</button></div>
     {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error}</div>}
     {site && <>
       <dl className="site-scope"><dt>Homepage</dt><dd><code>{site.scope.homepage}</code></dd><dt>Additional script origins</dt><dd>{site.scope.script_origins.length ? site.scope.script_origins.map(origin => <code key={origin}>{origin}<br /></code>) : 'None — homepage origin only'}</dd><dt>Permission supplied by requester</dt><dd>{site.authority_note}</dd>{admin && <><dt>Requester</dt><dd><code>{site.requester_id}</code></dd></>}{site.decision_note && <><dt>Admin decision</dt><dd>{site.decision_note}</dd></>}</dl>
@@ -107,21 +106,18 @@ function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onCheckout, o
   </section>;
 }
 
-export function Sites({ csrf, admin, accountId, onCheckout }: { csrf: string; admin: boolean; accountId: string; onCheckout: (quote: Deposit) => void }) {
+export function Sites({ csrf, admin, accountId, selected, onSelect, onReview, onCheckout }: { csrf: string; admin: boolean; accountId: string; selected: string | null; onSelect: (id: string | null) => void; onReview: (id: string) => void; onCheckout: (quote: Deposit) => void }) {
   const sites = useLive<Site[]>('/site-checks');
   const [creating, setCreating] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [review, setReview] = useState<string | null>(null);
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Website checks</h1><p className="subtle">Capture an approved site’s homepage and scripts. Inspect what was actually collected.</p></div><button className="primary" onClick={() => setCreating(true)}>New website snapshot +</button></section>
     {sites.error && <div className="notice error" role="alert">{sites.error} <button className="inline" onClick={sites.refresh}>Retry</button></div>}
     <section className="panel"><div className="table-toolbar"><strong>{sites.data ? `${sites.data.length} recent ${sites.data.length === 1 ? 'snapshot' : 'snapshots'}` : 'Loading snapshots…'}</strong><button className="quiet" onClick={sites.refresh}>Refresh websites ↻</button></div>
       {sites.data?.length === 0 && <div className="empty"><h2>Know what your site serves.</h2><p>Start with the public homepage and the scripts it includes. Permission comes first; a snapshot gives you evidence to review.</p></div>}
-      {sites.data?.map(site => <button className={`review-item site-item ${selected === site.id ? 'selected' : ''}`} key={site.id} onClick={() => setSelected(site.id)}><span><strong>{site.scope.homepage}</strong><small>{date(site.created_at)} · {site.id.slice(0, 8)}</small></span><span>{label(site.state)} <span aria-hidden="true">↗</span></span></button>)}
+      {sites.data?.map(site => <button className={`review-item site-item ${selected === site.id ? 'selected' : ''}`} key={site.id} onClick={() => onSelect(site.id)}><span><strong>{site.scope.homepage}</strong><small>{date(site.created_at)} · {site.id.slice(0, 8)}</small></span><span>{label(site.state)} <span aria-hidden="true">↗</span></span></button>)}
     </section>
-    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} accountId={accountId} sites={sites.data ?? []} onReview={setReview} onCheckout={onCheckout} onClose={() => setSelected(null)} onChange={sites.refresh} />}
-    {review && <ReviewDetail key={review} id={review} csrf={csrf} onClose={() => setReview(null)} onChange={sites.refresh} />}
+    {selected && <SiteDetail key={selected} id={selected} csrf={csrf} admin={admin} accountId={accountId} sites={sites.data ?? []} onReview={onReview} onCheckout={onCheckout} onClose={() => onSelect(null)} onChange={sites.refresh} />}
     <p className="fine">Snapshot collection is free during the pilot. Up to two pending/active snapshots and three submissions per day per account. Agent-review pricing is shown before you start. Raw evidence expires after seven days; scope and status remain in your history.</p>
-    {creating && <NewSite csrf={csrf} onCreated={site => { sites.refresh(); setSelected(site.id); }} onClose={() => setCreating(false)} />}
+    {creating && <NewSite csrf={csrf} onCreated={site => { sites.refresh(); onSelect(site.id); }} onClose={() => setCreating(false)} />}
   </>;
 }
