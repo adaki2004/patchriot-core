@@ -5,9 +5,17 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Prototype:** pairing, approval, a browser dashboard, a public incident log, private website snapshots and isolated agent reviews of their saved text. An owned example lets operators test their setup first. Configurable crypto checkout funds selected reviews; active penetration tests follow.
+**Working prototype:** connect approved agents, collect an authorized website snapshot, review it privately and inspect the evidence. The public watch log tracks reported incidents. Agents currently review saved text; live penetration testing comes later.
 
 **CPU pilot:** Pairing and tool execution work. Tested model configurations still produced false positives on clean examples; findings require human review.
+
+## Use Patchriot
+
+**Hosted beta: coming soon.** The current deployment is a private pilot. We will publish the website address here when the hosted beta opens.
+
+- **Request a review:** sign in to the hosted website, submit a site you have permission to assess, and read your private report. You need only a browser.
+- **Contribute an agent:** install the [relay](https://github.com/adaki2004/patchriot-relay) on your machine, pair it through the website and wait for approval. Patchriot runs the shared services.
+- **Develop or self-host:** use the local setup below. These commands are for running your own copy.
 
 ## What we're building
 
@@ -53,7 +61,9 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Incident feed | Admin drafts, dated research briefs, JSON import, reviewed publication and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
-## Run locally
+## Developer setup: run your own copy
+
+This starts a separate local website and dispatcher. Beta testers use the hosted website; operators run the relay on their own machine.
 
 Keep `patchriot-core`, `patchriot-relay` and `patchriot-dispatcher` as sibling directories. Use **Rust 1.94.1, Node 24.22.1 and a dedicated PostgreSQL 17 database**. CI pins this [Node security release](https://nodejs.org/en/blog/release/v24.22.1); the API runs in Rust. Start the [dispatcher](https://github.com/adaki2004/patchriot-dispatcher) first.
 
@@ -159,9 +169,15 @@ Opening another entry or loading research asks before replacing unsaved edits. D
 
 </details>
 
-## Payments: record funds before starting work
+## Price and payments
 
-Paid reviews use **NEAR Intents / 1Click**: reserve the agreed work, record a matching settlement, then release it to the selected agents. The default pilot is free.
+The intended beta offer is **$10 for one bounded website review**, or a **single-use coupon**. This is a review of the agreed snapshot, not an unlimited audit or a promise that a site is safe. Coupons are planned; the current private pilot is free.
+
+Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
+
+**Test status:** checkout and work activation passed simulated-provider tests. No live payment has been verified. The example below sets a 10 USDC service price; it does not fetch a USD exchange rate.
+
+**Operator payments:** the pilot does not calculate earnings or send payouts. A returned report is an activity count, not a payment entitlement. A reward schedule and payout records must be added before offering paid participation. Customer payments go to the configured service wallet, not directly to agents.
 
 **Orders** tracks a requester's payment and review separately; admins have a **Payment desk**. Cancellation closes checkout and asks the agents to stop; it does not reverse transfers or issue a refund. Refunds and payouts are not automated. Test the full payment flow and establish refund accounting before accepting live funds.
 
@@ -216,7 +232,7 @@ The configuration fixes the service price, recipient and allowed input tokens. C
 ```json
 {
   "destination": { "asset_id": "nep141:<catalog-id>", "symbol": "USDC", "decimals": 6, "blockchain": "base" },
-  "amount": "1000000",
+  "amount": "10000000",
   "recipient": "<treasury-address>",
   "recipient_type": "DESTINATION_CHAIN",
   "inputs": [{ "asset_id": "nep141:<catalog-id>", "symbol": "USDC", "decimals": 6, "blockchain": "base" }]
