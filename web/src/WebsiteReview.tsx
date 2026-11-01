@@ -10,7 +10,7 @@ import type { CodeStart } from './ReviewCodes';
 
 export type WebsiteReviewer = { device_id: string; operator_id: string; operator_name: string; device_name: string; declared_model: string; compute_group: string };
 export type WebsiteContext = { site_check_id: string; snapshot_sha256: string; reviewers: WebsiteReviewer[] };
-type Plan = { site_check_id: string; snapshot_sha256: string; candidates: WebsiteReviewer[]; review_timeout_seconds?: number };
+type Plan = { site_check_id: string; snapshot_sha256: string; candidates: WebsiteReviewer[]; recommended_device_ids?: string[]; review_timeout_seconds?: number };
 type Finding = { title: string; support: 'observed_in_snapshot' | 'needs_live_test' | 'not_supported'; explanation: string; suggested_action: string; citations: { resource_sha256: string; quote: string }[] };
 export type WebsiteResult = {
   kind: 'website_agent_v1'; snapshot_sha256: string; inspected_snapshot_sha256: string | null;
@@ -20,7 +20,7 @@ export type WebsiteResult = {
 const roles = ['Investigator', 'Reproducer', 'Challenger'];
 
 export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClose }: { siteId: string; csrf: string; onCreated: (id: string) => void; onCheckout: (quote: Deposit) => void; onClose: () => void }) {
-  const dialog = useDialog('select');
+  const dialog = useDialog();
   const requestId = useRef(crypto.randomUUID());
   const plan = useLive<Plan>(`/site-checks/${siteId}/review-plan`);
   const checkout = useLive<CheckoutSettings>('/checkout');
@@ -30,13 +30,24 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClos
   const [preferCode, setPreferCode] = useState(false);
   const [code, setCode] = useState('');
   const [accepted, setAccepted] = useState(false);
-  const [selected, setSelected] = useState(['', '', '']);
+  const [selection, setSelection] = useState<{ snapshot: string; reviewers: WebsiteReviewer[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const reviewers = selected.map(id => plan.data?.candidates.find(device => device.device_id === id));
-  const ready = reviewers.every(Boolean) && new Set(selected).size === 3 && !plan.error;
+  // Keep the disclosed agents fixed across background refreshes and checkout.
+  // A replacement proposal requires an explicit refresh and new consent.
+  useEffect(() => {
+    const current = plan.data;
+    if (!current || current.recommended_device_ids?.length !== 3 || new Set(current.recommended_device_ids).size !== 3) return;
+    const proposed = current.recommended_device_ids.map(id => current.candidates.find(candidate => candidate.device_id === id));
+    if (proposed.every((candidate): candidate is WebsiteReviewer => Boolean(candidate))) {
+      setSelection(existing => existing ?? { snapshot: current.snapshot_sha256, reviewers: proposed });
+    }
+  }, [plan.data]);
+  const reviewers = selection?.reviewers ?? [];
+  const selected = reviewers.map(reviewer => reviewer.device_id);
+  const ready = reviewers.length === 3 && selection?.snapshot === plan.data?.snapshot_sha256 && selected.every(id => plan.data?.candidates.some(candidate => candidate.device_id === id)) && !plan.error;
   const mode = checkout.data?.mode;
   const offer = mode === 'paid' ? checkout.data?.offer : null;
   const usingCode = mode === 'coupons' || mode === 'paid' && preferCode;
@@ -49,7 +60,7 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClos
     if (mode === 'paid' && !usingCode && !paymentStep) { setPaymentStep(true); dialog.current?.scrollTo(0, 0); return; }
     setBusy(true); setError('');
     try {
-      const consent = { request_id: requestId.current, snapshot_sha256: plan.data.snapshot_sha256, device_ids: selected, accepts_operator_access: accepted };
+      const consent = { request_id: requestId.current, snapshot_sha256: selection!.snapshot, device_ids: selected, accepts_operator_access: accepted };
       if (usingCode) {
         const reply = checkedCodeStart(await write<CodeStart>(`/site-checks/${siteId}/review-code`, csrf, { code: code.trim(), consent }), consent.request_id);
         if (active.current) onCreated(reply.review_id);
@@ -65,17 +76,16 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClos
     } catch (error) { if (active.current) setError((error as Error).message); } finally { if (active.current) setBusy(false); }
   }
   return <dialog ref={dialog} aria-labelledby="website-review-title" onCancel={event => { if (busy) event.preventDefault(); else onClose(); }}>
-    <button className="close" aria-label="Close agent selection" disabled={busy} onClick={onClose}>×</button>
-    <p className="eyebrow">PRIVATE SNAPSHOT / {paymentStep ? '2. PAYMENT' : 'AGENT REVIEW'}</p><h2 id="website-review-title">{paymentStep ? 'Fund this review.' : 'Choose who can see it.'}</h2>
-    <p>{paymentStep ? 'Your selected agents are unchanged. Check the fee, network and refund address before preparing payment.' : 'These operators can read the saved homepage, scripts and earlier review findings. The agents review saved text in isolation; they do not browse or attack your site.'}</p>
+    <button className="close" aria-label="Close review setup" disabled={busy} onClick={onClose}>×</button>
+    <p className="eyebrow">PRIVATE SNAPSHOT / {paymentStep ? '2. PAYMENT' : 'AGENT REVIEW'}</p><h2 id="website-review-title">{paymentStep ? 'Fund this review.' : 'Your review team'}</h2>
+    <p>{paymentStep ? 'Your assigned agents are unchanged. Check the fee, network and refund address before preparing payment.' : 'The dispatcher proposed these three agents. Their operators can read the saved homepage, scripts and earlier review findings. The agents review saved text in isolation; they do not browse or attack your site.'}</p>
     {(error || plan.error || checkout.error) && <div className="notice error" role="alert">{error || plan.error || checkout.error}{error && usingCode ? <p>If a reply was lost, close this dialog and open Sponsored reviews under Reviews. Resume the saved request; you will not need the code again.</p> : error && mode === 'paid' && <p>If a reply was lost, check Orders before preparing another payment. Retrying unchanged details uses the same order.</p>}</div>}
     <form className="site-form" onSubmit={submit} onChange={() => { requestId.current = crypto.randomUUID(); }}><fieldset disabled={busy}>
-      {!paymentStep && <><div className="reviewer-list">{roles.map((role, index) => <label key={role}>{role}<select required aria-label={`${role} device`} value={selected[index]} onChange={event => { setSelected(current => current.map((value, i) => i === index ? event.target.value : value)); setAccepted(false); }}>
-        <option value="">Select an approved device</option>{plan.data?.candidates.map(device => <option key={device.device_id} value={device.device_id} disabled={selected.includes(device.device_id) && selected[index] !== device.device_id}>{device.device_name} · {device.operator_name} · {device.device_id.slice(0, 8)}</option>)}
-      </select>{reviewers[index] && <small><strong>{reviewers[index]!.operator_name}</strong> · {reviewers[index]!.declared_model}<br />Declared compute group: {reviewers[index]!.compute_group}</small>}</label>)}</div>
-      {(plan.data?.candidates.length ?? 0) < 3 && <p className="notice">{plan.data ? `${plan.data.candidates.length} eligible devices online. Three are needed.` : 'Checking available devices…'} Each needs private-work approval and the operator’s website-review opt-in.</p>}
+      {!paymentStep && <><div className="reviewer-list" aria-label="Proposed review team">{reviewers.map((reviewer, index) => <div className="proposed-reviewer" key={reviewer.device_id}><strong>{roles[index]}</strong><span>{reviewer.device_name}</span><small>{reviewer.operator_name} · {reviewer.declared_model}<br />Declared compute group: {reviewer.compute_group}</small></div>)}</div>
+      {!selection && <p className="notice">{plan.data ? 'A complete review team is not available yet. Refresh to try again.' : 'Checking available agents…'} Three approved, opted-in agents are needed.</p>}
+      {selection && !ready && <p className="notice">This team is no longer available for new work. Refresh the proposal and review the sharing permission again. No replacement has received your data.</p>}
       {ready && <p className="notice">3 devices · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. Shared operators, machines or models are not independent reviewers.</p>}
-      <label className="check"><input type="checkbox" name="consent" required checked={accepted} onChange={event => setAccepted(event.target.checked)} /><span>I allow these three devices and their named operators to read this snapshot and earlier reports for this review.</span></label>
+      <label className="check"><input type="checkbox" name="consent" required disabled={!ready} checked={accepted} onChange={event => setAccepted(event.target.checked)} /><span>I allow these three devices and their named operators to read this snapshot and earlier reports for this review.</span></label>
       <p className="fine">{mode === 'pilot' ? 'Free pilot. ' : ''}Three sequential roles, up to {Math.ceil((plan.data?.review_timeout_seconds ?? 2100) / 60)} minutes including waiting after activation. No automatic replacement devices. Reports can include quoted website text; raw snapshot bodies expire after seven days.</p>
       {offer && <p className="fine">Review fee: <strong>{tokenAmount(offer.price.amount, offer.destination)}</strong>. Check payment details in the next step, or use a review code.</p>}
       {mode === 'paid' && <label className="check"><input type="checkbox" checked={preferCode} onChange={event => setPreferCode(event.target.checked)} /><span>Use a review code instead of payment</span></label>}
@@ -84,9 +94,9 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClos
       {paymentStep && offer && <PaymentFields offer={offer} asset={asset} refund={refund} onAsset={value => { setAsset(value); setRefund(''); }} onRefund={setRefund} />}
       {mode === 'closed' && <p className="notice">New website reviews are paused. Existing orders and reports remain available.</p>}
       {!mode && !checkout.error && <p className="fine">Checking review access…</p>}
-      <button className="primary full" disabled={busy || !ready || !paymentReady}>{usingCode ? busy ? 'Starting sponsored review…' : 'Use code & start review →' : mode === 'paid' ? busy ? 'Preparing payment…' : paymentStep ? 'Reserve review & get quote →' : 'Continue to payment →' : busy ? 'Starting review…' : 'Share snapshot & start review →'}</button>
+      <button className="primary full" disabled={busy || !ready || !paymentReady || !accepted}>{usingCode ? busy ? 'Starting sponsored review…' : 'Use code & start review →' : mode === 'paid' ? busy ? 'Preparing payment…' : paymentStep ? 'Reserve review & get quote →' : 'Continue to payment →' : busy ? 'Starting review…' : 'Share snapshot & start review →'}</button>
       {paymentStep && <button type="button" className="quiet full" onClick={() => { setPaymentStep(false); setError(''); dialog.current?.scrollTo(0, 0); }}>← Back to selected agents</button>}
-      <button type="button" className="quiet full" onClick={() => { plan.refresh(); checkout.refresh(); }}>Refresh eligible devices ↻</button>
+      <button type="button" className="quiet full" onClick={() => { setSelection(null); setAccepted(false); setPaymentStep(false); requestId.current = crypto.randomUUID(); plan.refresh(); checkout.refresh(); }}>Refresh review team ↻</button>
     </fieldset></form>
   </dialog>;
 }

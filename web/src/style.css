@@ -223,3 +223,6 @@ nav > button, .nav-note { flex-shrink: 0; white-space: nowrap; }
   .access-users .row-actions { display: flex; flex-wrap: wrap; text-align: left; gap: .5rem; }
   .access-users .row-actions button { min-height: 44px; margin: 0; }
 }
+
+.proposed-reviewer { display: grid; gap: .25rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+.proposed-reviewer small { color: var(--muted); line-height: 1.6; }

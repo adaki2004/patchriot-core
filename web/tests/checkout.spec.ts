@@ -32,7 +32,7 @@ async function setup(page: Page) {
   await page.route('**/api/review-codes', route => route.fulfill({ json: state.codeReservations }));
   await page.route('**/api/site-checks', route => route.fulfill({ json: [site] }));
   await page.route(`**/api/site-checks/${siteId}`, route => route.fulfill({ json: site }));
-  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices, review_timeout_seconds: 5700 } }));
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices, recommended_device_ids: devices.map(device => device.device_id), review_timeout_seconds: 5700 } }));
   await page.route('**/api/checkout', route => route.fulfill(state.settingsError ? { status: 503, json: { error: 'checkout_unavailable' } } : { json: state.settings }));
   await page.route(`**/api/site-checks/${siteId}/review`, route => { state.freeSubmissions++; return route.fulfill({ status: 402, json: { error: 'payment_required' } }); });
   await page.route(`**/api/site-checks/${siteId}/checkout`, route => {
@@ -106,7 +106,7 @@ test('a lost code reply survives refresh and resumes only the saved request', as
   await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('you will not need the code again');
   const original = state.codeSubmissions[0];
-  await page.getByRole('button', { name: 'Close agent selection', exact: true }).click();
+  await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
   await page.getByRole('button', { name: 'Reviews', exact: true }).click();
   await page.reload();
   const history = page.getByRole('region', { name: 'Sponsored reviews', exact: true });
@@ -137,7 +137,7 @@ test('switching to codes-only access exposes the code field even from the paymen
   await choose(page);
   await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
   state.settings = { mode: 'coupons', offer: null };
-  await page.getByRole('button', { name: 'Refresh eligible devices ↻', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh review team ↻', exact: true }).click();
   await expect(page.getByLabel('Review code', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Pay with', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use code & start review →', exact: true })).toBeDisabled();
@@ -148,8 +148,7 @@ async function choose(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Website checks', exact: true }).click();
   await page.getByRole('button', { name: 'https://checkout.example/', exact: false }).click();
-  await page.getByRole('button', { name: 'Choose review agents →' }).click();
-  for (const [i, role] of ['Investigator', 'Reproducer', 'Challenger'].entries()) await page.getByLabel(`${role} device`).selectOption(devices[i].device_id);
+  await page.getByRole('button', { name: 'Prepare agent review →' }).click();
   await page.getByLabel('I allow these three devices and their named operators').check();
 }
 
@@ -160,6 +159,47 @@ async function prepare(page: Page) {
   await page.getByLabel('Refund address on NEAR', { exact: false }).fill('customer.fixture.near');
   await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
 }
+
+test('background proposals cannot replace the agents whose access was accepted', async ({ page }) => {
+  const state = await setup(page);
+  const replacement = { ...devices[2], device_id: '00000000-0000-4000-8000-000000000099', device_name: 'Replacement agent', operator_name: 'Another operator' };
+  let changed = false;
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: [...devices, replacement], recommended_device_ids: (changed ? [devices[0], devices[1], replacement] : devices).map(d => d.device_id) } }));
+  await page.clock.install();
+  await choose(page);
+  await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
+  changed = true;
+  await page.clock.fastForward(11_000);
+  await page.getByText('Selected agents and sharing permission', { exact: true }).click();
+  const permission = page.locator('details[open]');
+  await expect(permission).toContainText('CPU agent 3');
+  await expect(permission).not.toContainText('Replacement agent');
+  await page.getByRole('button', { name: 'Refresh review team ↻', exact: true }).click();
+  await expect(page.getByLabel('Proposed review team')).toContainText('Replacement agent');
+  await expect(page.getByLabel('I allow these three devices and their named operators')).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Continue to payment →', exact: true })).toBeDisabled();
+  expect(state.submissions).toHaveLength(0);
+});
+
+test('missing automatic assignment or a disappearing agent blocks payment without a client-side replacement', async ({ page }) => {
+  const state = await setup(page);
+  let available = true;
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: available ? devices : devices.slice(0,2), recommended_device_ids: available ? devices.map(d => d.device_id) : [] } }));
+  await page.clock.install();
+  await choose(page);
+  available = false;
+  await page.clock.fastForward(11_000);
+  await expect(page.getByRole('dialog')).toContainText('team is no longer available');
+  await expect(page.getByRole('button', { name: 'Continue to payment →', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
+  // An older dispatcher may return candidates but no automatic proposal. The
+  // browser must not silently make its own choice from those candidates.
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices } }));
+  await page.getByRole('button', { name: 'Prepare agent review →' }).click();
+  await expect(page.getByRole('dialog')).toContainText('complete review team is not available');
+  await expect(page.getByLabel('Proposed review team')).toBeEmpty();
+  expect(state.submissions).toHaveLength(0);
+});
 
 test('paid review shows the price before an exact network-specific deposit and never uses the free route', async ({ page }, info) => {
   const state = await setup(page);
@@ -260,7 +300,7 @@ test('an unavailable or closed checkout cannot fall back to a free review', asyn
   await expect(page.getByRole('alert')).toContainText('Checkout is unavailable');
   await expect(page.getByRole('button', { name: 'Share snapshot & start review →', exact: true })).toBeDisabled();
   state.settingsError = false; state.settings = { mode: 'closed', offer: null };
-  await page.getByRole('button', { name: 'Refresh eligible devices ↻', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh review team ↻', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('New website reviews are paused');
   await expect(page.getByRole('button', { name: 'Share snapshot & start review →', exact: true })).toBeDisabled();
   expect(state.submissions).toHaveLength(0); expect(state.freeSubmissions).toBe(0);

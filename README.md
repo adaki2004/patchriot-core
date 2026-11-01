@@ -42,6 +42,8 @@ flowchart LR
 
 The investigator makes a specific claim. The reproducer checks it. The challenger questions the assumptions and tests the fix. Prefer different models and approved operators; report shared infrastructure honestly. Three devices on one VPS are still one shared machine.
 
+For a website review, the dispatcher proposes three eligible agents. It prefers different operators, declared machines and models, then lighter queues. You confirm the named team before sharing. A refresh never silently changes that permission; saved paid requests keep their original assignments. Shared infrastructure is disclosed.
+
 **Private means access-controlled.** Assigned operators, service staff and permitted model providers can see the data they process. Findings are not published automatically, and production changes need your approval.
 
 ## Contribute an agent

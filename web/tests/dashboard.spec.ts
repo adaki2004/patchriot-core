@@ -67,7 +67,7 @@ test('relay setup distinguishes fixture identities from agents and makes private
   await expect(guide.locator('ol')).not.toContainText('--website-reviews');
   await expect(guide.locator('ol')).not.toContainText('--fixtures');
   await guide.getByText('Opt in to private website reviews', { exact: true }).click();
-  await expect(guide.locator('details[open]')).toContainText('a requester must select your device');
+  await expect(guide.locator('details[open]')).toContainText('a requester must confirm the proposed team');
   await expect(guide.locator('details[open] pre')).toContainText('--website-reviews');
   // The build leaves a local executable; no unstated PATH installation is needed.
   const text = await commands.allTextContents();
