@@ -193,9 +193,10 @@ export function IncidentDesk({ csrf }: { csrf: string }) {
   const drafts = useLive<Draft[]>('/admin/incidents', true, 60_000);
   const [selected, select] = useState<Draft | null>(null);
   const [opened, setOpened] = useState(0);
+  const currentEditor = useRef(0);
   const [importing, setImporting] = useState(false);
   function open(draft: Draft | null, content: Content = { title: '', occurred_on: new Date().toISOString().slice(0, 10), evidence: 'reported', summary: '', takeaway: '', sources: [{ label: '', url: '' }] }) {
-    setOpened(value => value + 1);
+    setOpened(++currentEditor.current);
     select(draft ?? { id: crypto.randomUUID(), revision: 0, content, published_revision: null, published_at: null, updated_at: '' });
   }
   return <>
@@ -203,7 +204,12 @@ export function IncidentDesk({ csrf }: { csrf: string }) {
     {importing && <ResearchImport onClose={() => setImporting(false)} onLoad={content => { open(null, content); setImporting(false); }} />}
     {drafts.error && <div className="notice error" role="alert">{drafts.error} <button className="inline" onClick={drafts.refresh}>Reload drafts</button></div>}
     <div className="incident-desk-layout"><aside className="panel draft-list" aria-label="Saved incident drafts"><div className="table-toolbar"><strong>Latest drafts</strong><button className="quiet" onClick={drafts.refresh}>Refresh</button></div>{drafts.data?.length === 0 && <p className="fine">No drafts yet. Start with a public source.</p>}{drafts.data?.map(draft => <button key={draft.id} className={`review-item ${selected?.id === draft.id ? 'selected' : ''}`} onClick={() => open(draft)}><span><strong>{draft.content.title}</strong><small>{draft.published_revision === null ? 'Private draft' : draft.published_revision === draft.revision ? 'Published' : 'Unpublished changes'} · revision {draft.revision}</small></span></button>)}</aside>
-      {selected ? <Editor key={`${selected.id}-${opened}`} draft={selected} csrf={csrf} onSaved={value => { select(value); drafts.refresh(); }} /> : <section className="panel empty"><h2>Keep the record useful.</h2><p>Open a draft or add an entry. Public research is separate from private customer work.</p></section>}
+      {selected ? <Editor key={`${selected.id}-${opened}`} draft={selected} csrf={csrf} onSaved={value => {
+        // A save can finish after another editor opens, including the same draft.
+        // Refresh its saved entry without replacing that editor's unsaved work.
+        if (opened === currentEditor.current) select(value);
+        drafts.refresh();
+      }} /> : <section className="panel empty"><h2>Keep the record useful.</h2><p>Open a draft or add an entry. Public research is separate from private customer work.</p></section>}
     </div>
   </>;
 }

@@ -103,6 +103,48 @@ test('admin saves separately from publication and cannot publish unsaved changes
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+for (const reopened of ['first', 'second']) test(`a delayed incident save preserves unsaved work after opening the ${reopened} draft`, async ({ page }) => {
+  await setup(page, 'admin');
+  const drafts = ['first', 'second'].map(id => ({ id, revision: 1, content: { ...content, title: `${id} draft` }, published_revision: null, published_at: null, updated_at: '2025-01-04T00:00:00Z' }));
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  let started = false;
+  const writes: unknown[] = [];
+  await page.route('**/api/admin/incidents', route => route.fulfill({ json: drafts }));
+  await page.route('**/api/admin/incidents/first', async route => {
+    const body = route.request().postDataJSON(); writes.push(body); started = true;
+    if (writes.length > 1) return route.fulfill({ status: 409, json: { error: 'incident_changed' } });
+    await pending;
+    drafts[0] = { ...drafts[0], revision: 2, content: body.content };
+    await route.fulfill({ json: drafts[0] });
+  });
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+    const list = page.getByRole('complementary', { name: 'Saved incident drafts' });
+    await list.getByRole('button').filter({ hasText: 'first draft' }).click();
+    await page.getByLabel('Title', { exact: true }).fill('First draft saved slowly');
+    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await expect.poll(() => started).toBe(true);
+    await list.getByRole('button').filter({ hasText: `${reopened} draft` }).click();
+    await page.getByLabel('Title', { exact: true }).fill('Keep this newer unsaved wording');
+    release();
+    await expect(list.getByRole('button').filter({ hasText: 'First draft saved slowly' })).toBeVisible();
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Keep this newer unsaved wording');
+    await expect(page.getByRole('region', { name: 'Incident editor' })).toContainText('Unsaved changes');
+    await expect(page.getByRole('button', { name: 'Publish saved draft' })).toBeDisabled();
+    expect(writes).toEqual([{ action: 'save', revision: 1, content: { ...content, title: 'First draft saved slowly' } }]);
+    if (reopened === 'first') {
+      // Reopening the same saved version does not silently adopt a later revision.
+      // The server must still detect the conflict and preserve the unsaved text.
+      await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText('This entry changed');
+      expect(writes[1]).toEqual({ action: 'save', revision: 1, content: { ...content, title: 'Keep this newer unsaved wording' } });
+      await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Keep this newer unsaved wording');
+    }
+  } finally { release(); }
+});
+
 test('research import stays local and unsaved until the admin saves the editable draft', async ({ page }) => {
   await setup(page, 'admin');
   await page.route('**/api/admin/incidents', route => route.fulfill({ json: [] }));
