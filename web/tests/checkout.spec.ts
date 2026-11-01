@@ -110,6 +110,44 @@ test('a lost preparation reply keeps the same request and warns before creating 
   expect(state.submissions[0]).toEqual(state.submissions[1]);
 });
 
+test('a delayed checkout reply cannot open the old order after another account signs in', async ({ page }) => {
+  const state = await setup(page);
+  let releaseQuote!: () => void;
+  const pending = new Promise<void>(resolve => { releaseQuote = resolve; });
+  await page.route(`**/api/site-checks/${siteId}/checkout`, async route => {
+    const body: Submission = route.request().postDataJSON();
+    state.submissions.push(body); state.quote.request_id = body.consent.request_id;
+    await pending;
+    await route.fulfill({ json: state.quote });
+  });
+  await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
+  let oldOrderReads = 0;
+  try {
+    await prepare(page);
+    await expect.poll(() => state.submissions.length).toBe(1);
+    // The same event is emitted when a background request confirms expiry.
+    await page.evaluate(() => window.dispatchEvent(new Event('patchriot:session-expired')));
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: '00000000-0000-4000-8000-000000000099', display_name: 'New customer' }, csrf_token: 'new-csrf' } }));
+    await page.route('**/api/orders', route => route.fulfill({ json: [] }));
+    await page.route(`**/api/orders/${orderId}`, route => { oldOrderReads++; return route.fulfill({ status: 404, json: { error: 'not_found' } }); });
+    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
+    await expect(page.getByText('New customer', { exact: true })).toHaveText('New customer');
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+    const staleReply = page.waitForResponse(`**/api/site-checks/${siteId}/checkout`);
+    releaseQuote(); await (await staleReply).finished();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(page).toHaveURL(/#\/overview$/);
+    await expect(page.getByRole('region', { name: 'Order details' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
+    await expect(page.getByText(state.quote.deposit_address, { exact: true })).toHaveCount(0);
+    expect(oldOrderReads).toBe(0);
+    expect(state.submissions).toHaveLength(1); expect(state.resumed).toBe(0);
+  } finally { releaseQuote(); }
+});
+
 test('a quote for another request is rejected even when price and refund address match', async ({ page }) => {
   const state = await setup(page); state.wrongRequest = true;
   await prepare(page);

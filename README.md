@@ -82,6 +82,8 @@ target/debug/patchriot-core invite member "A contributor"
 
 Open **http://127.0.0.1:7410** and enter the private invitation. Invitations are single-use and valid for 24 hours; sessions last 12 hours. On a confirmed session expiry, the browser closes private views and offers sign-in again. `invite-account <account-uuid>` renews access to an existing account. `disable-account <account-uuid>` revokes its sessions.
 
+Delayed replies from an earlier login cannot update a new workspace. This discards the old browser response; it does not cancel work already accepted by the server.
+
 Workspace views, reviews, snapshots and orders have bookmarkable URLs, such as `/#/reviews/<review-id>`. Refresh and browser Back/Forward keep the selected page. Private links still require an authorized account; they contain record IDs, never invitations or payment instructions. Opening an order link only reads its status. Payment instructions require a separate, explicit request.
 
 In **Relay setup**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:

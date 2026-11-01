@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, write, sessionChanged, sessionExpiredEvent, SessionExpiredError } from './api';
+import { api, write, sessionChanged, sessionExpiredEvent, SessionExpiredError, SessionChangedError } from './api';
 import type { Account, Device, Fleet, Session } from './api';
 import './style.css';
 import { useLive } from './useLive';
@@ -175,12 +175,12 @@ function App() {
   }, [endSession]);
   const loadSession = useCallback(async () => {
     try { const value = await api<Session>('/session'); sessionChanged(); setSession(value); setSessionError(''); if (value.account) setNotice(''); }
-    catch (error) { setSessionError((error as Error).message); throw error; }
+    catch (error) { if (!(error instanceof SessionChangedError)) setSessionError((error as Error).message); throw error; }
   }, []);
   useEffect(() => { void loadSession().catch(() => {}); }, [loadSession]);
   async function logout() {
     try { await write('/auth/logout', session!.csrf_token!); endSession(); }
-    catch (error) { if (!(error instanceof SessionExpiredError)) setSessionError((error as Error).message); }
+    catch (error) { if (!(error instanceof SessionExpiredError || error instanceof SessionChangedError)) setSessionError((error as Error).message); }
   }
   function changed(message: string) { devices.refresh(); fleet.refresh(); setNotice(message); }
   return <>

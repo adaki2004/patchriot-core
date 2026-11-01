@@ -50,14 +50,21 @@ const messages: Record<string, string> = {
 
 export const sessionExpiredEvent = 'patchriot:session-expired';
 let sessionRevision = 0;
-/** Late replies from a previous login must not clear a newer workspace. */
+/** Late replies from a previous login must not update a newer workspace. */
 export function sessionChanged() { sessionRevision += 1; }
 export class SessionExpiredError extends Error {
   constructor() { super(messages.sign_in_required); }
 }
+export class SessionChangedError extends Error {
+  constructor() { super('Your session changed. Retry from the current workspace.'); }
+}
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const revision = sessionRevision;
+  // Only these GET responses contain no account-specific data. An old write
+  // may already have completed on the server; discard its reply, not the work.
+  const publicRead = (options.method ?? 'GET').toUpperCase() === 'GET' && ['/fleet', '/incidents'].includes(path);
+  const checkSession = () => { if (!publicRead && revision !== sessionRevision) throw new SessionChangedError(); };
   let response: Response;
   try {
     response = await fetch(`/api${path}`, {
@@ -67,10 +74,12 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       headers: { 'content-type': 'application/json', ...options.headers },
     });
   } catch (error) {
+    checkSession();
     if (options.signal?.aborted) throw error;
     throw new Error('Cannot reach Patchriot. Check your connection and try again.');
   }
   const body = await response.json().catch(() => null);
+  checkSession();
   if (!response.ok) {
     if (response.status === 401 && body?.error === 'sign_in_required') {
       if (revision === sessionRevision && !options.signal?.aborted) {

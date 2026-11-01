@@ -104,7 +104,7 @@ test('an expired session can leave the workspace through sign out', async ({ pag
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-test('a late failure from the previous login does not dismiss a new session', async ({ page }) => {
+for (const status of [200, 401]) test(`a late ${status} from the previous login does not change the new workspace`, async ({ page }) => {
   await setup(page, true);
   let releaseClaim!: () => void;
   const pending = new Promise<void>(resolve => { releaseClaim = resolve; });
@@ -112,7 +112,9 @@ test('a late failure from the previous login does not dismiss a new session', as
   await page.route('**/api/pairings/claim', async route => {
     claimStarted = true;
     await pending;
-    await route.fulfill({ status: 401, json: { error: 'sign_in_required' } });
+    await route.fulfill({ status, json: status === 200
+      ? { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' }
+      : { error: 'sign_in_required' } });
   });
   await page.route('**/api/auth/logout', route => route.fulfill({ json: { ok: true } }));
   await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
@@ -135,8 +137,10 @@ test('a late failure from the previous login does not dismiss a new session', as
     releaseClaim();
     await (await staleReply).finished();
     await page.getByRole('button', { name: 'My relays', exact: true }).click();
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Your session has ended' })).toHaveCount(0);
+    await expect(page.getByRole('status').filter({ hasText: 'Relay paired' })).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);
   } finally { releaseClaim(); }
 });
