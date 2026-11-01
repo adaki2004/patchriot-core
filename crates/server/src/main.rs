@@ -10,6 +10,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|_| "database connection or migration failed")?;
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "bootstrap-admin") {
+        if !(3..=4).contains(&args.len()) {
+            return Err("usage: patchriot-core bootstrap-admin <username> <private-password-file> [existing-admin-uuid]".into());
+        }
+        use std::io::Read;
+        let file = std::fs::File::open(&args[2]).map_err(|_| "unable to read password file")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if file.metadata()?.permissions().mode() & 0o077 != 0 {
+                return Err("password file must be owner-only (chmod 600)".into());
+            }
+        }
+        let mut password = zeroize::Zeroizing::new(String::new());
+        file.take(258)
+            .read_to_string(&mut password)
+            .map_err(|_| "unable to read password file")?;
+        if password.len() > 257 {
+            return Err("password file is too large".into());
+        }
+        if password.ends_with('\n') {
+            password.pop();
+        }
+        let existing = args
+            .get(3)
+            .map(|v| v.parse::<uuid::Uuid>())
+            .transpose()
+            .map_err(|_| "invalid account ID")?;
+        let id = patchriot_core::bootstrap_admin(
+            &pool,
+            &args[1],
+            std::mem::take(&mut *password),
+            existing,
+        )
+        .await?;
+        println!("Administrator password login created: {id}");
+        return Ok(());
+    }
     if args.first().is_some_and(|a| a == "review-code") {
         if args.len() != 2 {
             return Err("usage: patchriot-core review-code <label>".into());
@@ -143,9 +181,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = router(state);
     let listener = tokio::net::TcpListener::bind(bind).await?;
     eprintln!("Patchriot core listening on {bind}");
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
     Ok(())
 }
 

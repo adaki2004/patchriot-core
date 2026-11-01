@@ -23,6 +23,9 @@ mod orders;
 #[path = "review_codes/mod.rs"]
 mod review_codes;
 
+#[path = "access/mod.rs"]
+mod access;
+
 struct TestApp {
     app: Router,
     pool: PgPool,

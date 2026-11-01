@@ -78,6 +78,7 @@ test('an anonymous bookmark waits for sign-in and a denied read exposes no repor
   await expect(page.getByRole('heading', { name: 'This page is private.', exact: true })).toBeVisible();
   expect(calls.reads.some(path => path.startsWith('/api/reviews'))).toBe(false);
   await page.getByRole('button', { name: 'Sign in to open this page →', exact: true }).click();
+  await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
   await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
   await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Review report' }).getByRole('heading', { name: 'Needs review', exact: true })).toBeVisible();

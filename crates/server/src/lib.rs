@@ -1,7 +1,8 @@
 //! Browser sessions and an authenticated gateway to the private dispatcher.
-//! Prototype access uses one-use invitations. Google federation is a separate
+//! Prototype access uses approved invitations and passwords. Google federation is a separate
 //! integration; an invitation must never be presented as a verified Google identity.
 
+mod access;
 mod auth;
 mod diagnostics;
 mod gateway;
@@ -25,6 +26,7 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
 };
 
+pub use access::bootstrap_admin;
 pub use auth::{create_invite, disable_account, invite_account};
 
 #[derive(Clone)]
@@ -185,6 +187,21 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/incidents", get(incidents::drafts))
         .route("/api/admin/incidents/{id}", post(incidents::edit))
         .route("/api/auth/redeem", post(auth::redeem))
+        .route("/api/auth/login", post(access::login))
+        .route("/api/auth/activate", post(access::activate))
+        .route("/api/access-requests", post(access::request_access))
+        .route("/api/admin/access", get(access::list))
+        .route("/api/admin/access/{id}/decision", post(access::decide))
+        .route("/api/admin/accounts", post(access::create_account))
+        .route(
+            "/api/admin/accounts/{id}/invite",
+            post(access::renew_invite),
+        )
+        .route(
+            "/api/admin/accounts/{id}/coupon",
+            post(access::issue_coupon),
+        )
+        .route("/api/admin/accounts/{id}/disable", post(access::disable))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/fleet", get(gateway::fleet))
         .route("/api/devices", get(gateway::devices))

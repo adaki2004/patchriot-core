@@ -1,0 +1,114 @@
+import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+const admin = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Owner', role: 'admin', auth_method: 'password' };
+const member = { ...admin, id: '00000000-0000-4000-8000-000000000002', display_name: 'Judge', role: 'member' };
+const invitation = 'a'.repeat(64);
+const coupon = { id: '00000000-0000-4000-8000-000000000003', code: `pr-${'b'.repeat(64)}`, expires_at: '2027-01-08T12:00:00Z' };
+const grant = { account_id: member.id, invitation, expires_at: '2027-01-02T12:00:00Z', coupon };
+
+async function setup(page: Page, account: typeof admin | null = null) {
+  await page.route('**/api/session', route => route.fulfill({ json: { account, csrf_token: account ? 'test-csrf' : null } }));
+  await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } }));
+  await page.route('**/api/devices', route => route.fulfill({ json: [] }));
+  await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+}
+
+test('password login is persistent and clears sensitive fields after success', async ({ page }) => {
+  await setup(page);
+  let sent: unknown;
+  await page.route('**/api/auth/login', async route => {
+    sent = route.request().postDataJSON();
+    await page.route('**/api/session', request => request.fulfill({ json: { account: admin, csrf_token: 'test-csrf' } }));
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+  await expect(page.getByLabel('Username', { exact: true })).toBeFocused();
+  await page.getByLabel('Username', { exact: true }).fill('owner_example');
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password');
+  await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(sent).toEqual({ username: 'owner_example', password: 'browser-test-password' });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Access & users', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+});
+
+test('an activation fragment is removed and a failed session read does not redeem it twice', async ({ page }) => {
+  await setup(page);
+  let activations = 0, reads = 0;
+  await page.route('**/api/auth/activate', route => {
+    activations++;
+    expect(route.request().postDataJSON()).toEqual({ code: invitation, username: 'new_judge', password: 'browser-test-password' });
+    return route.fulfill({ json: { ok: true } });
+  });
+  await page.route('**/api/session', route => {
+    if (!activations) return route.fulfill({ json: { account: null, csrf_token: null } });
+    if (++reads === 1) return route.fulfill({ status: 503, json: { error: 'database_unavailable' } });
+    return route.fulfill({ json: { account: member, csrf_token: 'test-csrf' } });
+  });
+  await page.goto(`/activate#${invitation}`);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: 'Set up your account' })).toBeVisible();
+  await expect(page.getByLabel('Invitation code')).toHaveValue(invitation);
+  await page.getByLabel('Username', { exact: true }).fill('new_judge');
+  await page.getByLabel('Password', { exact: true }).fill('browser-test-password');
+  await page.getByRole('button', { name: 'Create password and sign in' }).click();
+  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Account storage');
+  await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Retry opening workspace' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(activations).toBe(1);
+});
+
+test('requesting access submits a short note without claiming automatic approval', async ({ page }) => {
+  await setup(page);
+  let sent: unknown;
+  await page.route('**/api/access-requests', route => { sent = route.request().postDataJSON(); return route.fulfill({ status: 202, json: { ok: true } }); });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Request access', exact: true }).click();
+  await page.getByLabel('Your name').fill('New person');
+  await page.getByLabel('Email', { exact: true }).fill('person@example.com');
+  await page.getByLabel('What would you like to do?').fill('Check my own website.');
+  await page.getByRole('button', { name: 'Send request' }).click();
+  await expect(page.getByRole('status')).toContainText('review requests by hand');
+  expect(sent).toEqual({ display_name: 'New person', email: 'person@example.com', note: 'Check my own website.' });
+  await page.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+});
+
+test('admin can approve access and share an account-specific setup link and coupon', async ({ page }) => {
+  await setup(page, admin);
+  let approved = false;
+  await page.route('**/api/admin/access', route => route.fulfill({ json: {
+    requests: [{ id: member.id, display_name: 'Judge', email: 'judge@example.com', note: 'Review my project.', status: approved ? 'approved' : 'pending', created_at: '2026-11-01T10:00:00Z', account_id: approved ? member.id : null }],
+    accounts: [{ ...admin, contact_email: null, username: 'owner_example', disabled: false, unused_coupons: 0 }, ...(approved ? [{ ...member, contact_email: 'judge@example.com', username: null, disabled: false, unused_coupons: 1 }] : [])],
+  } }));
+  await page.route(`**/api/admin/access/${member.id}/decision`, route => {
+    expect(route.request().postDataJSON()).toEqual({ decision: 'approve', with_coupon: true });
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf'); approved = true;
+    return route.fulfill({ json: grant });
+  });
+  await page.goto('/#/access-desk');
+  await page.getByRole('button', { name: 'Approve Judge', exact: true }).click();
+  const details = page.getByLabel('Private access details', { exact: true });
+  await expect(details).toContainText(`/activate#${invitation}`);
+  await expect(details).toContainText(coupon.code);
+  await page.getByRole('button', { name: 'Close private access details' }).click();
+  await expect(page.getByText('No pending requests.')).toBeVisible();
+  await expect(page.getByText('Password not set', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.reload();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText(coupon.code, { exact: false })).toHaveCount(0);
+});
+
+test('member bookmarks cannot open the access desk or fetch its contents', async ({ page }) => {
+  await setup(page, member);
+  let reads = 0;
+  await page.route('**/api/admin/access', route => { reads++; return route.fulfill({ status: 403, json: { error: 'admin_required' } }); });
+  await page.goto('/#/access-desk');
+  await expect(page.getByRole('heading', { name: 'Administrator access required.' })).toBeVisible();
+  expect(reads).toBe(0);
+});

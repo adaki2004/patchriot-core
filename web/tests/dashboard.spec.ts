@@ -13,7 +13,7 @@ async function setup(page: Page, signedIn = false) {
 }
 
 for (const dialog of [
-  { name: 'sign-in', signedIn: false, trigger: 'Sign in ↗', field: 'Invitation code', close: 'Close sign in' },
+  { name: 'sign-in', signedIn: false, trigger: 'Sign in ↗', field: 'Username', close: 'Close sign in' },
   { name: 'pairing', signedIn: true, trigger: 'Pair a relay ↗', field: 'Pairing code', close: 'Close pairing' },
 ]) {
   test(`${dialog.name} focuses its code field and returns keyboard focus on close`, async ({ page }) => {
@@ -149,7 +149,7 @@ test('session expiry clears private views and open dialogs while an outage prese
   await expect(page.getByRole('button', { name: 'My relays', exact: true })).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Your session has ended');
   await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
-  await expect(page.getByLabel('Invitation code', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
 });
 
 test('an expired session can leave the workspace through sign out', async ({ page }) => {
@@ -198,6 +198,7 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: 'new-account', display_name: 'Another member' }, csrf_token: 'new-csrf' } }));
     await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect(page.getByText('Another member', { exact: true })).toHaveText('Another member');
@@ -233,6 +234,7 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
   try {
     await page.goto('/');
     await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect.poll(() => loginStarted).toBe(true);
@@ -276,6 +278,7 @@ test('an accepted invitation can retry loading the workspace without redeeming t
   try {
     await page.goto('/');
     await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     const dialog = page.getByRole('dialog');

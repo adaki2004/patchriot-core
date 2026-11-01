@@ -7,6 +7,7 @@ license = "AGPL-3.0-only"
 publish = false
 
 [dependencies]
+argon2 = { version = "0.6", features = ["getrandom"] }
 axum = "0.8.9"
 chrono = { version = "0.4", features = ["serde"] }
 getrandom = "0.4"
@@ -22,6 +23,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net
 tower-http = { version = "0.6", features = ["set-header", "fs"] }
 url = "2.5"
 uuid = { version = "1.22", features = ["v4", "serde"] }
+zeroize = "1"
 
 [dev-dependencies]
 http-body-util = "0.1"

@@ -12,7 +12,7 @@ use sqlx::{FromRow, PgPool};
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
-fn token() -> Result<String, ApiError> {
+pub(crate) fn token() -> Result<String, ApiError> {
     let mut bytes = [0; 32];
     getrandom::fill(&mut bytes).map_err(|_| {
         ApiError::new(
@@ -22,7 +22,7 @@ fn token() -> Result<String, ApiError> {
     })?;
     Ok(hex::encode(bytes))
 }
-fn hash(value: &str) -> String {
+pub(crate) fn hash(value: &str) -> String {
     hex::encode(Sha256::digest(value.as_bytes()))
 }
 
@@ -189,7 +189,7 @@ pub async fn redeem(
     }
     let mut tx = state.pool.begin().await?;
     let invite: Option<(Uuid, DateTime<Utc>, Option<DateTime<Utc>>)> = sqlx::query_as(
-        "SELECT account_id, expires_at, redeemed_at FROM invites WHERE token_hash = $1 FOR UPDATE",
+        "SELECT account_id, expires_at, redeemed_at FROM invites WHERE token_hash = $1 AND purpose = 'login' FOR UPDATE",
     )
     .bind(hash(&input.code))
     .fetch_optional(&mut *tx)
@@ -207,19 +207,31 @@ pub async fn redeem(
     if !enabled {
         return Err(ApiError::bad("invalid_or_expired_invite"));
     }
-    let bearer = token()?;
-    let csrf = token()?;
     sqlx::query("UPDATE invites SET redeemed_at = now() WHERE token_hash = $1")
         .bind(hash(&input.code))
         .execute(&mut *tx)
         .await?;
-    sqlx::query("INSERT INTO sessions (token_hash, account_id, csrf_token, expires_at) VALUES ($1,$2,$3,now() + interval '12 hours')")
-        .bind(hash(&bearer)).bind(account).bind(csrf).execute(&mut *tx).await?;
+    let bearer = new_session(&mut tx, account).await?;
     tx.commit().await?;
+    cookie_response(&state.config, &bearer)
+}
+
+pub(crate) async fn new_session(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    account: Uuid,
+) -> Result<String, ApiError> {
+    let bearer = token()?;
+    let csrf = token()?;
+    sqlx::query("INSERT INTO sessions (token_hash, account_id, csrf_token, expires_at) VALUES ($1,$2,$3,now() + interval '12 hours')")
+        .bind(hash(&bearer)).bind(account).bind(csrf).execute(&mut **tx).await?;
+    Ok(bearer)
+}
+
+pub(crate) fn cookie_response(config: &Config, bearer: &str) -> Result<Response, ApiError> {
     let cookie = format!(
         "{}={bearer}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200{}",
-        state.config.cookie_name(),
-        if state.config.secure_cookies {
+        config.cookie_name(),
+        if config.secure_cookies {
             "; Secure"
         } else {
             ""

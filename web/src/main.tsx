@@ -14,6 +14,7 @@ import type { Deposit } from './Checkout';
 import { IncidentDesk, IncidentLog } from './Incidents';
 import { useNavigation } from './navigation';
 import type { View } from './navigation';
+import { Login, RequestAccess, AccessDesk } from './Access';
 
 function Mark() {
   return <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M3 3h26v17L16 33 3 20V3Z" fill="none" stroke="currentColor" strokeWidth="3" /><path d="m10 19 5-9h7l-5 7h6L12 28l3-9h-5Z" fill="currentColor" /></svg>;
@@ -21,38 +22,6 @@ function Mark() {
 
 function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) {
   return <div className={`notice ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}>{children}</div>;
-}
-
-function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: () => void }) {
-  const dialog = useDialog('input');
-  const [code, setCode] = useState('');
-  const [redeemed, setRedeemed] = useState(false);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError('');
-    // A startup lookup may still describe the session from before this login.
-    sessionChanged();
-    try {
-      if (!redeemed) {
-        await api('/auth/redeem', { method: 'POST', body: JSON.stringify({ code: code.trim() }) });
-        setRedeemed(true); setCode('');
-      }
-      // The invitation is single-use; a failed session read must not redeem it again.
-      await onLogin(); onClose();
-    } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
-  }
-  return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="login-title">
-    <button className="close" onClick={onClose} disabled={busy} aria-label="Close sign in">×</button>
-    <p className="eyebrow">PRIVATE ALPHA</p><h2 id="login-title">Welcome to the watch.</h2>
-    <p>{redeemed ? 'Your invitation was accepted. Retry opening the workspace with your existing sign-in session.' : 'Use your one-use invitation to open your workspace. Invitations expire after 24 hours.'}</p>
-    <form onSubmit={submit}>
-      {!redeemed && <label>Invitation code<input type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} disabled={busy} required minLength={64} maxLength={64} spellCheck={false} /></label>}
-      {error && <Notice error>{error}</Notice>}
-      <button className="primary full" disabled={busy}>{busy ? redeemed ? 'Opening workspace…' : 'Signing in…' : redeemed ? 'Retry opening workspace' : 'Open workspace →'}</button>
-    </form>
-    <p className="fine">Prototype access is by invitation. Google sign-in is planned.</p>
-  </dialog>;
 }
 
 function Pair({ account, csrf, onPaired, onClose }: { account: Account; csrf: string; onPaired: () => void; onClose: () => void }) {
@@ -139,7 +108,10 @@ function Guide() {
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [sessionError, setSessionError] = useState('');
-  const [login, setLogin] = useState(false);
+  const [initialCode, setInitialCode] = useState(() => window.location.pathname === '/activate' && /^[0-9a-f]{64}$/i.test(window.location.hash.slice(1)) ? window.location.hash.slice(1) : '');
+  const [login, setLogin] = useState(Boolean(initialCode));
+  const [accessRequest, setAccessRequest] = useState(false);
+  useEffect(() => { if (window.location.pathname === '/activate') window.history.replaceState(null, '', '/'); }, []);
   const [pairing, setPairing] = useState(false);
   const [checkout, setCheckout] = useState<Deposit | null>(null);
   const { route, navigate } = useNavigation();
@@ -153,7 +125,7 @@ function App() {
   const account = session?.account;
   const isAdmin = account?.role === 'admin';
   const privateView = !['overview', 'guide', 'incidents'].includes(view);
-  const adminView = view === 'incident-desk' || view === 'payment-desk';
+  const adminView = view === 'incident-desk' || view === 'payment-desk' || view === 'access-desk';
   useEffect(() => {
     const nav = workspaceNav.current;
     const active = nav?.querySelector<HTMLButtonElement>('button.active');
@@ -192,10 +164,10 @@ function App() {
     <a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     <header>
       <button className="brand" aria-label="Patchriot home" onClick={() => setView('overview')}><Mark /><span>patchriot<span className="brand-dot">.</span></span></button>
-      <div className="header-right"><span className="version">v0.0.1 / PRIVATE ALPHA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button>}</div>
+      <div className="header-right"><span className="version">v0.0.1 / PRIVATE ALPHA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <><button className="quiet" onClick={() => setAccessRequest(true)}>Request access</button><button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button></>}</div>
     </header>
     <main id="main" tabIndex={-1}>
-      <nav ref={workspaceNav} aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button>}{account && <button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button>{isAdmin && <button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button>}{isAdmin && <button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button><span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
+      <nav ref={workspaceNav} aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button>}{account && <button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button>{isAdmin && <button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button>}{isAdmin && <button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button>}<button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button>{isAdmin && <button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button>}<span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
       {sessionError && <Notice error>{sessionError} <button className="inline" onClick={() => void loadSession().catch(() => {})}>Retry</button></Notice>}
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
       {privateView && !account && <section className="panel empty" aria-label="Private workspace access"><h1 className="page-title">{session ? 'This page is private.' : 'Checking your session…'}</h1><p>{session ? 'Sign in with the account that has access. A saved link does not share its contents.' : 'Your workspace will open after your session is checked.'}</p>{session && <button className="primary" onClick={() => setLogin(true)}>Sign in to open this page →</button>}</section>}
@@ -232,9 +204,11 @@ function App() {
       {view === 'incidents' && <IncidentLog />}
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}
       {view === 'payment-desk' && isAdmin && <PaymentDesk />}
+      {view === 'access-desk' && isAdmin && session?.csrf_token && <AccessDesk csrf={session.csrf_token} />}
     </main>
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>
-    {login && <Login onLogin={loadSession} onClose={() => setLogin(false)} />}
+    {login && <Login initialCode={initialCode} onLogin={loadSession} onClose={() => { setLogin(false); setInitialCode(''); }} />}
+    {accessRequest && <RequestAccess onClose={() => setAccessRequest(false)} />}
     {pairing && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => { setView('devices'); changed('Relay paired. Check its approval and connection status below.'); }} onClose={() => setPairing(false)} />}
     {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(`${decisionLabels[decision.action]}: saved.`)} onClose={() => setDecision(null)} />}
   </>;

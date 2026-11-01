@@ -52,7 +52,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 
 | Area | Working now / next |
 | --- | --- |
-| Accounts and dashboard | Invitation login, private sessions, patcher/admin views; Google login and stronger authentication follow |
+| Accounts and dashboard | Approved access requests, password login, account-bound coupons and admin views; Google login and stronger authentication follow |
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
@@ -87,12 +87,17 @@ Set these through your **private environment**:
 
 ```sh
 target/debug/patchriot-core serve
-# In another configured terminal:
-target/debug/patchriot-core invite admin "Your name"
-target/debug/patchriot-core invite member "A contributor"
+# In another configured terminal, bootstrap your first admin once:
+umask 077
+openssl rand -base64 36 > ../admin-password.txt
+target/debug/patchriot-core bootstrap-admin your_username ../admin-password.txt
 ```
 
-Open **http://127.0.0.1:7410** and enter the private invitation. Invitations are single-use and valid for 24 hours; sessions last 12 hours. On a confirmed session expiry, the browser closes private views and offers sign-in again. `invite-account <account-uuid>` renews access to an existing account. `disable-account <account-uuid>` revokes its sessions.
+Open **http://127.0.0.1:7410** and sign in with that username and the generated password. Keep the password file private, outside Git. **Access & users** lets you approve requests, create member accounts and include a one-use review coupon. Share the setup link privately; the recipient chooses their own password. No email is sent automatically.
+
+Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are stored as Argon2id hashes. A judge’s coupon is tied to their account and expires unused after seven days. **Renew setup link** replaces outstanding invitations; completing setup ends old sessions. **Issue coupon** replaces unused coupons but leaves already-started reviews intact. Disabling login ends browser sessions; revoke devices separately in Fleet & approvals.
+
+To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing pilot login codes still work through **Use a pilot login code**. Password sign-in and setup are limited by username, socket peer and a shared backstop; forwarded IP headers are not trusted. A reverse proxy therefore shares the peer limit. Add edge rate limits before a public rollout. Google login and MFA are separate future integrations.
 
 In **Relay setup**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:
 

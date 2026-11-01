@@ -229,6 +229,7 @@ test('a delayed checkout reply cannot open the old order after another account s
     await page.route('**/api/orders', route => route.fulfill({ json: [] }));
     await page.route(`**/api/orders/${orderId}`, route => { oldOrderReads++; return route.fulfill({ status: 404, json: { error: 'not_found' } }); });
     await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect(page.getByText('New customer', { exact: true })).toHaveText('New customer');

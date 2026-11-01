@@ -2,7 +2,7 @@ export type Account = {
   id: string;
   display_name: string;
   role: 'member' | 'admin';
-  auth_method: 'invite' | 'google';
+  auth_method: 'invite' | 'google' | 'password';
 };
 
 export type Session = { account: Account | null; csrf_token: string | null };
@@ -25,6 +25,14 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  invalid_credentials: 'The username or password is incorrect, or this account is unavailable.',
+  invalid_username: 'Use 3–40 letters, numbers, dots, hyphens or underscores. Start with a letter or number.',
+  username_unavailable: 'That username is already taken. Choose another.',
+  invalid_password: 'Use at least 15 characters, at most 256 bytes.',
+  invalid_contact: 'Enter a valid email address.',
+  login_unavailable: 'Sign-in is temporarily unavailable. Please try again shortly.',
+  account_access_changed: 'This request was already handled or that email has an account. Refresh Users to find it.',
+  account_unavailable: 'That account cannot be changed here. Administrator access uses the local operator tools.',
   invalid_or_expired_invite: 'This invitation is invalid, expired or already used. Request a fresh code.',
   sign_in_required: 'Your session has ended. Sign in again to continue.',
   csrf_required: 'Your session changed. Refresh the page before trying again.',

@@ -201,3 +201,25 @@ nav > button, .nav-note { flex-shrink: 0; white-space: nowrap; }
 .payment-record-body dd { margin: 0 0 14px; overflow-wrap: anywhere; }
 .payment-record-body dt { margin-bottom: 4px; font-size: 12px; opacity: .75; }
 .payment-record-body code { overflow-wrap: anywhere; }
+
+.access-options { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 1rem; }
+.access-columns { display: grid; grid-template-columns: 1.3fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+.access-panel { padding: 1.5rem; min-width: 0; }
+.access-panel h2 { font-size: 1.35rem; margin: 0 0 1rem; }
+.access-request { border-top: 1px solid var(--line, #ddd); padding: 1.25rem 0; overflow-wrap: anywhere; }
+.access-request h3 { margin: 0; }
+@media (max-width: 760px) { .access-columns { grid-template-columns: 1fr; } }
+
+.access-users .row-actions { white-space: normal; }
+.access-users .row-actions button { margin: .3rem; }
+@media (max-width: 700px) {
+  .access-users table, .access-users tbody { display: block; }
+  .access-users thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .access-users tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding: 1.25rem 0; border-top: 1px solid var(--line); }
+  .access-users td { min-width: 0; max-width: none; padding: 0; border: 0; }
+  .access-users td:first-child, .access-users .row-actions { grid-column: 1 / -1; }
+  .access-users td:nth-child(2)::before { content: 'Username'; display: block; font-size: .7rem; color: var(--muted); margin-bottom: .3rem; }
+  .access-users td:nth-child(3)::before { content: 'Access'; display: block; font-size: .7rem; color: var(--muted); margin-bottom: .3rem; }
+  .access-users .row-actions { display: flex; flex-wrap: wrap; text-align: left; gap: .5rem; }
+  .access-users .row-actions button { min-height: 44px; margin: 0; }
+}

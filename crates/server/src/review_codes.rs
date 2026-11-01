@@ -90,6 +90,7 @@ pub(crate) struct ResumeCode {}
 #[derive(FromRow)]
 struct Saved {
     id: Uuid,
+    issued_to: Option<Uuid>,
     expires_at: DateTime<Utc>,
     revoked_at: Option<DateTime<Utc>>,
     account_id: Option<Uuid>,
@@ -166,8 +167,14 @@ async fn reserve(
     if enabled != Some(true) {
         return Err(ApiError::denied());
     }
-    let saved: Saved = sqlx::query_as("SELECT id,expires_at,revoked_at,account_id,site_check_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
+    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
         .bind(hash(&code)).fetch_optional(&mut *tx).await?.ok_or_else(unavailable)?;
+    if saved
+        .issued_to
+        .is_some_and(|recipient| recipient != account)
+    {
+        return Err(unavailable());
+    }
     if let Some(owner) = saved.account_id {
         if owner != account {
             return Err(unavailable());
@@ -201,7 +208,7 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
     if enabled != Some(true) {
         return Err(ApiError::denied());
     }
-    let saved: Saved = sqlx::query_as("SELECT id,expires_at,revoked_at,account_id,site_check_id,consent,review_id,operation_until FROM review_codes WHERE id = $1 AND account_id = $2 FOR UPDATE")
+    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,consent,review_id,operation_until FROM review_codes WHERE id = $1 AND account_id = $2 FOR UPDATE")
         .bind(id).bind(account).fetch_optional(&mut *tx).await?.ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found"))?;
     let site = saved
         .site_check_id
