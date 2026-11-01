@@ -23,6 +23,7 @@ async function setup(page: Page, signedIn = true) {
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+  await page.route('**/api/review-codes', route => route.fulfill({ json: [] }));
 }
 
 async function openOrder(page: Page) {

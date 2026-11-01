@@ -6,11 +6,14 @@ const account = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Che
 const siteId = '00000000-0000-4000-8000-000000000002';
 const orderId = '00000000-0000-4000-8000-000000000003';
 const reviewId = '00000000-0000-4000-8000-000000000004';
+const codeId = '00000000-0000-4000-8000-000000000005';
 const input = { asset_id: 'nep141:fixture.near', symbol: 'NEAR', decimals: 24, blockchain: 'near' };
 const output = { asset_id: 'nep141:fixture.usdc.near', symbol: 'USDC', decimals: 6, blockchain: 'near' };
 const devices = [1, 2, 3].map(i => ({ device_id: `00000000-0000-4000-8000-00000000001${i}`, operator_id: account.id, operator_name: 'One fixture operator', device_name: `CPU agent ${i}`, declared_model: 'fixture-model', compute_group: 'one-host' }));
 const offer = { id: 'a'.repeat(64), price: { asset: output.asset_id, amount: '1000000' }, destination: output, inputs: [input], payment_window_seconds: 300 };
 type Submission = { consent: { request_id: string; device_ids: string[]; snapshot_sha256: string; accepts_operator_access: boolean }; offer_id: string; origin_asset: string; refund_address: string };
+type CodeSubmission = { code: string; consent: Submission['consent'] };
+type CodeReservation = { id: string; label: string; site_check_id: string; request_id: string; consent: Submission['consent']; reserved_at: string; review_id: string | null; last_error: string | null };
 
 async function setup(page: Page) {
   const deadline = new Date(Date.now() + 300_000).toISOString();
@@ -18,6 +21,7 @@ async function setup(page: Page) {
   const state = {
     settings: { mode: 'paid', offer } as CheckoutSettings, settingsError: false, statusError: 0, quoteError: false, wrongRequest: false, quote,
     submissions: [] as Submission[], resumed: 0, freeSubmissions: 0,
+    codeSubmissions: [] as CodeSubmission[], codeReservations: [] as CodeReservation[], codeError: false, codeWrongBinding: false, codeResumed: 0,
     order: { id: orderId, review_id: reviewId, state: 'awaiting_payment', price: offer.price, created_at: new Date().toISOString(), expires_at: deadline, payment: { state: 'pending', received_amount: null as string | null, deadline }, cancellation: null as null | { requested_at: string; confirmed_at: string | null; review_state: string | null }, requires_attention: false, can_cancel: true },
   };
   const site = { id: siteId, request_id: siteId, requester_id: account.id, scope: { homepage: 'https://checkout.example/', script_origins: [] }, scope_sha256: '1'.repeat(64), authority_note: 'Owned test site.', state: 'collected', created_at: 1, deadline_at: 9999999999, evidence_available: true, evidence_expires_at: 9999999999, summary: { homepage_sha256: '2'.repeat(64), external_scripts: 0, inline_scripts: 1, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 1000, requests_made: 1, finished_at: 1 } };
@@ -25,6 +29,7 @@ async function setup(page: Page) {
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 3, online_operators: 1, online_compute_groups: 1 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+  await page.route('**/api/review-codes', route => route.fulfill({ json: state.codeReservations }));
   await page.route('**/api/site-checks', route => route.fulfill({ json: [site] }));
   await page.route(`**/api/site-checks/${siteId}`, route => route.fulfill({ json: site }));
   await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices, review_timeout_seconds: 5700 } }));
@@ -36,6 +41,23 @@ async function setup(page: Page) {
     state.submissions.push(body); state.quote.request_id = state.wrongRequest ? siteId : body.consent.request_id;
     return route.fulfill(state.quoteError ? { status: 503, json: { error: 'checkout_unavailable' } } : { json: state.quote });
   });
+  const review = { id: reviewId, mode: 'website_agent', state: 'queued', created_at: Math.floor(Date.now() / 1000), deadline_at: Math.floor(Date.now() / 1000) + 2100, steps: [], evidence_source: 'Browser fixture', website: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), reviewers: devices } };
+  await page.route('**/api/reviews', route => route.fulfill({ json: state.codeSubmissions.length ? [review] : [] }));
+  await page.route(`**/api/reviews/${reviewId}`, route => route.fulfill({ json: review }));
+  await page.route(`**/api/site-checks/${siteId}/review-code`, route => {
+    const body: CodeSubmission = route.request().postDataJSON();
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
+    state.codeSubmissions.push(body);
+    state.codeReservations = [{ id: codeId, label: 'Invited tester', site_check_id: siteId, request_id: body.consent.request_id, consent: body.consent, reserved_at: new Date().toISOString(), review_id: state.codeError ? null : reviewId, last_error: state.codeError ? 'dispatcher_unavailable' : null }];
+    return route.fulfill(state.codeError ? { status: 503, json: { error: 'dispatcher_unavailable' } } : { json: { redemption_id: codeId, request_id: state.codeWrongBinding ? siteId : body.consent.request_id, review_id: reviewId } });
+  });
+  await page.route(`**/api/review-codes/${codeId}/resume`, route => {
+    expect(route.request().postDataJSON()).toEqual({});
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
+    state.codeResumed++;
+    state.codeReservations[0].review_id = reviewId;
+    return route.fulfill({ json: { redemption_id: codeId, request_id: state.codeReservations[0].request_id, review_id: reviewId } });
+  });
   await page.route('**/api/orders', route => route.fulfill({ json: [state.order] }));
   await page.route(`**/api/orders/${orderId}`, route => route.fulfill(state.statusError ? { status: state.statusError, json: { error: state.statusError === 401 ? 'sign_in_required' : 'database_unavailable' } } : { json: state.order }));
   await page.route(`**/api/orders/${orderId}/quote`, route => {
@@ -46,6 +68,81 @@ async function setup(page: Page) {
   });
   return state;
 }
+
+test('a code covers one consented review without payment instructions or browser storage', async ({ page }, info) => {
+  const state = await setup(page); state.settings = { mode: 'coupons', offer: null };
+  await choose(page);
+  const submit = page.getByRole('button', { name: 'Use code & start review →', exact: true });
+  await expect(submit).toBeDisabled();
+  const code = `pr-${'a'.repeat(64)}`;
+  await page.getByLabel('Review code', { exact: true }).fill(code);
+  await expect(page.getByRole('dialog')).toContainText('Cancellation does not restore the code');
+  await page.getByRole('dialog').screenshot({ path: info.outputPath('review-code-consent.png') });
+  await submit.click();
+  await expect(page.getByRole('region', { name: 'Review report' })).toBeVisible();
+  expect(state.codeSubmissions).toHaveLength(1);
+  expect(state.codeSubmissions[0].consent.device_ids).toEqual(devices.map(device => device.device_id));
+  expect(state.codeSubmissions[0].consent.accepts_operator_access).toBe(true);
+  expect(state.submissions).toHaveLength(0); expect(state.freeSubmissions).toBe(0);
+  await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage }, url: location.href }))).not.toContain(code);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('paid mode offers a review code alongside the unchanged payment route', async ({ page }) => {
+  const state = await setup(page);
+  await choose(page);
+  await page.getByLabel('Use a review code instead of payment', { exact: true }).check();
+  await page.getByLabel('Review code', { exact: true }).fill(`pr-${'b'.repeat(64)}`);
+  await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Review report' })).toBeVisible();
+  expect(state.codeSubmissions).toHaveLength(1); expect(state.submissions).toHaveLength(0); expect(state.freeSubmissions).toBe(0);
+});
+
+test('a lost code reply survives refresh and resumes only the saved request', async ({ page }, info) => {
+  const state = await setup(page); state.settings = { mode: 'coupons', offer: null }; state.codeError = true;
+  await choose(page);
+  await page.getByLabel('Review code', { exact: true }).fill(`pr-${'c'.repeat(64)}`);
+  await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('you will not need the code again');
+  const original = state.codeSubmissions[0];
+  await page.getByRole('button', { name: 'Close agent selection', exact: true }).click();
+  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await page.reload();
+  const history = page.getByRole('region', { name: 'Sponsored reviews', exact: true });
+  await expect(history).toContainText('Start not confirmed');
+  await history.getByText('Saved sharing permission', { exact: true }).click();
+  await expect(history).toContainText(original.consent.snapshot_sha256);
+  await history.screenshot({ path: info.outputPath('sponsored-review-recovery.png') });
+  await history.getByRole('button', { name: 'Resume saved request →', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Review report' })).toBeVisible();
+  expect(state.codeResumed).toBe(1); expect(state.codeSubmissions).toHaveLength(1);
+  expect(state.codeReservations[0].request_id).toBe(original.consent.request_id);
+  expect(state.submissions).toHaveLength(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('a mismatched code reply never opens another review', async ({ page }) => {
+  const state = await setup(page); state.settings = { mode: 'coupons', offer: null }; state.codeWrongBinding = true;
+  await choose(page);
+  await page.getByLabel('Review code', { exact: true }).fill(`pr-${'d'.repeat(64)}`);
+  await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('could not be matched');
+  await expect(page.getByRole('region', { name: 'Review report' })).toHaveCount(0);
+  expect(state.codeSubmissions).toHaveLength(1);
+});
+
+test('switching to codes-only access exposes the code field even from the payment step', async ({ page }) => {
+  const state = await setup(page);
+  await choose(page);
+  await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
+  state.settings = { mode: 'coupons', offer: null };
+  await page.getByRole('button', { name: 'Refresh eligible devices ↻', exact: true }).click();
+  await expect(page.getByLabel('Review code', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Pay with', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Use code & start review →', exact: true })).toBeDisabled();
+  expect(state.submissions).toHaveLength(0); expect(state.codeSubmissions).toHaveLength(0);
+});
 
 async function choose(page: Page) {
   await page.goto('/');

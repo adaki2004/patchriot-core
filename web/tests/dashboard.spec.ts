@@ -9,6 +9,7 @@ async function setup(page: Page, signedIn = false) {
   await page.route('**/api/fleet', route => route.fulfill({ json: fleet }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+  await page.route('**/api/review-codes', route => route.fulfill({ json: [] }));
 }
 
 for (const dialog of [
