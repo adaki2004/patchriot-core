@@ -20,18 +20,18 @@ type Step = {
   device_id: string | null; operator_id: string | null; compute_group: string | null;
   result: { runs: Run[] } | AgentResult | WebsiteResult | null; fixture_matches: boolean | null; evidence_complete?: boolean | null;
 };
-type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; steps: Step[]; evidence_source: string; website?: WebsiteContext; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
+type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; steps: Step[]; evidence_source: string; website?: WebsiteContext; source?: { source_id: string; snapshot_sha256: string; reviewers: WebsiteContext['reviewers'] }; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
 
 const states: Record<string, string> = {
   awaiting_payment: 'Waiting for payment', queued: 'Waiting for a relay', running: 'In progress', completed: 'Example checks complete',
   needs_review: 'Needs review', cancelled: 'Cancelled', failed: 'Incomplete', leased: 'Assigned',
 };
 const label = (value: string) => states[value] ?? value.replaceAll('_', ' ');
-const reviewLabel = (review: Review) => review.mode === 'website_agent' && review.state === 'completed' ? 'Reports received' : label(review.state);
+const reviewLabel = (review: Review) => ['website_agent', 'source_agent'].includes(review.mode) && review.state === 'completed' ? 'Reports received' : label(review.state);
 function stepLabel(step: Step) {
   if (step.state !== 'completed') return label(step.state);
   const result = step.result;
-  const outcome = result && !('runs' in result) ? result.kind === 'website_agent_v1' ? result.execution.state : result.outcome : null;
+  const outcome = result && !('runs' in result) ? result.kind !== 'owned_agent_v1' ? result.execution.state : result.outcome : null;
   return outcome === 'timed_out' ? 'Timed out' : outcome === 'failed' ? 'Run failed' : outcome === 'cancelled' ? 'Run cancelled' : 'Reported';
 }
 
@@ -71,7 +71,7 @@ function Evidence({ step }: { step: Step }) {
     <div className="table-scroll"><table><thead><tr><th>Version</th><th>Execution</th><th>Checks matching policy</th></tr></thead><tbody>{step.result.runs.map((run, index) => <tr key={`${run.version}-${index}`}><td>{run.version}</td><td>{run.completed ? 'Finished' : 'Did not finish'}</td><td>{run.checks.filter(check => check.actual === check.expected).length} / {run.checks.length}</td></tr>)}</tbody></table></div>
   </>;
   const result = step.result;
-  if (result.kind === 'website_agent_v1') return <WebsiteEvidence result={result} complete={step.evidence_complete} />;
+  if (result.kind !== 'owned_agent_v1') return <WebsiteEvidence result={result} complete={step.evidence_complete} />;
   return <>
     <p className={`result-line ${step.fixture_matches ? 'match' : 'mismatch'}`}>{step.fixture_matches ? 'Tool evidence shows the original flaw and the supplied fix passing.' : 'The agent did not provide a complete, matching tool result.'}</p>
     <p className="model-name"><strong>{result.model}</strong><small>{Math.round(result.duration_ms / 1000)} seconds · {result.inference_calls} model calls · {result.terminal_calls} completed terminal calls</small></p>
@@ -90,6 +90,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const review = detail.data;
+  const material = review?.website ?? review?.source;
   useEffect(() => { if (review) onChange(); }, [review?.state, onChange]);
   useEffect(() => {
     panel.current?.focus({ preventScroll: true });
@@ -105,20 +106,20 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   const groups = new Set(review?.steps.flatMap(step => step.compute_group ? [`${step.operator_id}:${step.compute_group}`] : []));
   const devices = new Set(review?.steps.flatMap(step => step.device_id ? [step.device_id] : []));
   return <section ref={panel} tabIndex={-1} className="review-detail panel" aria-label="Review report">
-    <div className="section-heading"><div><p className="eyebrow">{!review ? 'PRIVATE REVIEW' : review.mode === 'website_agent' ? 'WEBSITE SNAPSHOT / PRIVATE AGENT REVIEW' : `ACCESS CONTROL / ${review.mode === 'owned_agent' ? 'LOCAL AGENT CHECK' : 'OWNED FIXTURE'}`}</p><h2>{review ? reviewLabel(review) : detail.error ? 'Review unavailable' : 'Loading review…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
+    <div className="section-heading"><div><p className="eyebrow">{!review ? 'PRIVATE REVIEW' : review.mode === 'source_agent' ? 'SOURCE CODE / PRIVATE AGENT REVIEW' : review.mode === 'website_agent' ? 'WEBSITE SNAPSHOT / PRIVATE AGENT REVIEW' : `ACCESS CONTROL / ${review.mode === 'owned_agent' ? 'LOCAL AGENT CHECK' : 'OWNED FIXTURE'}`}</p><h2>{review ? reviewLabel(review) : detail.error ? 'Review unavailable' : 'Loading review…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
     {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} {detail.error && <button className="inline" onClick={detail.refresh}>Retry report</button>}</div>}
     {review && <>
       <div className="review-actions"><a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a><button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel review</button>}</div>
       {review.payment && <p className="fine">This review has a payment record. Manage cancellation in Orders.{onOpenOrders && <button className="inline" onClick={onOpenOrders}>Open orders →</button>}</p>}
       {['queued', 'running'].includes(review.state) && <p className="fine">{review.steps.filter(step => step.state === 'completed').length} of 3 reports received · Ends at {new Date(review.deadline_at * 1000).toLocaleTimeString()}</p>}
-      <div className="notice">{devices.size} {devices.size === 1 ? 'device' : 'devices'} · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. {review.mode === 'website_agent' ? 'These agents review saved text. No browser execution or live exploit reproduction was performed.' : 'These are operator-reported checks of our owned example.'} Shared machines and models are not independent reviewers.</div>
-      {review.website && <details className="execution-details"><summary>Who received permission?</summary><ol>{review.website.reviewers.map((device, i) => <li key={device.device_id}><strong>{['Investigator', 'Reproducer', 'Challenger'][i]}:</strong> {device.device_name} · {device.operator_name}<br /><span className="fine">{device.declared_model} · {device.compute_group} · {device.device_id}</span></li>)}</ol><p className="fine">Consent applies to this snapshot: <code>{review.website.snapshot_sha256}</code></p></details>}
+      <div className="notice">{devices.size} {devices.size === 1 ? 'device' : 'devices'} · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. {review.mode === 'source_agent' ? 'These agents inspect source excerpts. This mode does not build or execute the code.' : review.mode === 'website_agent' ? 'These agents review saved text. No browser execution or live exploit reproduction was performed.' : 'These are operator-reported checks of our owned example.'} Shared machines and models are not independent reviewers.</div>
+      {material && <details className="execution-details"><summary>Who received permission?</summary><ol>{material.reviewers.map((device, i) => <li key={device.device_id}><strong>{['Investigator', 'Reproducer', 'Challenger'][i]}:</strong> {device.device_name} · {device.operator_name}<br /><span className="fine">{device.declared_model} · {device.compute_group} · {device.device_id}</span></li>)}</ol><p className="fine">Consent applies to this snapshot: <code>{material.snapshot_sha256}</code></p></details>}
       <div className="review-steps">{review.steps.map(step => <article key={step.role} className="review-step">
         <div className="step-title"><h3>{step.role}</h3><span className={`badge ${step.state === 'completed' && step.fixture_matches ? 'approved' : step.state === 'failed' ? 'revoked' : 'pending'}`}>{stepLabel(step)}</span></div>
         <p className="fine">Attempt {step.attempts} / 3{step.compute_group ? ` · ${step.compute_group}` : ' · awaiting capacity'}</p>
         <Evidence step={step} />
       </article>)}</div>
-      <p className="fine">{review.mode === 'website_agent' ? 'Reports are claims to inspect, not a safety certificate. Matching quotations do not validate security reasoning or prove an exploit. Model identities and cleanup are operator-reported.' : `${review.mode === 'owned_agent' ? 'The fix is supplied, not generated by these agents. Model names and digests are operator declarations.' : 'The original should fail one access check; the patched and clean versions should pass all three.'} Completing this example is not a verdict about any other system.`}</p>
+      <p className="fine">{['website_agent', 'source_agent'].includes(review.mode) ? 'Reports are claims to inspect, not a safety certificate. Matching quotations do not validate security reasoning or prove an exploit. Model identities and cleanup are operator-reported.' : `${review.mode === 'owned_agent' ? 'The fix is supplied, not generated by these agents. Model names and digests are operator declarations.' : 'The original should fail one access check; the patched and clean versions should pass all three.'} Completing this example is not a verdict about any other system.`}</p>
     </>}
   </section>;
 }
@@ -127,13 +128,13 @@ export function Reviews({ csrf, selected, onSelect, onOpenOrders }: { csrf: stri
   const reviews = useLive<Review[]>('/reviews');
   const [creating, setCreating] = useState(false);
   return <>
-    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Inspect agent reports and example checks. Start reviews of your own site under Website checks.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>
+    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Inspect agent reports and example checks. Start new work under Request an audit.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>
     {reviews.error && <div className="notice error" role="alert">{reviews.error} <button className="inline" onClick={reviews.refresh}>Retry</button></div>}
     {selected && <ReviewDetail key={selected} id={selected} csrf={csrf} onClose={() => onSelect(null)} onChange={reviews.refresh} onOpenOrders={onOpenOrders} />}
     <SponsoredReviews csrf={csrf} onOpen={id => { reviews.refresh(); onSelect(id); }} />
     <section className="panel"><div className="table-toolbar"><strong>{reviews.data ? `${reviews.data.length} ${reviews.data.length === 1 ? 'review' : 'reviews'}` : 'Loading reviews…'}</strong><button className="quiet" onClick={reviews.refresh}>Refresh reviews ↻</button></div>
       {reviews.data?.length === 0 && <div className="empty"><h2>Make the evidence visible.</h2><p>Run quick fixture tests or let local agents inspect the supplied bug and fix.</p></div>}
-      {Boolean(reviews.data?.length) && <div className="review-list">{reviews.data!.map(review => <button className={`review-item ${selected === review.id ? 'selected' : ''}`} key={review.id} onClick={() => onSelect(review.id)}><span><strong>{review.mode === 'website_agent' ? 'Website snapshot review' : 'Access-control example'}</strong><small>{review.mode === 'owned_fixture' ? 'Fixture tests' : 'Local agents'} · {new Date(review.created_at * 1000).toLocaleString()} · {review.id.slice(0, 8)}</small></span><span>{reviewLabel(review)} <span aria-hidden="true">↗</span></span></button>)}</div>}
+      {Boolean(reviews.data?.length) && <div className="review-list">{reviews.data!.map(review => <button className={`review-item ${selected === review.id ? 'selected' : ''}`} key={review.id} onClick={() => onSelect(review.id)}><span><strong>{review.mode === 'source_agent' ? 'Source code review' : review.mode === 'website_agent' ? 'Website snapshot review' : 'Access-control example'}</strong><small>{review.mode === 'owned_fixture' ? 'Fixture tests' : 'Local agents'} · {new Date(review.created_at * 1000).toLocaleString()} · {review.id.slice(0, 8)}</small></span><span>{reviewLabel(review)} <span aria-hidden="true">↗</span></span></button>)}</div>}
     </section>
     <p className="fine">At most three active reviews per account. Each run needs three approved devices in its chosen mode. The relay setup guide explains how to contribute.</p>
     {creating && <NewReview csrf={csrf} onCreated={review => { reviews.refresh(); onSelect(review.id); }} onClose={() => setCreating(false)} />}

@@ -9,7 +9,9 @@ mod gateway;
 mod incidents;
 pub mod payments;
 pub mod review_codes;
+mod review_target;
 mod sites;
+mod sources;
 
 use axum::{
     Json, Router,
@@ -228,6 +230,28 @@ pub fn router(state: AppState) -> Router {
         .route("/api/reviews/{id}", get(gateway::review))
         .route("/api/reviews/{id}/cancel", post(gateway::cancel_review))
         .route("/api/reviews/{id}/report", get(gateway::report))
+        .route(
+            "/api/sources",
+            get(sources::list)
+                .post(sources::create)
+                .layer(DefaultBodyLimit::max(
+                    patchriot_protocol::sources::MAX_SOURCE_BODY_BYTES,
+                )),
+        )
+        .route("/api/sources/{id}", get(sources::detail))
+        .route("/api/sources/{id}/decision", post(sources::decide))
+        .route("/api/sources/{id}/delete", post(sources::delete))
+        .route("/api/sources/{id}/evidence", get(sources::evidence))
+        .route("/api/sources/{id}/review-plan", get(sources::review_plan))
+        .route("/api/sources/{id}/review", post(sources::create_review))
+        .route(
+            "/api/sources/{id}/review-code",
+            post(review_codes::redeem_source),
+        )
+        .route(
+            "/api/sources/{id}/checkout",
+            post(payments::browser_checkout::create_source),
+        )
         .route("/api/site-checks", get(sites::list).post(sites::create))
         .route("/api/site-checks/{id}", get(sites::detail))
         .route(

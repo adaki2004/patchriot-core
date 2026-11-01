@@ -16,6 +16,8 @@ const ORIGIN: &str = "https://patchriot.example";
 
 #[path = "sites/mod.rs"]
 mod sites;
+#[path = "sources/mod.rs"]
+mod sources;
 
 #[path = "orders/mod.rs"]
 mod orders;

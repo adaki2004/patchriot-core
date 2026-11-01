@@ -2,6 +2,7 @@
 //! asset and refund address; price, recipient and deadline come from the server.
 
 use super::*;
+use crate::review_target::ReviewTarget;
 use access::{
     CheckoutPolicy, CheckoutService, PAYMENT_WINDOW_SECONDS, PaymentPresentation, PaymentToken,
     ReviewAccess, SLIPPAGE_BPS,
@@ -71,7 +72,7 @@ fn error(error: CheckoutError) -> ApiError {
 fn terms(
     policy: &CheckoutPolicy,
     account: Uuid,
-    site: Uuid,
+    target: ReviewTarget,
     input: &CreateCheckout,
 ) -> Result<CheckoutTerms, ApiError> {
     if input.offer_id
@@ -93,7 +94,8 @@ fn terms(
     let deadline = DateTime::from_timestamp(Utc::now().timestamp() + PAYMENT_WINDOW_SECONDS, 0)
         .ok_or_else(|| error(CheckoutError::InvalidTerms))?;
     let terms = CheckoutTerms {
-        site_check_id: site,
+        site_check_id: target.site_id().unwrap_or_default(),
+        source_id: target.source_id(),
         consent: input.consent.clone(),
         payment: InvoiceTerms {
             account_id: account,
@@ -120,8 +122,13 @@ fn terms(
     Ok(terms)
 }
 
-fn matches(terms: &CheckoutTerms, account: Uuid, site: Uuid, input: &CreateCheckout) -> bool {
-    terms.site_check_id == site
+fn matches(
+    terms: &CheckoutTerms,
+    account: Uuid,
+    target: ReviewTarget,
+    input: &CreateCheckout,
+) -> bool {
+    ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id) == Some(target)
         && terms.payment.account_id == account
         && terms.payment.request_id == input.consent.request_id
         && terms.consent.request_id == input.consent.request_id
@@ -170,7 +177,7 @@ async fn save(
     pool: &PgPool,
     policy: &CheckoutPolicy,
     account: Uuid,
-    site: Uuid,
+    target: ReviewTarget,
     input: &CreateCheckout,
 ) -> Result<CheckoutTerms, ApiError> {
     let mut tx = pool.begin().await?;
@@ -199,12 +206,12 @@ async fn save(
     let terms = if let Some(saved) = saved {
         let stored: CheckoutTerms = serde_json::from_value(saved.terms.clone())
             .map_err(|_| error(CheckoutError::Database))?;
-        if !matches(&stored, account, site, input) {
+        if !matches(&stored, account, target, input) {
             return Err(error(CheckoutError::ConflictingTerms));
         }
         saved.resumable(account)?
     } else {
-        let terms = terms(policy, account, site, input)?;
+        let terms = terms(policy, account, target, input)?;
         let count: i64 = sqlx::query_scalar("SELECT count(*) FROM checkout_orders WHERE account_id = $1 AND created_at > now() - interval '15 minutes'")
             .bind(account).fetch_one(&mut *tx).await?;
         if count >= 5 {
@@ -270,7 +277,36 @@ pub(crate) async fn create(
 ) -> Result<Json<DepositView>, ApiError> {
     let account = auth::require_write(&headers, &state).await?.id;
     let service = service(&state)?;
-    let terms = save(&state.pool, &service.policy, account, site, &input).await?;
+    let terms = save(
+        &state.pool,
+        &service.policy,
+        account,
+        ReviewTarget::Website(site),
+        &input,
+    )
+    .await?;
+    let quote = checkout::prepare(&state, &service.provider, &terms)
+        .await
+        .map_err(error)?;
+    view(terms, quote).map(Json)
+}
+
+pub(crate) async fn create_source(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(site): Path<Uuid>,
+    Json(input): Json<CreateCheckout>,
+) -> Result<Json<DepositView>, ApiError> {
+    let account = auth::require_write(&headers, &state).await?.id;
+    let service = service(&state)?;
+    let terms = save(
+        &state.pool,
+        &service.policy,
+        account,
+        ReviewTarget::Source(site),
+        &input,
+    )
+    .await?;
     let quote = checkout::prepare(&state, &service.provider, &terms)
         .await
         .map_err(error)?;

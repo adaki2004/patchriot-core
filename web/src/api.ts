@@ -26,6 +26,16 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  source_file_count: 'Choose 1–12 source files.',
+  invalid_source_path: 'Use supported text files with simple, unique paths. No hidden files, archives or credential files.',
+  invalid_source_text: 'Each file must be nonempty UTF-8 text, at most 16 KiB, without binary or hidden direction-control characters.',
+  source_too_large: 'Choose at most 48 KiB of source in total.',
+  source_may_contain_secret: 'A file or note appears to contain a credential. Remove it before uploading. This check cannot detect every secret.',
+  source_upload_limit: 'The upload limit has been reached. Remove an old retained upload or try again later.',
+  invalid_source_request: 'Add a title, requested check and permission note, and confirm private storage.',
+  conflicting_source_request: 'This upload changed. Start a fresh request or open the saved upload.',
+  source_already_decided: 'This upload was already decided or has expired. Refresh its status.',
+
   pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
   invalid_credentials: 'The username or password is incorrect, or this account is unavailable.',
   invalid_username: 'Use 3–40 letters, numbers, dots, hyphens or underscores. Start with a letter or number.',

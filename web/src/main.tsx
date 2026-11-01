@@ -18,6 +18,7 @@ import { Login, RequestAccess, AccessDesk } from './Access';
 import { Guide, AgentList } from './Pairing';
 import { Landing, WorkspaceHome, RequestWork } from './Product';
 import { Docs } from './Docs';
+import { Sources } from './Sources';
 
 function Mark() {
   return <img className="brand-mark" src="/brand/white-hat.png" alt="" width="44" height="44" />;
@@ -151,7 +152,7 @@ function App() {
     <main id="main" tabIndex={-1} className={appView ? 'app-main' : 'public-main'}>
       <nav ref={workspaceNav} className={appView ? 'workspace-nav' : 'public-nav'} aria-label="Workspace">
         <button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>{account ? (appView ? 'Overview' : 'Workspace') : 'Home'}</button>
-        {account && appView && <><button className={view === 'request' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('request')}>Request an audit</button><button className={view === 'guide' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('guide')}>Pair an agent</button><button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button><button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button><button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button><button className={view === 'agents' ? 'active' : ''} onClick={() => setView('agents')}>Agents</button><button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button></>}
+        {account && appView && <><button className={view === 'request' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('request')}>Request an audit</button><button className={view === 'guide' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('guide')}>Pair an agent</button><button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button><button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button><button className={view === 'sources' ? 'active' : ''} onClick={() => setView('sources')}>Source reviews</button><button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button><button className={view === 'agents' ? 'active' : ''} onClick={() => setView('agents')}>Agents</button><button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button></>}
         <button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button><button className={view === 'docs' ? 'active' : ''} onClick={() => navigate('docs', 'start')}>Docs</button>
         {isAdmin && appView && <><span className="nav-group">ADMIN</span><button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button><button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button><button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button></>}
         <span className="nav-note">DON’T TRUST. VERIFY.</span>
@@ -163,7 +164,7 @@ function App() {
       {adminView && account && !isAdmin && <section className="panel empty"><h1 className="page-title">Administrator access required.</h1><p>This account cannot open the admin desk.</p></section>}
       {(view === 'home' || (view === 'overview' && !account)) && <Landing fleet={fleet.data} error={fleet.error} onRetry={fleet.refresh} signedIn={Boolean(account)} onAccess={() => setAccessRequest(true)} onApp={() => setView('overview')} onDocs={() => navigate('docs', 'start')} onPair={() => account ? setView('guide') : setAccessRequest(true)} />}
       {view === 'overview' && account && <><WorkspaceHome name={account.display_name} fleet={fleet.data} onRequest={() => setView('request')} onPair={() => setView('guide')} onReviews={() => setView('reviews')} onDocs={() => navigate('docs', 'start')} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}<button className="text-button" onClick={() => setPairing(true)}>I already have a pairing code →</button></>}
-      {view === 'request' && account && <RequestWork onWebsite={() => setView('sites')} />}
+      {view === 'request' && account && <RequestWork onWebsite={() => setView('sites')} onSource={() => setView('sources')} />}
       {view === 'docs' && <Docs page={route.id} onPage={page => navigate('docs', page)} />}
       {view === 'devices' && account && <>
         <section className="section-heading fleet-heading"><div><p className="eyebrow">{isAdmin ? 'OPERATOR CONSOLE' : 'YOUR CONTRIBUTION'}</p><h1 className="page-title">{isAdmin ? 'Fleet & approvals' : 'Your relays'}</h1><p className="subtle">Pairing proves a device key. Approval is a separate decision.</p></div><button className="primary" onClick={() => setPairing(true)}>Pair a relay +</button></section>
@@ -176,6 +177,7 @@ function App() {
       {view === 'reviews' && account && session?.csrf_token && <Reviews csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('reviews', id)} onOpenOrders={() => setView('orders')} />}
       {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('orders', id)} report={route.report} onReport={open => navigate('orders', route.id, open)} initialQuote={checkout} onClearQuote={() => setCheckout(null)} />}
       {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} accountId={account.id} selected={route.id} onSelect={id => navigate('sites', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
+      {view === 'sources' && account && session?.csrf_token && <Sources csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => navigate('sources', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'guide' && account && <Guide onPair={() => setPairing(true)} />}
       {view === 'agents' && account && <AgentList />}
       {view === 'incidents' && <IncidentLog />}

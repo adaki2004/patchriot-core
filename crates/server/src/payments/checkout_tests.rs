@@ -19,6 +19,7 @@ fn terms(db: &TestDb) -> (CheckoutTerms, QuoteResponse) {
         CheckoutTerms {
             presentation: None,
             site_check_id: Uuid::new_v4(),
+            source_id: None,
             consent,
             payment,
         },

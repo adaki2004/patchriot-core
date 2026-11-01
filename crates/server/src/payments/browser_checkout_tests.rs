@@ -13,6 +13,38 @@ use tower::ServiceExt;
 const ORIGIN: &str = "https://checkout.fixture.example";
 const SERVICE_KEY: &str = "checkout-fixture-internal-service-key";
 
+#[tokio::test]
+async fn source_checkout_uses_the_same_price_but_cannot_be_rebound_to_a_website() {
+    let db = TestDb::new().await;
+    let network = Network::start().await;
+    let policy = policy();
+    let browser = Browser::new(&db, &network, network.access(&policy)).await;
+    let id = Uuid::new_v4();
+    let body = input(&policy);
+    let (status, quote) = browser
+        .call("POST", &format!("/api/sources/{id}/checkout"), body.clone())
+        .await;
+    assert_eq!(status, StatusCode::OK, "{quote}");
+    assert_eq!(quote["output"]["amount"], policy.amount);
+    assert_eq!(network.count("quote"), 1);
+    let saved: Value = sqlx::query_scalar("SELECT terms FROM checkout_orders WHERE account_id=$1")
+        .bind(db.account)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(saved["source_id"], id.to_string());
+    assert!(saved.get("site_check_id").is_none());
+    assert_eq!(
+        browser
+            .call("POST", &format!("/api/site-checks/{id}/checkout"), body)
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(network.count("quote"), 1);
+    db.finish().await;
+}
+
 fn policy() -> CheckoutPolicy {
     CheckoutPolicy {
         destination: PaymentToken {
@@ -69,7 +101,7 @@ impl Network {
             bad_address.clone(),
         );
         let app = Router::new()
-            .route("/internal/site-checks/{site}/admit-review", post(move |Path(site):Path<Uuid>, headers:HeaderMap, Json(body):Json<Value>| {
+            .route("/internal/{kind}/{site}/admit-review", post(move |Path((kind,site)):Path<(String,Uuid)>, headers:HeaderMap, Json(body):Json<Value>| {
                 let (calls,denied)=(admissions.clone(),denied.clone());
                 async move {
                     assert_eq!(headers["authorization"], format!("Bearer {SERVICE_KEY}"));
@@ -80,12 +112,18 @@ impl Network {
                     // The real dispatcher assigns a review ID distinct from the
                     // caller's retry key. Keep it stable across fixture retries.
                     let review_id=Uuid::from_u128(Uuid::parse_str(consent["request_id"].as_str().unwrap()).unwrap().as_u128() ^ 1);
-                    (StatusCode::OK,Json(json!({
+                    let mut reply=json!({
                         "id":review_id,"request_id":consent["request_id"],"scenario":"website_snapshot_v1","mode":"website_agent","state":"awaiting_payment",
                         "created_at":Utc::now().timestamp(),"deadline_at":body["payment_expires_at"],"steps":[],"evidence_source":"synthetic fixture",
                         "website":{"site_check_id":site,"snapshot_sha256":consent["snapshot_sha256"],"reviewers":consent["device_ids"].as_array().unwrap().iter().map(|id|json!({"device_id":id,"operator_id":Uuid::new_v4(),"operator_name":"Fixture operator","device_name":"Fixture device","declared_model":"fixture-model","compute_group":"fixture-host"})).collect::<Vec<_>>()},
                         "payment":{"price":body["price"],"expires_at":body["payment_expires_at"],"invoice_id":null,"funded_at":null}
-                    })))
+                    });
+                    if kind == "sources" {
+                        reply["scenario"]=json!("source_bundle_v1");reply["mode"]=json!("source_agent");
+                        let mut context=reply.as_object_mut().unwrap().remove("website").unwrap();
+                        context.as_object_mut().unwrap().remove("site_check_id");context["source_id"]=json!(site);reply["source"]=context;
+                    } else { assert_eq!(kind,"site-checks"); }
+                    (StatusCode::OK,Json(reply))
                 }
             }))
             .route("/v0/quote", post(move |headers:HeaderMap,Json(body):Json<Value>| {

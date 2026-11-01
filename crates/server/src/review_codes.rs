@@ -1,6 +1,7 @@
 //! One-use sponsorship for an approved snapshot review. Codes cover work, not
 //! money. The original consent is saved before dispatch and reused on every retry.
 
+use crate::review_target::ReviewTarget;
 use crate::{ApiError, AppState, auth, gateway, payments::access::ReviewAccess};
 use axum::{
     Json,
@@ -8,9 +9,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
 };
 use chrono::{DateTime, Utc};
-use patchriot_protocol::{
-    FixtureScenario, ReviewMode, ReviewView, website_reviews::CreateWebsiteReview,
-};
+use patchriot_protocol::{ReviewView, website_reviews::CreateWebsiteReview};
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -95,6 +94,7 @@ struct Saved {
     revoked_at: Option<DateTime<Utc>>,
     account_id: Option<Uuid>,
     site_check_id: Option<Uuid>,
+    source_id: Option<Uuid>,
     consent: Option<Value>,
     review_id: Option<Uuid>,
     operation_until: Option<DateTime<Utc>>,
@@ -104,7 +104,8 @@ struct Saved {
 pub(crate) struct Reservation {
     id: Uuid,
     label: String,
-    site_check_id: Uuid,
+    site_check_id: Option<Uuid>,
+    source_id: Option<Uuid>,
     request_id: Uuid,
     consent: Value,
     reserved_at: DateTime<Utc>,
@@ -130,7 +131,7 @@ fn preparing() -> ApiError {
 async fn reserve(
     pool: &PgPool,
     account: Uuid,
-    site: Uuid,
+    target: ReviewTarget,
     input: RedeemCode,
 ) -> Result<Uuid, ApiError> {
     let code = input.code.trim().to_ascii_lowercase();
@@ -167,7 +168,7 @@ async fn reserve(
     if enabled != Some(true) {
         return Err(ApiError::denied());
     }
-    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
+    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
         .bind(hash(&code)).fetch_optional(&mut *tx).await?.ok_or_else(unavailable)?;
     if saved
         .issued_to
@@ -179,7 +180,9 @@ async fn reserve(
         if owner != account {
             return Err(unavailable());
         }
-        if saved.site_check_id != Some(site) || saved.consent.as_ref() != Some(&terms) {
+        if ReviewTarget::from_ids(saved.site_check_id, saved.source_id) != Some(target)
+            || saved.consent.as_ref() != Some(&terms)
+        {
             return Err(ApiError::new(StatusCode::CONFLICT, "review_code_bound"));
         }
     } else {
@@ -191,8 +194,8 @@ async fn reserve(
         if occupied {
             return Err(ApiError::new(StatusCode::CONFLICT, "request_conflict"));
         }
-        sqlx::query("UPDATE review_codes SET account_id = $2,request_id = $3,site_check_id = $4,consent = $5,reserved_at = now(),updated_at = now() WHERE id = $1")
-            .bind(saved.id).bind(account).bind(consent.request_id).bind(site).bind(terms).execute(&mut *tx).await?;
+        sqlx::query("UPDATE review_codes SET account_id = $2,request_id = $3,site_check_id = $4,source_id = $6,consent = $5,reserved_at = now(),updated_at = now() WHERE id = $1")
+            .bind(saved.id).bind(account).bind(consent.request_id).bind(target.site_id()).bind(terms).bind(target.source_id()).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(saved.id)
@@ -208,10 +211,9 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
     if enabled != Some(true) {
         return Err(ApiError::denied());
     }
-    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,consent,review_id,operation_until FROM review_codes WHERE id = $1 AND account_id = $2 FOR UPDATE")
+    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,consent,review_id,operation_until FROM review_codes WHERE id = $1 AND account_id = $2 FOR UPDATE")
         .bind(id).bind(account).fetch_optional(&mut *tx).await?.ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found"))?;
-    let site = saved
-        .site_check_id
+    let target = ReviewTarget::from_ids(saved.site_check_id, saved.source_id)
         .ok_or_else(|| ApiError::bad("invalid_request"))?;
     let consent: CreateWebsiteReview = serde_json::from_value(
         saved
@@ -239,13 +241,13 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
     let reply: Result<Json<ReviewView>, ApiError> = gateway::request_for_account(
         state,
         Method::POST,
-        &format!("/internal/site-checks/{site}/review"),
+        &format!("{}/review", target.path()),
         account,
         Some(&consent),
     )
     .await;
     let result = match reply {
-        Ok(Json(review)) if matches_review(&review, site, &consent) => Ok(review.id),
+        Ok(Json(review)) if matches_review(&review, target, &consent) => Ok(review.id),
         Ok(_) => Err(ApiError::new(
             StatusCode::BAD_GATEWAY,
             "invalid_dispatcher_response",
@@ -267,21 +269,12 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
     })
 }
 
-fn matches_review(review: &ReviewView, site: Uuid, consent: &CreateWebsiteReview) -> bool {
-    review.request_id == consent.request_id
-        && review.mode == ReviewMode::WebsiteAgent.as_str()
-        && review.scenario == FixtureScenario::WebsiteSnapshotV1
-        && review.payment.is_none()
-        && review.website.as_ref().is_some_and(|context| {
-            context.site_check_id == site
-                && context.snapshot_sha256 == consent.snapshot_sha256
-                && context
-                    .reviewers
-                    .iter()
-                    .map(|r| r.device_id)
-                    .collect::<Vec<_>>()
-                    == consent.device_ids
-        })
+fn matches_review(
+    review: &ReviewView,
+    target: ReviewTarget,
+    consent: &CreateWebsiteReview,
+) -> bool {
+    review.payment.is_none() && target.matches(review, consent)
 }
 
 pub(crate) async fn redeem(
@@ -293,7 +286,20 @@ pub(crate) async fn redeem(
     let session = auth::require_write(&headers, &state).await?;
     available(&state)?;
     rate(&state.pool, session.id).await?;
-    let id = reserve(&state.pool, session.id, site, input).await?;
+    let id = reserve(&state.pool, session.id, ReviewTarget::Website(site), input).await?;
+    Ok(Json(start(&state, session.id, id).await?))
+}
+
+pub(crate) async fn redeem_source(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(site): Path<Uuid>,
+    Json(input): Json<RedeemCode>,
+) -> Result<Json<Started>, ApiError> {
+    let session = auth::require_write(&headers, &state).await?;
+    available(&state)?;
+    rate(&state.pool, session.id).await?;
+    let id = reserve(&state.pool, session.id, ReviewTarget::Source(site), input).await?;
     Ok(Json(start(&state, session.id, id).await?))
 }
 
@@ -314,7 +320,7 @@ pub(crate) async fn list(
     headers: HeaderMap,
 ) -> Result<Json<Vec<Reservation>>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    let rows = sqlx::query_as("SELECT id,label,site_check_id,request_id,consent,reserved_at,review_id,last_error FROM review_codes WHERE account_id = $1 ORDER BY (review_id IS NULL) DESC, reserved_at DESC LIMIT 50")
+    let rows = sqlx::query_as("SELECT id,label,site_check_id,source_id,request_id,consent,reserved_at,review_id,last_error FROM review_codes WHERE account_id = $1 ORDER BY (review_id IS NULL) DESC, reserved_at DESC LIMIT 50")
         .bind(session.id).fetch_all(&state.pool).await?;
     Ok(Json(rows))
 }
