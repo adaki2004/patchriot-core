@@ -48,8 +48,8 @@ function NewReview({ csrf, onCreated, onClose }: { csrf: string; onCreated: (rev
       onCreated(review); onClose();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
-  return <dialog ref={dialog} onCancel={onClose} aria-labelledby="new-review-title">
-    <button className="close" onClick={onClose} aria-label="Close review setup">×</button>
+  return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="new-review-title">
+    <button className="close" onClick={onClose} disabled={busy} aria-label="Close review setup">×</button>
     <p className="eyebrow">OWNED EXAMPLE / NO CHARGE</p><h2 id="new-review-title">Watch a review move through the swarm.</h2>
     <p>A signed-in user can read someone else’s document. The example includes that bug and a supplied fix.</p>
     <form onSubmit={submit}>

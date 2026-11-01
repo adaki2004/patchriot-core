@@ -282,25 +282,38 @@ test('agent checks are an explicit choice and a retry keeps the same request ide
   await setup(page, true);
   await page.route('**/api/fleet', route => route.fulfill({ json: { ...fleet, agent_review_timeout_seconds: 5700 } }));
   const submitted: Record<string, unknown>[] = [];
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/api/reviews', async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: [] });
     expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
     submitted.push(route.request().postDataJSON());
+    if (submitted.length === 1) await pending;
     await route.fulfill({ status: 503, json: { error: 'dispatcher_unavailable' } });
   });
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
-  await page.getByRole('button', { name: 'New example review +' }).click();
-  await expect(page.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
-  await page.getByRole('radio', { name: 'Local agent check', exact: false }).check();
-  await expect(page.getByText('Expires after 95 minutes', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Run agent checks →' }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
-  await page.getByRole('button', { name: 'Run agent checks →' }).click();
-  await expect.poll(() => submitted.length).toBe(2);
-  expect(submitted[0]).toEqual({ request_id: expect.any(String), scenario: 'access_control_v1', mode: 'owned_agent' });
-  expect(submitted[1]).toEqual(submitted[0]);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+    await page.getByRole('button', { name: 'New example review +' }).click();
+    await expect(page.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
+    await page.getByRole('radio', { name: 'Local agent check', exact: false }).check();
+    await expect(page.getByText('Expires after 95 minutes', { exact: false })).toBeVisible();
+    await page.getByRole('button', { name: 'Run agent checks →' }).click();
+    await expect.poll(() => submitted.length).toBe(1);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close review setup', exact: true })).toBeDisabled();
+    release();
+    await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+    await page.getByRole('button', { name: 'Run agent checks →' }).click();
+    await expect.poll(() => submitted.length).toBe(2);
+    expect(submitted[0]).toEqual({ request_id: expect.any(String), scenario: 'access_control_v1', mode: 'owned_agent' });
+    expect(submitted[1]).toEqual(submitted[0]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expect(page.getByRole('dialog').getByRole('alert')).toBeVisible();
+    await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  } finally { release(); }
 });
 
 test('agent reports preserve missing evidence and render model prose as inert text', async ({ page }) => {
