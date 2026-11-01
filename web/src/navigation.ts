@@ -25,9 +25,12 @@ export function useNavigation() {
   const navigate = useCallback((view: View, id: string | null = null, report = false, replace = false) => {
     const hash = `#/${view}${id ? `/${id}${report && view === 'orders' ? '/report' : ''}` : ''}`;
     if (window.location.hash === hash) return;
+    const changingView = readRoute().view !== view;
     if (replace) window.history.replaceState(null, '', hash);
     else window.history.pushState(null, '', hash);
     setRoute(readRoute());
+    // New sections start at the top; Back/Forward retain the browser's saved position.
+    if (changingView) window.scrollTo(0, 0);
   }, []);
   return { route, navigate };
 }
