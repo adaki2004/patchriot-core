@@ -53,7 +53,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 
 ## Run locally
 
-Keep `patchriot-core`, `patchriot-relay` and `patchriot-dispatcher` as sibling directories. Use **Rust 1.94.1, Node 24 and a dedicated PostgreSQL 17 database**. Start the [dispatcher](https://github.com/adaki2004/patchriot-dispatcher) first.
+Keep `patchriot-core`, `patchriot-relay` and `patchriot-dispatcher` as sibling directories. Use **Rust 1.94.1, Node 24.22.1 and a dedicated PostgreSQL 17 database**. CI pins this [Node security release](https://nodejs.org/en/blog/release/v24.22.1); the API runs in Rust. Start the [dispatcher](https://github.com/adaki2004/patchriot-dispatcher) first.
 
 ```sh
 cargo build --locked -p patchriot-core
