@@ -681,8 +681,13 @@ async fn gateway_uses_session_identity_and_ignores_forged_browser_authority() {
         get(move |headers: HeaderMap| {
             let capture = capture.clone();
             async move {
+                let operator = headers["x-patchriot-account"].to_str().unwrap().to_owned();
                 capture.lock().unwrap().push(headers);
-                Json(json!([]))
+                let device = json!({"id":Uuid::new_v4(),"operator_id":operator,"operator_name":"Owned test operator","label":"Report counter","runtime":"owned_fixture","runtime_version":"0.0.1","declared_model":null,"compute_group":"owned-test","approval":"approved","state":"online","last_seen_at":null,"sequence":1,"reports_received":4});
+                let mut older = device.clone();
+                older["id"] = json!(Uuid::new_v4());
+                older.as_object_mut().unwrap().remove("reports_received");
+                Json(json!([device, older]))
             }
         }),
     );
@@ -707,6 +712,8 @@ async fn gateway_uses_session_identity_and_ignores_forged_browser_authority() {
             )
             .await;
         assert_eq!(response.0, StatusCode::OK);
+        assert_eq!(response.2[0]["reports_received"], 4);
+        assert!(response.2[1].get("reports_received").is_none());
         let observed = received.lock().unwrap().last().unwrap().clone();
         assert_eq!(
             observed["x-patchriot-account"],

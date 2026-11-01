@@ -220,6 +220,10 @@ pub struct DeviceView {
     pub state: String,
     pub last_seen_at: Option<i64>,
     pub sequence: u64,
+    /// Received role reports, including incomplete evidence. Not verified
+    /// findings or earnings. Older dispatchers/decision replies may omit this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reports_received: Option<u64>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

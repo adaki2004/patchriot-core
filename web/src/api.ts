@@ -21,6 +21,7 @@ export type Device = {
   website_reviews?: boolean;
   state: string;
   last_seen_at: number | null;
+  reports_received?: number | null;
 };
 
 const messages: Record<string, string> = {
