@@ -201,6 +201,45 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
   } finally { releaseStartup(); releaseLogin(); }
 });
 
+test('an accepted invitation can retry loading the workspace without redeeming the code again', async ({ page }) => {
+  await setup(page);
+  let redemptions = 0, sessionReads = 0, retryStarted = false;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/auth/redeem', route => {
+    redemptions++;
+    return route.fulfill(redemptions === 1 ? { json: { ok: true } } : { status: 400, json: { error: 'invalid_or_expired_invite' } });
+  });
+  await page.route('**/api/session', async route => {
+    if (!redemptions) return route.fulfill({ json: { account: null, csrf_token: null } });
+    if (++sessionReads === 1) return route.fulfill({ status: 503, json: { error: 'database_unavailable' } });
+    retryStarted = true; await pending;
+    return route.fulfill({ json: { account, csrf_token: 'test-csrf' } });
+  });
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('alert')).toContainText('Account storage is unavailable');
+    await expect(dialog.getByRole('button', { name: 'Retry opening workspace', exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Retry opening workspace', exact: true }).click();
+    await expect.poll(() => retryStarted).toBe(true);
+    await expect(dialog.getByLabel('Invitation code', { exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Close sign in', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    release();
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+    await expect(page.getByText('Test operator', { exact: true })).toHaveText('Test operator');
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    expect(redemptions).toBe(1);
+    expect(sessionReads).toBe(2);
+  } finally { release(); }
+});
+
 for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay list without self-approving`, async ({ page }) => {
   await setup(page, true);
   await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, role }, csrf_token: 'test-csrf' } }));

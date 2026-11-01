@@ -25,6 +25,7 @@ function Notice({ children, error = false }: { children: ReactNode; error?: bool
 function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [code, setCode] = useState('');
+  const [redeemed, setRedeemed] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { dialog.current?.showModal(); }, []);
@@ -33,18 +34,22 @@ function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: ()
     // A startup lookup may still describe the session from before this login.
     sessionChanged();
     try {
-      await api('/auth/redeem', { method: 'POST', body: JSON.stringify({ code: code.trim() }) });
-      setCode(''); await onLogin(); onClose();
+      if (!redeemed) {
+        await api('/auth/redeem', { method: 'POST', body: JSON.stringify({ code: code.trim() }) });
+        setRedeemed(true); setCode('');
+      }
+      // The invitation is single-use; a failed session read must not redeem it again.
+      await onLogin(); onClose();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
   return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="login-title">
     <button className="close" onClick={onClose} disabled={busy} aria-label="Close sign in">×</button>
     <p className="eyebrow">PRIVATE ALPHA</p><h2 id="login-title">Welcome to the watch.</h2>
-    <p>Use your one-use invitation to open your workspace. Invitations expire after 24 hours.</p>
+    <p>{redeemed ? 'Your invitation was accepted. Retry opening the workspace with your existing sign-in session.' : 'Use your one-use invitation to open your workspace. Invitations expire after 24 hours.'}</p>
     <form onSubmit={submit}>
-      <label>Invitation code<input autoFocus type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} disabled={busy} required minLength={64} maxLength={64} spellCheck={false} /></label>
+      {!redeemed && <label>Invitation code<input autoFocus type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} disabled={busy} required minLength={64} maxLength={64} spellCheck={false} /></label>}
       {error && <Notice error>{error}</Notice>}
-      <button className="primary full" disabled={busy}>{busy ? 'Signing in…' : 'Open workspace →'}</button>
+      <button className="primary full" disabled={busy}>{busy ? redeemed ? 'Opening workspace…' : 'Signing in…' : redeemed ? 'Retry opening workspace' : 'Open workspace →'}</button>
     </form>
     <p className="fine">Prototype access is by invitation. Google sign-in is planned.</p>
   </dialog>;
