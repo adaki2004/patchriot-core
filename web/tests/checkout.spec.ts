@@ -203,6 +203,7 @@ test('missing automatic assignment or a disappearing agent blocks payment withou
 
 test('paid review shows the price before an exact network-specific deposit and never uses the free route', async ({ page }, info) => {
   const state = await setup(page);
+  state.quote.provider_app_fee_bps = 1;
   await choose(page);
   const modal = page.getByRole('dialog');
   await expect(modal).toContainText('1 USDC');
@@ -217,6 +218,7 @@ test('paid review shows the price before an exact network-specific deposit and n
   await submit.click();
   await expect(modal).toHaveCount(0);
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
+  await expect(instructions).toContainText('0.01% provider app fee is included in the displayed amount');
   await expect(instructions.getByRole('heading', { name: 'Send 1.000000000000000000000001 NEAR', exact: true })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { (window as Window & { copiedAmount?: string }).copiedAmount = value; } } }));
   await instructions.getByRole('button', { name: 'Copy exact amount', exact: true }).click();

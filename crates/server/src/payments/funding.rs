@@ -86,7 +86,7 @@ fn binds(event: &Event, invoice: &Invoice, order: &Order, terms: &CheckoutTerms)
         && terms.payment.destination_asset == event.asset
         && terms.payment.required_amount == event.amount
         && terms.payment.recipient == invoice.recipient
-        && terms.payment.quote_request == invoice.quote_request
+        && matches_request(&terms.payment.quote_request, &invoice.quote_request)
         && terms.consent.accepts_operator_access
 }
 

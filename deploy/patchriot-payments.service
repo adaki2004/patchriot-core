@@ -1,0 +1,43 @@
+[Unit]
+Description=Patchriot payment confirmation and work activation
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=patchriot-core
+Group=patchriot-core
+WorkingDirectory=/opt/patchriot
+EnvironmentFile=/etc/patchriot/payments.env
+ExecStart=/opt/patchriot/bin/patchriot-core payments-run
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=15
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=256M
+CPUQuota=100%
+TasksMax=64
+# Needs database/dispatcher access and DNS + HTTPS to 1click.chaindefuser.com.
+# No inbound listener and no wallet signer. Restrict egress at deployment.
+
+[Install]
+WantedBy=multi-user.target

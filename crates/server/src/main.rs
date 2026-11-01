@@ -126,9 +126,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         && args != ["serve"]
         && args != ["payments-fund-once"]
         && args != ["payments-cancel-once"]
+        && args != ["payments-run"]
     {
         return Err(
-            "expected serve, invite, invite-account, disable-account, review-code, revoke-review-code, payments-reconcile-once, payments-fund-once or payments-cancel-once"
+            "expected serve, bootstrap-admin, invite, invite-account, disable-account, review-code, revoke-review-code, payments-run, payments-reconcile-once, payments-fund-once or payments-cancel-once"
                 .into(),
         );
     }
@@ -147,6 +148,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => return Err("invalid PATCHRIOT_RELAY_ORIGIN".into()),
     };
     let mut state = AppState::new(pool, config.with_relay_origin(relay_origin)?)?;
+    if args == ["payments-run"] {
+        let key = std::env::var("PATCHRIOT_1CLICK_API_KEY")
+            .map_err(|_| "PATCHRIOT_1CLICK_API_KEY is required")?;
+        let provider = patchriot_core::payments::OneClick::new(&key)?;
+        eprintln!("Patchriot payment worker started; waiting for saved orders.");
+        patchriot_core::payments::worker::run(&state, &provider, shutdown_signal()).await;
+        return Ok(());
+    }
     if args == ["payments-fund-once"] {
         let result = patchriot_core::payments::funding::deliver_once(&state).await?;
         println!("{}", serde_json::to_string(&result)?);

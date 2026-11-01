@@ -189,7 +189,7 @@ The intended beta offer is **$10 for one bounded website review**, or a **single
 
 Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
 
-**Test status:** checkout and work activation passed simulated-provider tests. No live payment has been verified. The example below sets a 10 USDC service price; it does not fetch a USD exchange rate.
+**Test status:** checkout and work activation passed simulated-provider tests. The live token catalog and a dry exact-output quote were checked; no live settlement has been verified. The example below sets a 10 USDC service price; it does not fetch a USD exchange rate.
 
 **Operator payments:** the pilot does not calculate earnings or send payouts. A returned report is an activity count, not a payment entitlement. A reward schedule and payout records must be added before offering paid participation. Customer payments go to the configured service wallet, not directly to agents.
 
@@ -287,7 +287,11 @@ In the browser, open a collected snapshot and choose **Choose review agents**. P
 
 Quote replies include `request_id`, the original consent's retry key, and a separate server-assigned `review_id`. Check the request key against your submission; use the review ID to open the resulting report.
 
-The web server does not start payment workers. Schedule reconciliation, funding and cancellation delivery before enabling checkout. `GET /api/payments` exposes the signed-in account's recorded totals; `checkout_enabled` reflects paid mode. **Before accepting live funds, establish a refund procedure and test the complete flow with synthetic payments.** Payouts and held-fund release remain unexposed; none of these services has a treasury signing key.
+Run `patchriot-core payments-run` alongside the web server before enabling checkout. Every ten seconds it handles due cancellations, checks due 1Click receipts and activates already-paid work. Each stage processes at most ten records; invoice checks normally repeat after 60 seconds. Database claims make restart and duplicate delivery safe. It keeps watching expired quotes for seven days; late or mismatched money needs operator review. The one-shot commands remain useful for diagnosis. No chain-wide indexer or block cursor is needed for these quote-specific deposits.
+
+For Linux, [deploy/patchriot-payments.service](deploy/patchriot-payments.service) uses the same installed core binary. Put `DATABASE_URL`, `PATCHRIOT_PUBLIC_ORIGIN`, `PATCHRIOT_DISPATCHER_URL`, `PATCHRIOT_INTERNAL_KEY` and `PATCHRIOT_1CLICK_API_KEY` in root-readable `/etc/patchriot/payments.env`. Never add a wallet private key. Install the unit, run `systemctl daemon-reload`, then `systemctl enable --now patchriot-payments`. Inspect fixed status counts with `journalctl -u patchriot-payments`. Both checkout and this worker need DNS/HTTPS access to `1click.chaindefuser.com`; the core pilot unit’s loopback-only network policy must be adjusted explicitly for paid checkout. Browser requests never trigger reconciliation or confirm their own payment.
+
+The quote keeps the recipient, refund destination, asset, amount and deadline bound to the saved order. Known provider defaults and timestamp formatting are accepted; other changes are rejected. Provider app fees are capped at 100 basis points (1%) and shown as part of the exact transfer amount. The complete accepted provider response is saved and must match later status replies. `GET /api/payments` exposes the signed-in account’s recorded totals. Payouts and held-fund release remain separate; none of these services has a treasury signing key.
 
 Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It reads the newest 50 invoices, exact integer amounts, ledger credits, delivery errors and cancellation facts from the database, including disabled customer accounts. It does not contact the provider or reveal deposit instructions. It is recent history, not a complete reconciliation report; an attention flag does not authorize a refund.
 

@@ -22,6 +22,7 @@ pub mod checkout;
 pub(crate) mod desk;
 pub mod funding;
 pub(crate) mod orders;
+pub mod worker;
 
 const API_ORIGIN: &str = "https://1click.chaindefuser.com";
 const RESPONSE_LIMIT: usize = 128 * 1024;
@@ -141,6 +142,67 @@ fn date(value: &Value) -> Option<DateTime<Utc>> {
         .map(|v| v.with_timezone(&Utc))
 }
 
+/// 1Click echoes server defaults and the partner fee schedule. Those do not
+/// change our fixed recipient/output amount. Bound their cost and reject any
+/// other addition; save the complete accepted echo for exact status matching.
+fn matches_request(requested: &Value, echoed: &Value) -> bool {
+    if app_fee_bps(&echoed["appFees"]).is_none() {
+        return false;
+    }
+    let (Some(requested), Some(echoed)) = (requested.as_object(), echoed.as_object()) else {
+        return false;
+    };
+    if !requested.iter().all(|(key, value)| {
+        if key == "deadline" {
+            match (date(value), echoed.get(key).and_then(date)) {
+                (Some(wanted), Some(actual)) => {
+                    wanted.timestamp_millis() == actual.timestamp_millis() && actual <= wanted
+                }
+                _ => false,
+            }
+        } else {
+            echoed.get(key) == Some(value)
+        }
+    }) {
+        return false;
+    }
+    echoed.iter().all(|(key, value)| {
+        if requested.contains_key(key) {
+            return true;
+        }
+        match key.as_str() {
+            "confidentiality" => value == "public",
+            "quoteWaitingTimeMs" => value == 0,
+            "insured" => value == false,
+            "appFees" => app_fee_bps(value).is_some(),
+            _ => false,
+        }
+    })
+}
+
+/// Provider-added app fees may total at most 1%. The payer sees the exact input
+/// amount before transferring; this ceiling never reduces the service output.
+fn app_fee_bps(value: &Value) -> Option<u64> {
+    if value.is_null() {
+        return Some(0);
+    }
+    let fees = value.as_array()?;
+    if fees.len() > 8 {
+        return None;
+    }
+    let mut total = 0_u64;
+    for fee in fees {
+        let fee = fee.as_object()?;
+        if fee.len() != 2
+            || !access::Blockchain::Near.accepts_address(fee.get("recipient")?.as_str()?)
+        {
+            return None;
+        }
+        total = total.checked_add(fee.get("fee")?.as_u64()?)?;
+    }
+    (total <= 100).then_some(total)
+}
+
 fn validate_quote_request(
     terms: &InvoiceTerms,
     now: DateTime<Utc>,
@@ -186,7 +248,7 @@ fn validate_quote<'a>(
     let requested_deadline = validate_quote_request(terms, now)?;
     let quote = &response.quote;
     let deadline = date(&quote["deadline"]).ok_or(PaymentError::InvalidQuote)?;
-    if response.quote_request != terms.quote_request
+    if !matches_request(&terms.quote_request, &response.quote_request)
         || atom_amount(&quote["amountOut"]) != Some(terms.required_amount)
         || !positive_input_amount(&quote["amountIn"])
         || deadline <= now
@@ -301,6 +363,7 @@ impl OneClick {
             origin: origin.into(),
             api_key,
             client: reqwest::Client::builder()
+                .user_agent(concat!("Patchriot/", env!("CARGO_PKG_VERSION")))
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
                 .connect_timeout(std::time::Duration::from_secs(2))

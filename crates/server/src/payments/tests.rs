@@ -1,5 +1,42 @@
 use super::*;
 
+#[test]
+fn provider_defaults_cannot_change_recipients_amounts_or_routing() {
+    let request = serde_json::json!({"dry":false,"amount":"10000000","recipient":"treasury.near","refundTo":"customer.near","deadline":"2026-11-01T12:00:00+00:00"});
+    let mut echo = request.clone();
+    echo["deadline"] = json!("2026-11-01T12:00:00.000Z");
+    echo["confidentiality"] = json!("public");
+    echo["quoteWaitingTimeMs"] = json!(0);
+    echo["insured"] = json!(false);
+    echo["appFees"] = json!([{"recipient":"provider.near","fee":1}]);
+    assert!(matches_request(&request, &echo));
+    assert_eq!(app_fee_bps(&echo["appFees"]), Some(1));
+    for (field, value) in [
+        ("recipient", json!("someone-else.near")),
+        ("refundTo", json!("someone-else.near")),
+        ("amount", json!("9000000")),
+        ("deadline", json!("2026-11-01T12:00:01Z")),
+        ("dry", json!(true)),
+        ("confidentiality", json!("shield")),
+        ("insured", json!(true)),
+        ("customRecipientMsg", json!("execute_something")),
+        ("virtualChainRecipient", json!("someone-else.near")),
+        ("newRoutingField", json!(false)),
+        ("appFees", json!([{"recipient":"provider.near","fee":101}])),
+        (
+            "appFees",
+            json!([{"recipient":"provider.near","fee":60},{"recipient":"another.near","fee":60}]),
+        ),
+        ("appFees", json!([{"recipient":"provider.near","fee":-1}])),
+    ] {
+        let mut changed = echo.clone();
+        changed[field] = value;
+        assert!(!matches_request(&request, &changed), "accepted {field}");
+    }
+    echo.as_object_mut().unwrap().remove("refundTo");
+    assert!(!matches_request(&request, &echo));
+}
+
 #[path = "browser_checkout_tests.rs"]
 mod browser_checkout;
 #[path = "checkout_tests.rs"]

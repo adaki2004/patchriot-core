@@ -32,6 +32,7 @@ pub(crate) struct DepositView {
     deposit_memo: Option<String>,
     refund_address: String,
     expires_at: DateTime<Utc>,
+    provider_app_fee_bps: u64,
 }
 
 #[derive(Serialize)]
@@ -256,6 +257,8 @@ fn view(terms: CheckoutTerms, quote: CheckoutQuote) -> Result<DepositView, ApiEr
             .ok_or_else(|| error(CheckoutError::Database))?
             .into(),
         expires_at: deadline,
+        provider_app_fee_bps: app_fee_bps(&quote.payment.quote_request["appFees"])
+            .ok_or_else(|| error(CheckoutError::Database))?,
     })
 }
 
