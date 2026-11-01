@@ -105,7 +105,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   const devices = new Set(review?.steps.flatMap(step => step.device_id ? [step.device_id] : []));
   return <section ref={panel} tabIndex={-1} className="review-detail panel" aria-label="Review report">
     <div className="section-heading"><div><p className="eyebrow">{!review ? 'PRIVATE REVIEW' : review.mode === 'website_agent' ? 'WEBSITE SNAPSHOT / PRIVATE AGENT REVIEW' : `ACCESS CONTROL / ${review.mode === 'owned_agent' ? 'LOCAL AGENT CHECK' : 'OWNED FIXTURE'}`}</p><h2>{review ? reviewLabel(review) : detail.error ? 'Review unavailable' : 'Loading review…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
-    {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error}</div>}
+    {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} {detail.error && <button className="inline" onClick={detail.refresh}>Retry report</button>}</div>}
     {review && <>
       <div className="review-actions"><a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a><button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel review</button>}</div>
       {review.payment && <p className="fine">This review has a payment record. Manage cancellation in Orders.{onOpenOrders && <button className="inline" onClick={onOpenOrders}>Open orders →</button>}</p>}

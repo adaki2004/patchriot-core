@@ -85,7 +85,7 @@ function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onCheckout, o
   }
   return <section ref={panel} tabIndex={-1} className="review-detail panel site-detail" aria-label="Website evidence">
     <div className="section-heading"><div><p className="eyebrow">LIMITED WEBSITE SNAPSHOT</p><h2>{site ? label(site.state) : detail.error ? 'Snapshot unavailable' : 'Loading scope…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close snapshot ×</button></div>
-    {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error}</div>}
+    {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} {detail.error && <button className="inline" onClick={detail.refresh}>Retry snapshot</button>}</div>}
     {site && <>
       <dl className="site-scope"><dt>Homepage</dt><dd><code>{site.scope.homepage}</code></dd><dt>Additional script origins</dt><dd>{site.scope.script_origins.length ? site.scope.script_origins.map(origin => <code key={origin}>{origin}<br /></code>) : 'None — homepage origin only'}</dd><dt>Permission supplied by requester</dt><dd>{site.authority_note}</dd>{admin && <><dt>Requester</dt><dd><code>{site.requester_id}</code></dd></>}{site.decision_note && <><dt>Admin decision</dt><dd>{site.decision_note}</dd></>}</dl>
       <div className="review-actions"><button className="quiet" onClick={detail.refresh}>Refresh snapshot ↻</button>{site.evidence_available && <a className="text-button" href={`/api/site-checks/${id}/evidence`} download>Download snapshot JSON ↓</a>}{active(site.state) && <button className="quiet" disabled={busy} onClick={() => void cancel()}>Cancel collection</button>}</div>

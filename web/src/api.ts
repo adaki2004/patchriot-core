@@ -29,7 +29,7 @@ const messages: Record<string, string> = {
   sign_in_required: 'Your session has ended. Sign in again to continue.',
   csrf_required: 'Your session changed. Refresh the page before trying again.',
   origin_not_allowed: 'This address is not configured for sign-in. Open the configured Patchriot website.',
-  dispatcher_unavailable: 'The dispatcher is unavailable. The last response is shown below; it may be out of date.',
+  dispatcher_unavailable: 'The dispatcher is unavailable. Previously loaded data may be out of date. Please try again shortly.',
   database_unavailable: 'Account storage is unavailable. Please try again shortly.',
   request_conflict: 'This request changed or a previous action already succeeded. Refresh the view before trying again.',
   pairing_expired: 'This pairing code has expired. Run pair again in your relay terminal, using the same state directory, then enter the new code.',
