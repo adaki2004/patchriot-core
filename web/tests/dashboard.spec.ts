@@ -145,6 +145,47 @@ for (const status of [200, 401]) test(`a late ${status} from the previous login 
   } finally { releaseClaim(); }
 });
 
+for (const startupFirst of [true, false]) test(`sign-in survives a delayed startup session reply (${startupFirst ? 'startup first' : 'login first'})`, async ({ page }) => {
+  await setup(page);
+  let releaseStartup!: () => void, releaseLogin!: () => void;
+  const startup = new Promise<void>(resolve => { releaseStartup = resolve; });
+  const login = new Promise<void>(resolve => { releaseLogin = resolve; });
+  let authenticated = false, loginStarted = false;
+  await page.route('**/api/session', async route => {
+    if (!authenticated) {
+      await startup;
+      return route.fulfill({ headers: { 'x-fixture-startup': 'true' }, json: { account: null, csrf_token: null } });
+    }
+    return route.fulfill({ json: { account, csrf_token: 'test-csrf' } });
+  });
+  await page.route('**/api/auth/redeem', async route => {
+    loginStarted = true; await login; authenticated = true;
+    return route.fulfill({ json: { ok: true } });
+  });
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
+    await expect.poll(() => loginStarted).toBe(true);
+    const startupReply = page.waitForResponse(response => response.url().endsWith('/api/session') && response.headers()['x-fixture-startup'] === 'true');
+    if (startupFirst) {
+      releaseStartup(); await (await startupReply).finished();
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      releaseLogin();
+    } else {
+      releaseLogin();
+      await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+      releaseStartup(); await (await startupReply).finished();
+    }
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByText('Test operator', { exact: true })).toHaveText('Test operator');
+  } finally { releaseStartup(); releaseLogin(); }
+});
+
 test('pairing collects consent, sends the session CSRF and does not self-approve', async ({ page }) => {
   await setup(page, true);
   let submission: Record<string, unknown> | undefined;

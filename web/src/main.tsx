@@ -30,6 +30,8 @@ function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: ()
   useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
+    // A startup lookup may still describe the session from before this login.
+    sessionChanged();
     try {
       await api('/auth/redeem', { method: 'POST', body: JSON.stringify({ code: code.trim() }) });
       setCode(''); await onLogin(); onClose();
