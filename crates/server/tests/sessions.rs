@@ -802,6 +802,125 @@ fn service_configuration_rejects_insecure_or_credentialed_destinations() {
 }
 
 #[tokio::test]
+async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels() {
+    use patchriot_protocol::website_reviews::ReviewPrice;
+    use patchriot_protocol::{DeviceIntroduction, DeviceView, ReviewView, RuntimeKind};
+
+    // These are permitted byte lengths, including characters that JSON must
+    // escape. A bounded number of rows can still exceed the detail-body limit.
+    let intro = DeviceIntroduction {
+        label: "\"".repeat(80),
+        runtime: RuntimeKind::Hermes,
+        runtime_version: "\"".repeat(80),
+        declared_model: Some("\"".repeat(160)),
+        compute_group: "\"".repeat(80),
+        slots: 1,
+    };
+    intro.validate().unwrap();
+    let operator = Uuid::new_v4();
+    let devices: Vec<DeviceView> = (0..200)
+        .map(|_| DeviceView {
+            id: Uuid::new_v4(),
+            operator_id: operator,
+            operator_name: "\"".repeat(80),
+            label: intro.label.clone(),
+            runtime: intro.runtime,
+            runtime_version: intro.runtime_version.clone(),
+            declared_model: intro.declared_model.clone(),
+            compute_group: intro.compute_group.clone(),
+            approval: "approved".into(),
+            private_work_approved: true,
+            website_reviews: true,
+            state: "online".into(),
+            last_seen_at: Some(1_793_513_000),
+            sequence: 1,
+            reports_received: Some(0),
+        })
+        .collect();
+    let reviewers: Vec<Value> = devices[..3].iter().map(|device| json!({
+        "device_id":device.id,"operator_id":device.operator_id,"operator_name":device.operator_name,
+        "device_name":device.label,"declared_model":device.declared_model,"compute_group":device.compute_group,
+    })).collect();
+    let price = ReviewPrice {
+        asset: "\"".repeat(256),
+        amount: i64::MAX.to_string(),
+    };
+    assert!(price.valid());
+    let reviews: Vec<ReviewView> = (0..50).map(|_| {
+        let steps: Vec<_> = ["investigator", "reproducer", "challenger"].iter().enumerate().map(|(i, role)| json!({
+            "role":role,"state":"completed","attempts":3,"device_id":devices[i].id,"operator_id":operator,
+            "compute_group":intro.compute_group,"result":null,"fixture_matches":false,"evidence_complete":false,
+        })).collect();
+        serde_json::from_value(json!({
+            "id":Uuid::new_v4(),"request_id":Uuid::new_v4(),"scenario":"website_snapshot_v1",
+            "mode":"website_agent","state":"needs_review","created_at":1_793_513_000,"deadline_at":1_793_518_700,
+            "evidence_source":"operator_reported_static_website_review_not_a_safety_verdict","steps":steps,
+            "website":{"site_check_id":Uuid::new_v4(),"snapshot_sha256":"a".repeat(64),"reviewers":reviewers},
+            "payment":{"price":price,"expires_at":1_793_513_300,"invoice_id":Uuid::new_v4(),"funded_at":1_793_513_100},
+        })).unwrap()
+    }).collect();
+    let lists = [
+        ("/api/devices", serde_json::to_value(devices).unwrap()),
+        ("/api/reviews", serde_json::to_value(reviews).unwrap()),
+    ];
+    for (path, value) in &lists {
+        let bytes = serde_json::to_vec(value).unwrap().len();
+        assert!(
+            bytes > 256 * 1024 && bytes < 512 * 1024,
+            "{path}: {bytes} bytes"
+        );
+    }
+    let payload = Arc::new(Mutex::new(Value::Null));
+    let reply = payload.clone();
+    let downstream = Router::new().fallback(get(move || {
+        let value = reply.lock().unwrap().clone();
+        async move { Json(value) }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let (cookie, _) = test.login("admin").await;
+    let mut observations = Vec::new();
+    for (path, expected) in &lists {
+        *payload.lock().unwrap() = expected.clone();
+        let denied = test.request("GET", path, Value::Null, &[]).await;
+        let accepted = test
+            .request("GET", path, Value::Null, &[("cookie", &cookie)])
+            .await;
+        *payload.lock().unwrap() = json!("x".repeat(512 * 1024));
+        let oversized = test
+            .request("GET", path, Value::Null, &[("cookie", &cookie)])
+            .await;
+        observations.push((path, expected, denied, accepted, oversized));
+    }
+    *payload.lock().unwrap() = json!("x".repeat(256 * 1024));
+    let detail = test
+        .request(
+            "GET",
+            &format!("/api/reviews/{}", Uuid::new_v4()),
+            Value::Null,
+            &[("cookie", &cookie)],
+        )
+        .await;
+    test.finish().await;
+    server.abort();
+    let _ = server.await;
+    for (path, expected, denied, accepted, oversized) in observations {
+        assert_eq!(denied.0, StatusCode::UNAUTHORIZED, "{path}");
+        assert_eq!(accepted.0, StatusCode::OK, "{path}: {}", accepted.2);
+        assert_eq!(&accepted.2, expected, "{path}");
+        assert_eq!(oversized.0, StatusCode::BAD_GATEWAY, "{path}");
+        assert_eq!(
+            oversized.2["error"], "dispatcher_response_too_large",
+            "{path}"
+        );
+    }
+    assert_eq!(detail.0, StatusCode::BAD_GATEWAY);
+    assert_eq!(detail.2["error"], "dispatcher_response_too_large");
+}
+
+#[tokio::test]
 async fn renewed_invites_keep_the_same_account_and_cannot_enable_disabled_accounts() {
     let test = TestApp::new("http://127.0.0.1:1").await;
     let (_, previous) = test.login("member").await;

@@ -12,6 +12,10 @@ use patchriot_protocol::{
 use serde::{Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
+// Up to 200 devices or 50 review summaries, including escaped operator labels
+// and saved payment terms. Individual responses retain the smaller default.
+const LIST_RESPONSE_MAX_BYTES: usize = 512 * 1024;
+
 pub(crate) async fn request<T: Serialize, R: DeserializeOwned>(
     state: &AppState,
     method: reqwest::Method,
@@ -22,8 +26,8 @@ pub(crate) async fn request<T: Serialize, R: DeserializeOwned>(
     request_with_limit(state, method, path, session, body, 256 * 1024).await
 }
 
-/// Only trusted route handlers choose a larger response bound, for an explicit
-/// private evidence download. Normal list and status responses remain small.
+/// Only trusted route handlers choose a larger response bound for a bounded
+/// list or private evidence download. Ordinary detail/status reads stay small.
 pub(crate) async fn request_with_limit<T: Serialize, R: DeserializeOwned>(
     state: &AppState,
     method: reqwest::Method,
@@ -126,12 +130,13 @@ pub async fn devices(
     headers: HeaderMap,
 ) -> Result<Json<Vec<DeviceView>>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    request::<(), _>(
+    request_with_limit::<(), _>(
         &state,
         reqwest::Method::GET,
         "/internal/devices",
         Some(&session),
         None,
+        LIST_RESPONSE_MAX_BYTES,
     )
     .await
 }
@@ -177,12 +182,13 @@ pub async fn reviews(
     headers: HeaderMap,
 ) -> Result<Json<Vec<ReviewView>>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    request::<(), _>(
+    request_with_limit::<(), _>(
         &state,
         reqwest::Method::GET,
         "/internal/reviews",
         Some(&session),
         None,
+        LIST_RESPONSE_MAX_BYTES,
     )
     .await
 }
