@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
+import { useDialog } from './useDialog';
 import { PaymentFields, checkedDeposit, tokenAmount } from './Checkout';
 import type { CheckoutSettings, Deposit } from './Checkout';
 
@@ -17,7 +18,7 @@ export type WebsiteResult = {
 const roles = ['Investigator', 'Reproducer', 'Challenger'];
 
 export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClose }: { siteId: string; csrf: string; onCreated: (id: string) => void; onCheckout: (quote: Deposit) => void; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog('select');
   const requestId = useRef(crypto.randomUUID());
   const plan = useLive<Plan>(`/site-checks/${siteId}/review-plan`);
   const checkout = useLive<CheckoutSettings>('/checkout');
@@ -35,7 +36,6 @@ export function WebsiteReviewSetup({ siteId, csrf, onCreated, onCheckout, onClos
   const paymentReady = !checkout.error && (mode === 'pilot' || !!(offer && tokenAmount(offer.price.amount, offer.destination) && (!paymentStep || offer.inputs.some(token => token.asset_id === asset) && refund.trim())));
   const operators = new Set(reviewers.flatMap(device => device ? [device.operator_id] : []));
   const groups = new Set(reviewers.flatMap(device => device ? [`${device.operator_id}:${device.compute_group}`] : []));
-  useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!ready || !plan.data || !paymentReady || !accepted) return;
     if (mode === 'paid' && !paymentStep) { setPaymentStep(true); dialog.current?.scrollTo(0, 0); return; }

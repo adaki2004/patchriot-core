@@ -11,6 +11,28 @@ async function setup(page: Page, signedIn = false) {
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
 }
 
+for (const dialog of [
+  { name: 'sign-in', signedIn: false, trigger: 'Sign in ↗', field: 'Invitation code', close: 'Close sign in' },
+  { name: 'pairing', signedIn: true, trigger: 'Pair a relay ↗', field: 'Pairing code', close: 'Close pairing' },
+]) {
+  test(`${dialog.name} focuses its code field and returns keyboard focus on close`, async ({ page }) => {
+    await setup(page, dialog.signedIn);
+    await page.goto('/');
+    const trigger = page.getByRole('button', { name: dialog.trigger, exact: true });
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByLabel(dialog.field, { exact: true })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+
+    await page.keyboard.press('Enter');
+    await page.getByRole('button', { name: dialog.close, exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+}
+
 test('shows real fleet dimensions, prototype scope and usable mobile layout', async ({ page }) => {
   await setup(page);
   await page.goto('/');

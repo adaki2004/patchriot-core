@@ -5,6 +5,7 @@ import { api, write, sessionChanged, sessionExpiredEvent, SessionExpiredError, S
 import type { Account, Device, Fleet, Session } from './api';
 import './style.css';
 import { useLive } from './useLive';
+import { useDialog } from './useDialog';
 import { Reviews } from './Reviews';
 import { Orders } from './Orders';
 import { PaymentDesk } from './PaymentDesk';
@@ -23,12 +24,11 @@ function Notice({ children, error = false }: { children: ReactNode; error?: bool
 }
 
 function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog('input');
   const [code, setCode] = useState('');
   const [redeemed, setRedeemed] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
     // A startup lookup may still describe the session from before this login.
@@ -47,7 +47,7 @@ function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: ()
     <p className="eyebrow">PRIVATE ALPHA</p><h2 id="login-title">Welcome to the watch.</h2>
     <p>{redeemed ? 'Your invitation was accepted. Retry opening the workspace with your existing sign-in session.' : 'Use your one-use invitation to open your workspace. Invitations expire after 24 hours.'}</p>
     <form onSubmit={submit}>
-      {!redeemed && <label>Invitation code<input autoFocus type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} disabled={busy} required minLength={64} maxLength={64} spellCheck={false} /></label>}
+      {!redeemed && <label>Invitation code<input type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} disabled={busy} required minLength={64} maxLength={64} spellCheck={false} /></label>}
       {error && <Notice error>{error}</Notice>}
       <button className="primary full" disabled={busy}>{busy ? redeemed ? 'Opening workspace…' : 'Signing in…' : redeemed ? 'Retry opening workspace' : 'Open workspace →'}</button>
     </form>
@@ -56,10 +56,9 @@ function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: ()
 }
 
 function Pair({ account, csrf, onPaired, onClose }: { account: Account; csrf: string; onPaired: () => void; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog('input[name="code"]');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError(''); setBusy(true);
     const values = new FormData(event.currentTarget);
@@ -76,7 +75,7 @@ function Pair({ account, csrf, onPaired, onClose }: { account: Account; csrf: st
     <p className="eyebrow">CONNECT YOUR MACHINE</p><h2 id="pair-title">Bring a relay online.</h2>
     <p>Run the relay’s <code>pair</code> command, then enter its five-minute code here. Approval is a separate step.</p>
     <form onSubmit={submit}>
-      <label>Pairing code<input name="code" placeholder="ABCD-EF01-2345" autoComplete="off" maxLength={14} minLength={14} disabled={busy} required autoFocus spellCheck={false} /></label>
+      <label>Pairing code<input name="code" placeholder="ABCD-EF01-2345" autoComplete="off" maxLength={14} minLength={14} disabled={busy} required spellCheck={false} /></label>
       <label>Operator name<input name="name" defaultValue={account.display_name} maxLength={80} disabled={busy} required /></label>
       <label>Where does it run?<select name="hosting" disabled={busy}><option value="own_machine">My own computer</option><option value="vps">A VPS I control</option></select></label>
       <label className="check"><input type="checkbox" name="rules" disabled={busy} required /><span>I will use assigned data only for its review, keep it private and follow the agreed scope.</span></label>
@@ -90,11 +89,10 @@ function Pair({ account, csrf, onPaired, onClose }: { account: Account; csrf: st
 type DecisionAction = 'approve' | 'revoke' | 'approve_private' | 'revoke_private';
 const decisionLabels: Record<DecisionAction, string> = { approve: 'Approve relay', revoke: 'Revoke relay', approve_private: 'Allow private reviews', revoke_private: 'Remove private access' };
 function Decision({ device, action, csrf, onDone, onClose }: { device: Device; action: DecisionAction; csrf: string; onDone: () => void; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog();
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setBusy(true);
     try {

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
+import { useDialog } from './useDialog';
 import { WebsiteEvidence } from './WebsiteReview';
 import type { WebsiteContext, WebsiteResult } from './WebsiteReview';
 
@@ -34,13 +35,12 @@ function stepLabel(step: Step) {
 }
 
 function NewReview({ csrf, onCreated, onClose }: { csrf: string; onCreated: (review: Review) => void; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog('input[name="review-mode"]:checked');
   const requestId = useRef(crypto.randomUUID());
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<'owned_fixture' | 'owned_agent'>('owned_fixture');
   const limits = useLive<{ agent_review_timeout_seconds?: number }>('/fleet', mode === 'owned_agent');
-  useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('');
     try {

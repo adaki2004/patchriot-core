@@ -24,7 +24,7 @@ header { min-height: 104px; display: flex; align-items: center; justify-content:
 nav { display: flex; gap: 30px; min-height: 64px; align-items: stretch; border-bottom: 1px solid var(--line); }
 nav button { font-size: 13px; padding: 0; border-bottom: 2px solid transparent; color: var(--muted); }
 nav button.active { color: var(--ink); border-bottom-color: var(--ink); font-weight: 650; }
-.nav-note { margin-left: auto; display: flex; align-items: center; color: #858d7e; font-size: 10px; }
+.nav-note { margin-left: auto; display: flex; align-items: center; color: var(--muted); font-size: 10px; }
 .primary, .danger { padding: 15px 22px; background: var(--dark); color: var(--lime); font-weight: 650; border-radius: 5px; display: inline-flex; align-items: center; justify-content: center; gap: 32px; }
 .primary:hover { background: #304327; }
 .primary.small { padding: 10px 16px; font-size: 13px; gap: 15px; }
@@ -73,7 +73,7 @@ h3 { font-size: 18px; margin: 25px 0 10px; letter-spacing: -.35px; font-weight: 
 .pill { background: #d4dfbf; padding: 6px 8px; white-space: nowrap; font-size: 9px; }
 .pilot-note p { font-size: 12px; color: #5c6851; margin: 0; flex: 1; }
 .pilot-note strong { color: var(--ink); }.pilot-note button { white-space: nowrap; }
-footer { display: flex; justify-content: space-between; padding: 32px 0; margin-top: 55px; border-top: 1px solid var(--line); font-size: 12px; gap: 25px; color: #738069; }
+footer { display: flex; justify-content: space-between; padding: 32px 0; margin-top: 55px; border-top: 1px solid var(--line); font-size: 12px; gap: 25px; color: var(--muted); }
 footer > span:first-child { color: var(--ink); font-weight: 700; }footer .subtle { margin-left: 15px; font-weight: 400; }
 .notice { margin: 18px 0; padding: 15px 18px; background: #e8eddf; border: 1px solid #cfd9bc; color: #3d5426; border-radius: 5px; font-size: 13px; }
 .notice.error { background: #fff1e6; border-color: #e9c4a4; color: #7c3916; }

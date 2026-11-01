@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
+import { useDialog } from './useDialog';
 import { WebsiteReviewSetup } from './WebsiteReview';
 import type { Deposit } from './Checkout';
 import { SiteComparison } from './SiteComparison';
@@ -23,11 +24,10 @@ function origin(raw: string): string {
 }
 
 function NewSite({ csrf, onCreated, onClose }: { csrf: string; onCreated: (site: Site) => void; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog('input[name="homepage"]');
   const requestId = useRef(crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  useEffect(() => { dialog.current?.showModal(); }, []);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError('');
     const form = new FormData(event.currentTarget);

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { write } from './api';
 import { useLive } from './useLive';
+import { useDialog } from './useDialog';
 
 type Source = { label: string; url: string };
 type Content = {
@@ -65,14 +66,13 @@ function researchContent(raw: string): Content {
 }
 
 function ResearchImport({ onLoad, onClose }: { onLoad: (content: Content) => void; onClose: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
+  const dialog = useDialog('textarea');
   const [raw, setRaw] = useState('');
   const [filename, setFilename] = useState('');
   const [error, setError] = useState('');
   const [reading, setReading] = useState(false);
   const [brief] = useState(() => researchBrief(new Date()));
   const [copyNotice, setCopyNotice] = useState('');
-  useEffect(() => { dialog.current?.showModal(); }, []);
   async function copyBrief() {
     try { await navigator.clipboard.writeText(brief); setCopyNotice('Research brief copied.'); }
     catch { setCopyNotice('Copy is unavailable. Select the brief below and copy it manually.'); }
