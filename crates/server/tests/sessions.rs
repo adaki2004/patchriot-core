@@ -802,6 +802,92 @@ fn service_configuration_rejects_insecure_or_credentialed_destinations() {
 }
 
 #[tokio::test]
+async fn pairing_recovery_errors_are_specific_without_forwarding_private_dispatcher_text() {
+    let payload = Arc::new(Mutex::new((
+        StatusCode::CONFLICT,
+        json!({"error":"pairing_expired"}),
+    )));
+    let reply = payload.clone();
+    let downstream = Router::new().fallback(move || {
+        let (status, body) = reply.lock().unwrap().clone();
+        async move { (status, Json(body)) }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let (cookie, session) = test.login("member").await;
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    let claim = json!({"user_code":"ABCD-EF01-2345","display_name":"Example operator","hosting":"own_machine","accepts_private_work_rules":true});
+    let mut results = Vec::new();
+    for (status, body, expected) in [
+        (
+            StatusCode::CONFLICT,
+            json!({"error":"pairing_expired"}),
+            "pairing_expired",
+        ),
+        (
+            StatusCode::CONFLICT,
+            json!({"error":"pairing_already_claimed"}),
+            "pairing_already_claimed",
+        ),
+        (
+            StatusCode::NOT_FOUND,
+            json!({"error":"private database detail"}),
+            "pairing_code_unavailable",
+        ),
+        (
+            StatusCode::CONFLICT,
+            json!({"error":"private operator detail"}),
+            "request_conflict",
+        ),
+        (
+            StatusCode::CONFLICT,
+            json!({"error":"pairing_expired","private":"x".repeat(2048)}),
+            "request_conflict",
+        ),
+        (
+            StatusCode::CONFLICT,
+            json!("not an error object"),
+            "request_conflict",
+        ),
+        (
+            StatusCode::FORBIDDEN,
+            json!({"error":"pairing_expired"}),
+            "action_not_allowed",
+        ),
+    ] {
+        *payload.lock().unwrap() = (status, body);
+        let result = test
+            .request("POST", "/api/pairings/claim", claim.clone(), &headers)
+            .await;
+        results.push((status, expected, result));
+    }
+    *payload.lock().unwrap() = (StatusCode::CONFLICT, json!({"error":"pairing_expired"}));
+    let unrelated = test
+        .request(
+            "GET",
+            &format!("/api/reviews/{}", Uuid::new_v4()),
+            Value::Null,
+            &headers,
+        )
+        .await;
+    test.finish().await;
+    server.abort();
+    let _ = server.await;
+    for (status, expected, result) in results {
+        assert_eq!(result.0, status);
+        assert_eq!(result.2, json!({"error":expected}));
+    }
+    assert_eq!(unrelated.0, StatusCode::CONFLICT);
+    assert_eq!(unrelated.2, json!({"error":"request_conflict"}));
+}
+
+#[tokio::test]
 async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels() {
     use patchriot_protocol::website_reviews::ReviewPrice;
     use patchriot_protocol::{DeviceIntroduction, DeviceView, ReviewView, RuntimeKind};

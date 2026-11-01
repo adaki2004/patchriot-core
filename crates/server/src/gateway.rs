@@ -93,6 +93,18 @@ async fn request_as<T: Serialize, R: DeserializeOwned>(
         .map_err(|_| ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "dispatcher_unavailable"))?;
     let status = response.status();
     if !status.is_success() {
+        // Pairing recovery needs a concrete next step. Only these fixed codes
+        // are public; unknown/private upstream error details remain hidden.
+        if path == "/internal/pairings/claim" {
+            if status == StatusCode::NOT_FOUND {
+                return Err(ApiError::new(status, "pairing_code_unavailable"));
+            }
+            if status == StatusCode::CONFLICT
+                && let Some(code) = pairing_conflict(&mut response).await
+            {
+                return Err(ApiError::new(status, code));
+            }
+        }
         return Err(match status.as_u16() {
             400 => ApiError::bad("invalid_request"),
             403 => ApiError::new(StatusCode::FORBIDDEN, "action_not_allowed"),
@@ -119,6 +131,22 @@ async fn request_as<T: Serialize, R: DeserializeOwned>(
     let value = serde_json::from_slice(&bytes)
         .map_err(|_| ApiError::new(StatusCode::BAD_GATEWAY, "invalid_dispatcher_response"))?;
     Ok(Json(value))
+}
+
+async fn pairing_conflict(response: &mut reqwest::Response) -> Option<&'static str> {
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.ok()? {
+        if bytes.len() + chunk.len() > 1024 {
+            return None;
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let body: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    match body.get("error")?.as_str()? {
+        "pairing_expired" => Some("pairing_expired"),
+        "pairing_already_claimed" => Some("pairing_already_claimed"),
+        _ => None,
+    }
 }
 
 pub async fn fleet(State(state): State<AppState>) -> Result<Json<FleetSummary>, ApiError> {

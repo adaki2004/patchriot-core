@@ -286,6 +286,45 @@ for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay li
   } finally { release(); }
 });
 
+for (const [code, status, guidance] of [
+  ['pairing_expired', 409, /Run pair again.*same state directory/],
+  ['pairing_code_unavailable', 404, /Copy the latest code.*same state directory/],
+  ['pairing_already_claimed', 409, /different account.*separate state directory/],
+] as const) test(`pairing recovers from ${code} without losing the operator profile`, async ({ page }) => {
+  await setup(page, true);
+  const requests: Record<string, unknown>[] = [];
+  let accepted = false;
+  await page.route('**/api/devices', route => route.fulfill({ json: accepted ? [{
+    id: '00000000-0000-4000-8000-000000000002', operator_id: account.id,
+    operator_name: 'My operator profile', label: 'Recovered relay', runtime: 'owned_fixture',
+    runtime_version: '0.0.1', compute_group: 'my-machine', approval: 'pending', state: 'pending', last_seen_at: null,
+  }] : [] }));
+  await page.route('**/api/pairings/claim', route => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) return route.fulfill({ status, json: { error: code } });
+    accepted = true;
+    return route.fulfill({ json: { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Pair a relay ↗', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
+  await dialog.getByLabel('Operator name', { exact: true }).fill('My operator profile');
+  await dialog.getByRole('combobox', { name: 'Where does it run?', exact: true }).selectOption('vps');
+  await dialog.getByLabel('I will use assigned data', { exact: false }).check();
+  await dialog.getByRole('button', { name: 'Pair relay →', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText(guidance);
+  await expect(dialog.getByLabel('Pairing code', { exact: true })).toBeEnabled();
+  await expect(dialog.getByLabel('Operator name', { exact: true })).toHaveValue('My operator profile');
+  await expect(dialog.getByRole('combobox', { name: 'Where does it run?', exact: true })).toHaveValue('vps');
+  await expect(dialog.getByLabel('I will use assigned data', { exact: false })).toBeChecked();
+  await dialog.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-9999');
+  await dialog.getByRole('button', { name: 'Pair relay →', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole('row').filter({ hasText: 'Recovered relay' })).toContainText('Awaiting approval');
+  expect(requests).toEqual(['ABCD-EF01-2345', 'ABCD-EF01-9999'].map(user_code => ({ user_code, display_name: 'My operator profile', hosting: 'vps', accepts_private_work_rules: true })));
+});
+
 test('a pending device decision stays visible and an error leaves its reason editable', async ({ page }) => {
   await setup(page, true);
   await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, role: 'admin' }, csrf_token: 'test-csrf' } }));
