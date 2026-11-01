@@ -16,9 +16,11 @@ import { useNavigation } from './navigation';
 import type { View } from './navigation';
 import { Login, RequestAccess, AccessDesk } from './Access';
 import { Guide, AgentList } from './Pairing';
+import { Landing, WorkspaceHome, RequestWork } from './Product';
+import { Docs } from './Docs';
 
 function Mark() {
-  return <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M3 3h26v17L16 33 3 20V3Z" fill="none" stroke="currentColor" strokeWidth="3" /><path d="m10 19 5-9h7l-5 7h6L12 28l3-9h-5Z" fill="currentColor" /></svg>;
+  return <img className="brand-mark" src="/brand/white-hat.png" alt="" width="44" height="44" />;
 }
 
 function Notice({ children, error = false }: { children: ReactNode; error?: boolean }) {
@@ -103,7 +105,8 @@ function App() {
   const devices = useLive<Device[]>('/devices', Boolean(session?.account));
   const account = session?.account;
   const isAdmin = account?.role === 'admin';
-  const privateView = !['overview', 'incidents'].includes(view);
+  const privateView = !['home', 'overview', 'incidents', 'docs'].includes(view);
+  const appView = Boolean(account) && !['home', 'docs'].includes(view);
   const adminView = view === 'incident-desk' || view === 'payment-desk' || view === 'access-desk';
   useEffect(() => {
     const nav = workspaceNav.current;
@@ -142,32 +145,26 @@ function App() {
   return <>
     <a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     <header>
-      <button className="brand" aria-label="Patchriot home" onClick={() => setView('overview')}><Mark /><span>patchriot<span className="brand-dot">.</span></span></button>
-      <div className="header-right"><span className="version">v0.0.1 / PRIVATE ALPHA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <><button className="quiet" onClick={() => setAccessRequest(true)}>Request access</button><button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button></>}</div>
+      <button className="brand" aria-label="Patchriot home" onClick={() => setView('home')}><Mark /><span>patchriot<span className="brand-dot">.</span></span></button>
+      <div className="header-right"><span className="version">PRIVATE BETA</span>{account ? <><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></> : <><button className="quiet" onClick={() => setAccessRequest(true)}>Request access</button><button className="primary small" onClick={() => setLogin(true)}>Sign in ↗</button></>}</div>
     </header>
-    <main id="main" tabIndex={-1}>
-      <nav ref={workspaceNav} aria-label="Workspace"><button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>Overview</button>{account && <button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button>}{account && <button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button>}{account && <button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button>}{account && <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button>}<button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button>{isAdmin && <button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button>}{isAdmin && <button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button>}{account && <><button className={view === 'agents' ? 'active' : ''} onClick={() => setView('agents')}>Agents</button><button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}>Relay setup</button></>}{isAdmin && <button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button>}<span className="nav-note">DON’T TRUST. VERIFY.</span></nav>
+    <main id="main" tabIndex={-1} className={appView ? 'app-main' : 'public-main'}>
+      <nav ref={workspaceNav} className={appView ? 'workspace-nav' : 'public-nav'} aria-label="Workspace">
+        <button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>{account ? (appView ? 'Overview' : 'Workspace') : 'Home'}</button>
+        {account && appView && <><button className={view === 'request' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('request')}>Request an audit</button><button className={view === 'guide' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('guide')}>Pair an agent</button><button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button><button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button><button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button><button className={view === 'agents' ? 'active' : ''} onClick={() => setView('agents')}>Agents</button><button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button></>}
+        <button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button><button className={view === 'docs' ? 'active' : ''} onClick={() => navigate('docs', 'start')}>Docs</button>
+        {isAdmin && appView && <><span className="nav-group">ADMIN</span><button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button><button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button><button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button></>}
+        <span className="nav-note">DON’T TRUST. VERIFY.</span>
+      </nav>
+      <div className="page-content">
       {sessionError && <Notice error>{sessionError} <button className="inline" onClick={() => void loadSession().catch(() => {})}>Retry</button></Notice>}
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
       {privateView && !account && <section className="panel empty" aria-label="Private workspace access"><h1 className="page-title">{session ? 'This page is private.' : 'Checking your session…'}</h1><p>{session ? 'Sign in with the account that has access. A saved link does not share its contents.' : 'Your workspace will open after your session is checked.'}</p>{session && <button className="primary" onClick={() => setLogin(true)}>Sign in to open this page →</button>}</section>}
       {adminView && account && !isAdmin && <section className="panel empty"><h1 className="page-title">Administrator access required.</h1><p>This account cannot open the admin desk.</p></section>}
-      {view === 'overview' && <>
-        <section className="hero">
-          <div className="hero-copy"><p className="eyebrow"><span className="tiny-mark">+</span> A SWARM OF REBELS. A SAFER INTERNET.</p><h1>More defenders.<br /><span>Fewer blind spots.</span></h1><p className="hero-description">One weak link can put everyone at risk. Bring a website you’re authorized to assess, collect evidence and confirm the proposed review team.</p>
-            <div className="hero-actions">
-              <button className="primary" onClick={() => setView('sites')}>Review a website <span>↗</span></button>
-              <button className="text-button" onClick={() => account ? setPairing(true) : setAccessRequest(true)}>{account ? 'Pair a relay' : 'Contribute an agent'} <span>{account ? '↗' : '→'}</span></button>
-            </div><p className="fine hero-footnote">Start with an approved snapshot. See who will review it before sharing.</p>
-          </div>
-          <div className="watch-card"><div className="watch-top"><span>FLEET / LIVE STATUS</span><span className={`dot ${fleet.error ? 'disconnected' : ''}`} /></div><div className="watch-art" aria-hidden="true"><div className="orbit orbit-a" /><div className="orbit orbit-b" /><div className="orbit orbit-c" /><div className="center-mark"><Mark /></div><span className="node node-a" /><span className="node node-b" /><span className="node node-c" /></div><div className="watch-bottom"><span>{fleet.error ? 'Connection interrupted' : fleet.data ? `${fleet.data.online_devices} approved relays online` : 'Connecting to dispatcher…'}</span><small>{fleet.updated ? `Updated ${fleet.updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Waiting for a response'}</small></div></div>
-        </section>
-        {fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}
-        <section className="stats" aria-label="Live fleet counts"><div><span className="stat-value">{fleet.data?.online_devices ?? '—'}</span><span>Online relays</span></div><div><span className="stat-value">{fleet.data?.online_operators ?? '—'}</span><span>Distinct operators</span></div><div><span className="stat-value">{fleet.data?.online_compute_groups ?? '—'}</span><span>Declared compute groups</span></div><p>Live counts, not a decentralization claim. Several relays can belong to one operator or share one machine.</p></section>
-        <section className="section-heading"><div><p className="eyebrow">EVIDENCE OVER ASSURANCES</p><h2>Find it. Reproduce it. Challenge it.</h2></div><span className="subtle">The review workflow we’re building</span></section>
-        <div className="roles"><article><span className="role-number">01 / INVESTIGATE</span><h3>Follow the weak link.</h3><p>Inspect authorized code and websites. Turn a suspicion into a precise claim with evidence.</p></article><article><span className="role-number">02 / REPRODUCE</span><h3>Make the finding stand up.</h3><p>Run the same conditions against the same target. A confident answer is not a reproduction.</p></article><article><span className="role-number">03 / CHALLENGE</span><h3>Check the fix, too.</h3><p>Question the assumptions. Test the proposed patch and keep disagreements in the report.</p></article></div>
-        <section className="pilot-note"><span className="pill">WORKING NOW</span><p><strong>Evidence you can inspect.</strong> Pair an agent, run an owned example or review an approved website snapshot. Private access is explicit; active penetration tests follow.</p><button className="text-button" onClick={() => setView('guide')}>Try the relay →</button></section>
-        <IncidentLog />
-      </>}
+      {(view === 'home' || (view === 'overview' && !account)) && <Landing fleet={fleet.data} error={fleet.error} onRetry={fleet.refresh} signedIn={Boolean(account)} onAccess={() => setAccessRequest(true)} onApp={() => setView('overview')} onDocs={() => navigate('docs', 'start')} onPair={() => account ? setView('guide') : setAccessRequest(true)} />}
+      {view === 'overview' && account && <><WorkspaceHome name={account.display_name} fleet={fleet.data} onRequest={() => setView('request')} onPair={() => setView('guide')} onReviews={() => setView('reviews')} onDocs={() => navigate('docs', 'start')} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}<button className="text-button" onClick={() => setPairing(true)}>I already have a pairing code →</button></>}
+      {view === 'request' && account && <RequestWork onWebsite={() => setView('sites')} />}
+      {view === 'docs' && <Docs page={route.id} onPage={page => navigate('docs', page)} />}
       {view === 'devices' && account && <>
         <section className="section-heading fleet-heading"><div><p className="eyebrow">{isAdmin ? 'OPERATOR CONSOLE' : 'YOUR CONTRIBUTION'}</p><h1 className="page-title">{isAdmin ? 'Fleet & approvals' : 'Your relays'}</h1><p className="subtle">Pairing proves a device key. Approval is a separate decision.</p></div><button className="primary" onClick={() => setPairing(true)}>Pair a relay +</button></section>
         {devices.error && <Notice error>{devices.error} <button className="inline" onClick={devices.refresh}>Retry</button></Notice>}
@@ -185,6 +182,7 @@ function App() {
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}
       {view === 'payment-desk' && isAdmin && <PaymentDesk />}
       {view === 'access-desk' && isAdmin && session?.csrf_token && <AccessDesk csrf={session.csrf_token} />}
+      </div>
     </main>
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>
     {login && <Login initialCode={initialCode} onLogin={loadSession} onClose={() => { setLogin(false); setInitialCode(''); }} />}

@@ -36,7 +36,7 @@ Return one JSON object, without markdown fences or extra fields:
 ${JSON.stringify({ ...researchFormat, occurred_on: 'YYYY-MM-DD' }, null, 2)}
 
 Replace every example value. Use reported for developing claims, confirmed only when an original source confirms the incident described, and advisory for a published security advisory. Confirmation by a source is not independent verification by Patchriot.
-Keep title within 140 UTF-8 bytes, summary within 2400, takeaway within 1200, and the whole entry within 12 KB. Include 1–4 original public HTTPS sources: label at most 100 bytes, URL at most 1500, without credentials or query parameters. Give a practical takeaway supported by those sources. Include no private customer information, credentials or unpublished exploit details.
+Keep title within 140 UTF-8 bytes, summary within 2400, takeaway within 1200, and the whole entry within 12 KB. Include 1–4 original public HTTPS sources: label at most 100 bytes, URL at most 1500, without credentials or query parameters. Write like a person keeping useful notes: concrete facts, short sentences, no dramatic claims or filler. Give a practical takeaway supported by those sources. Include no private customer information, credentials or unpublished exploit details.
 
 This is a research draft for human source review, not permission to test a website or publish the entry.`;
 }
@@ -110,9 +110,9 @@ function ContentView({ content }: { content: Content }) {
     <p className="incident-kind">{evidenceLabels[content.evidence]} <span> / {date(content.occurred_on)}</span></p>
     <h3>{content.title}</h3>
     <p className="incident-prose">{content.summary}</p>
-    <h4>What to take from it</h4>
+    <h4>Worth checking</h4>
     <p className="incident-prose">{content.takeaway}</p>
-    <h4>Read the sources</h4>
+    <h4>Sources</h4>
     <ul className="incident-sources">{content.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noopener noreferrer nofollow">{source.label} ↗</a></li>)}</ul>
   </>;
 }
@@ -139,11 +139,11 @@ export function IncidentLog() {
     event.preventDefault(); select(entries[next].id); tabs.current[next]?.focus();
   }
   return <section className="incident-section" aria-labelledby="incident-title">
-    <div className="section-heading"><div><p className="eyebrow">LEARN FROM WHAT BROKE</p><h2 id="incident-title">The watch log.</h2></div><p className="subtle">Public research. Private reviews stay private.</p></div>
-    <p className="incident-intro">Public incidents, practical takeaways and links to the evidence. Updated after review.</p>
+    <div className="section-heading"><div><p className="eyebrow">FIELD NOTES</p><h2 id="incident-title">The incident notebook.</h2></div><p className="subtle">Sources first. Updates when the facts change.</p></div>
+    <p className="incident-intro">What broke, what we know so far, and something useful to take away. Pick an entry; use ↑ and ↓ if you prefer.</p>
     {feed.error && <div className="notice error" role="alert">The watch log could not refresh. Any entries below are from the last successful response. <button className="inline" onClick={feed.refresh}>Retry watch log</button></div>}
     <div className="incident-terminal">
-      <div className="incident-bar"><span><span aria-hidden="true">›_ </span> PATCHRIOT / WATCH LOG</span><span>{feed.data ? `${entries.length} published` : 'Connecting…'} <span className="key-hint">· ↑ ↓ to browse</span></span></div>
+      <div className="incident-bar"><span>INCIDENT NOTES</span><span>{feed.data ? `${entries.length} published` : 'Connecting…'} <span className="key-hint">· ↑ ↓ to browse</span></span></div>
       {!selected && <div className="incident-empty"><h3>{feed.data ? 'Nothing published yet.' : 'Loading the watch log…'}</h3><p>Entries appear here after their sources have been reviewed.</p></div>}
       {selected && <div className="incident-grid">
         <div className="incident-tabs" role="tablist" aria-label="Published incidents" aria-orientation="vertical">{entries.map((entry, index) => <button key={entry.id} ref={node => { tabs.current[index] = node; }} id={`incident-tab-${entry.id}`} role="tab" aria-selected={entry.id === selected.id} aria-controls="incident-detail" tabIndex={entry.id === selected.id ? 0 : -1} onKeyDown={event => navigate(event, index)} onClick={() => select(entry.id)}><small>{date(entry.content.occurred_on)} / {entry.content.evidence}</small><strong>{entry.content.title}</strong><span aria-hidden="true">↳</span></button>)}</div>

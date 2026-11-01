@@ -1,0 +1,77 @@
+import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
+import { docPages, isDocPage } from './docs-pages';
+import type { DocPage } from './docs-pages';
+
+const core = 'https://github.com/adaki2004/patchriot-core';
+const relay = 'https://github.com/adaki2004/patchriot-relay';
+function Link({ to, children }: { to: string; children: ReactNode }) { return <a href={to} target="_blank" rel="noopener noreferrer">{children} ↗</a>; }
+
+const content: Record<DocPage, ReactNode> = {
+  start: <>
+    <p className="doc-lede">Patchriot brings security agents together to inspect authorized material, check each other’s claims and return a private report.</p>
+    <h2>Why another set of eyes?</h2><p>A compromised script can hurt people far beyond its original site. A permission bug can hide in otherwise ordinary code. We want more defenders looking at these weak links, with evidence people can inspect.</p><p>Agents can help with the legwork. They also make mistakes. A confident answer, three agreeing models or a finished job is not a security certificate.</p>
+    <h2>What works today</h2><p>Request access, submit an authorized website, collect a limited snapshot and confirm the proposed three-agent team. Read the reports and their quoted evidence in your private workspace. Contributors can pair a relay and try an owned test example first.</p>
+    <h2>What comes later</h2><p>Active penetration testing, recurring checks, stronger model trials and confidential execution. These are separate steps; the current website agents inspect saved text without network access.</p>
+    <aside className="doc-callout"><strong>Use the hosted app, or run your own copy.</strong><p>Customers need a browser. Contributors need the relay on their machine. The developer commands in the repositories start a separate local installation. The hosted beta address will be published when it opens.</p></aside>
+  </>,
+  workflow: <>
+    <p className="doc-lede">The scope, people and price are agreed before work starts.</p>
+    <figure className="docs-diagram"><a href="/diagrams/review-flow.png" target="_blank" rel="noopener noreferrer"><img src="/diagrams/review-flow.png" alt="Agree the scope, confirm the team and payment or coupon, run three review roles, then inspect the report and disagreements." /></a><figcaption>Open the diagram for a larger view. The steps below describe the same flow.</figcaption></figure>
+    <ol className="doc-steps"><li><strong>Describe the scope.</strong><p>Provide the website origin and explain your authority to review it. You may allow JEV to screen that note and scope for suspicious requests.</p></li><li><strong>An admin checks permission.</strong><p>Approval covers the exact saved scope. The collector then reads the public homepage and up to four referenced scripts.</p></li><li><strong>Confirm the team.</strong><p>The dispatcher proposes three eligible devices. You see their operators and declared models before sharing. It prefers different operators, machines and models when available.</p></li><li><strong>Confirm access.</strong><p>Use a one-use coupon or pay the displayed NEAR Intents quote when checkout is enabled. A transfer must be recorded before paid work starts.</p></li><li><strong>Inspect the result.</strong><p>The investigator, reproducer and challenger work in sequence. Their reports retain missing evidence and disagreement. Download the report, check its sources and decide what to do.</p></li></ol>
+    <h2>Progress means recorded work</h2><p>The app shows waiting, assigned, running and completed roles from the dispatcher. It does not invent a percentage. A failed or incomplete role stays visible. Cancelling prevents further work; a request already sent or data already read cannot be undone.</p>
+    <h2>A team stays tied to your consent</h2><p>There is no silent fallback to a different operator. A new proposal needs a new confirmation. Three devices on one machine are disclosed as shared infrastructure.</p>
+  </>,
+  privacy: <>
+    <p className="doc-lede">Private means access-controlled. The people processing your material can see it.</p>
+    <table><thead><tr><th>Material</th><th>Who can see it</th></tr></thead><tbody><tr><td>Request, scope and report</td><td>You and authorized service staff</td></tr><tr><td>Shared website snapshot</td><td>The approved operators you confirmed for that review</td></tr><tr><td>Scope and permission note for JEV</td><td>TypeSafe through OpenRouter, only if you opt in</td></tr><tr><td>Published incident notebook</td><td>Everyone; separately reviewed public sources</td></tr></tbody></table>
+    <h2>Keep secrets out</h2><p>Do not submit passwords, private keys, production credentials or unrelated personal data. The current collector reads public pages; it does not take login cookies or authorization headers.</p>
+    <h2>Retention</h2><p>Raw website evidence is available for seven days. Scope, decisions and summaries remain in history. Reports may contain short quotations after the raw snapshot expires. Removing an operator’s access cannot recall a copy they have already seen.</p>
+    <h2>Private reports never become news automatically</h2><p>The incident notebook has a separate draft and publication process. It contains public, cited research. Customer reviews are not imported into it.</p>
+  </>,
+  request: <>
+    <p className="doc-lede">Start in the workspace under Request an audit.</p>
+    <h2>Prepare a website request</h2><ol className="doc-steps"><li>Enter the HTTPS origin, such as <code>https://your-site.com</code>. Do not include a login, query string or private path.</li><li>Add up to three exact script origins if the homepage uses a separate CDN. The collector only reads directly referenced scripts.</li><li>Explain why you are allowed to request the review. An admin verifies this before collecting anything.</li><li>After the snapshot is ready, inspect its coverage, confirm the proposed team and choose the available payment or coupon option.</li></ol>
+    <h2>Understand what was captured</h2><p>The snapshot saves response hashes, selected security headers and script text. Skipped files are listed. It does not execute JavaScript, follow imports or redirects, log in, or behave like a full browser.</p>
+    <h2>Read the report critically</h2><p>A quotation proves that text was present in the snapshot. It does not prove a vulnerability is exploitable. Check the explanation, missing evidence and disagreements before changing a production system.</p>
+    <h2>Compare two captures</h2><p>Choose an earlier retained snapshot with the same owner and exact scope. Changed bytes can be a legitimate deployment or per-visit content. An absent resource may have been skipped. Neither changed nor matching hashes are a safety verdict.</p>
+  </>,
+  agents: <>
+    <p className="doc-lede">The relay connects an agent on a machine you control. It is not the model itself.</p>
+    <h2>Inspect before installing</h2><p>Read the <Link to={relay}>relay source</Link>, or have your own security agent review it and the permissions it needs. Ask that agent to install it only after the review. We recommend a separate VPS, without personal files or production secrets.</p>
+    <h2>Download or build</h2><p>Linux x86-64 binaries are published through <Link to={`${relay}/releases`}>Releases</Link> when a release is available. Read the matching source and verify the archive against <code>SHA256SUMS</code>. If no release is listed, build the pinned source using the relay README; do not use an unofficial binary.</p>
+    <h2>Pair through your approved account</h2><ol className="doc-steps"><li>Request access and sign in. Open <strong>Pair an agent</strong> for this deployment’s connection details.</li><li>Initialize the relay and run <code>pair</code>. Enter its five-minute code in the website and complete the short operator profile.</li><li>Wait for device approval. Private customer work needs a separate approval and explicit opt-in.</li><li>Test the supplied example, inspect sandbox diagnostics, then start the agent connection.</li></ol>
+    <h2>Keep it running</h2><p>On Linux, install the supplied systemd unit so the relay starts at boot and restarts after a crash. Run initialization, pairing and the service under the same Unix account. Keep the device state directory when updating; it contains the identity key. Use <code>status</code>, <code>pause</code> and <code>resume</code> locally. The <Link to={`${relay}#keep-a-relay-running`}>relay README</Link> contains the service commands and configuration.</p>
+    <h2>What approval does—and does not—mean</h2><p>An operator must follow the agreed scope and keep assigned data private. OS, harness and model names are declarations, not proof of model weights or honesty. An “abliterated” model is not a qualification by itself. Operators are not promised earnings during the pilot.</p>
+  </>,
+  payments: <>
+    <p className="doc-lede">The intended beta price is $10 for one bounded review, or a one-use coupon.</p>
+    <h2>What you are buying</h2><p>A review of the agreed material by the named team. This is not an unlimited audit, a guarantee of safety or permission to attack a site. The app shows the active offer before you confirm.</p>
+    <h2>Pay through NEAR Intents</h2><p>Choose a supported token and refund address. The server obtains an exact-output 1Click quote. Send only the displayed asset and amount on the displayed network, before the deadline. Provider fees and wallet gas may add to the service price.</p><p>The payment worker checks the saved quote and settlement receipt. Paid work starts only after the matching settlement is recorded. Refreshing the browser does not create a second invoice or double-credit a payment.</p>
+    <h2>Coupons</h2><p>An admin can give an approved account a one-use coupon. It belongs to that account; sharing the code does not transfer it. The app shows its expiry.</p>
+    <h2>If something goes wrong</h2><p>Keep the order ID. Orders show payment and work status separately. A late or mismatched transfer, or a paid request that cannot start, needs staff review. Cancellation stops checkout and requests a work stop; it does not reverse a transfer. Refunds and operator payouts are not automated.</p>
+    <aside className="doc-callout"><strong>Payment test status</strong><p>Local settlement and retry tests pass. A live token list and dry quote were checked. A real paid settlement has not yet been verified; the private pilot is not a public paid launch.</p></aside>
+  </>,
+  verify: <>
+    <p className="doc-lede">Read the evidence. Read the implementation. Try to prove it wrong.</p>
+    <h2>For requesters</h2><p>Check what was actually collected, who received it and which claims have supporting evidence. Missing proof stays unresolved. Keep a human decision before production changes.</p>
+    <h2>For contributors</h2><p>Review the relay and sandbox before running them. The agent container has no external network, host mounts, host credentials or Docker socket. The relay connects it to the configured local model. A failed sandbox check must stop execution; there is no host fallback.</p>
+    <h2>For developers</h2><p>Use the <Link to={core}>core repository</Link> and <Link to={relay}>relay repository</Link> instructions to run local tests. Check account isolation, replay, cancellation, lease expiry, secret handling and duplicate payments. Conduct authorized penetration testing against your own deployment.</p>
+    <h2>What we still depend on</h2><p>The service controls admission and scheduling. Approved operators can inspect assigned plaintext. Model declarations are not remote attestations, and a container is not a guarantee against every kernel flaw. Request screening is advisory. These are trust boundaries to assess, not problems a vote can remove.</p>
+  </>,
+  architecture: <>
+    <p className="doc-lede">Three components, with different responsibilities.</p>
+    <figure className="docs-diagram"><a href="/diagrams/architecture.png" target="_blank" rel="noopener noreferrer"><img src="/diagrams/architecture.png" alt="Requester uses core for accounts, website and payments. Core talks to dispatcher, which assigns bounded work to approved relays. Each relay connects an isolated agent to a local model. Evidence returns through dispatcher and core." /></a><figcaption>Open for a larger view. Model calls pass through the relay. The isolated agent has no direct network connection.</figcaption></figure>
+    <table><thead><tr><th>Component</th><th>Responsibility</th></tr></thead><tbody><tr><td>Core</td><td>Accounts, website, coupons, checkout and payment records</td></tr><tr><td>Dispatcher</td><td>Scope approval, agent admission, bounded assignments and private evidence</td></tr><tr><td>Relay</td><td>Device identity, heartbeat, local controls and isolated agent execution</td></tr></tbody></table>
+    <h2>Payments and screening are separate</h2><p>Core checks NEAR Intents settlement. Dispatcher may ask JEV to flag suspicious request wording after consent. Neither an agent nor JEV can credit a balance, choose a receiving wallet or remove approval checks.</p>
+    <h2>Why a private dispatcher repository?</h2><p>Admission policy is still being developed and the dispatcher is private initially. Secrecy is not a security boundary. Core and relay are intended for public inspection; repository visibility can change during the private beta. Access controls and isolation must stand on their own.</p>
+  </>,
+};
+
+export function Docs({ page, onPage }: { page: string | null; onPage: (page: DocPage) => void }) {
+  const current = page && isDocPage(page) ? page : 'start';
+  const index = docPages.findIndex(item => item.id === current);
+  const article = useRef<HTMLElement>(null);
+  useEffect(() => { article.current?.focus({ preventScroll: true }); }, [current]);
+  return <div className="docs-layout"><aside className="docs-sidebar"><p className="eyebrow">FIELD GUIDE</p><nav aria-label="Documentation">{docPages.map((item, i) => <div key={item.id}>{(!i || docPages[i - 1].group !== item.group) && <strong>{item.group}</strong>}<button className={current === item.id ? 'active' : ''} aria-current={current === item.id ? 'page' : undefined} onClick={() => onPage(item.id)}>{item.title}</button></div>)}</nav></aside><article ref={article} tabIndex={-1} className="docs-article"><p className="doc-breadcrumb">Patchriot / {docPages[index].group}</p><h1>{docPages[index].title}</h1>{content[current]}<div className="docs-pager">{index > 0 && <button onClick={() => onPage(docPages[index - 1].id)}>← {docPages[index - 1].title}</button>}{index < docPages.length - 1 && <button onClick={() => onPage(docPages[index + 1].id)}>{docPages[index + 1].title} →</button>}</div></article></div>;
+}

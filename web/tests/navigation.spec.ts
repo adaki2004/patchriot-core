@@ -51,7 +51,7 @@ test('a review bookmark survives reload and browser history without submitting w
   await page.goForward();
   await expect(page).toHaveURL(/#\/incidents$/);
   await expect(report).toHaveCount(0);
-  await page.getByRole('button', { name: 'Relay setup', exact: true }).click();
+  await page.getByRole('button', { name: 'Pair an agent', exact: true }).click();
   const skip = page.getByRole('link', { name: 'Skip to content', exact: true });
   await skip.focus(); await skip.click();
   await expect(page).toHaveURL(/#\/guide$/);
@@ -121,7 +121,7 @@ test('invalid paths cannot become API paths and member links cannot open admin d
   const calls = await setup(page);
   for (const hash of [`#/reviews/${reviewId}/cancel`, '#/reviews/../../admin/payments', `#/sites/${siteId}?token=not-a-token`, '#/devices/anything', `#/orders/${orderId}/report/extra`]) {
     await page.goto(`/${hash}`);
-    await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'What are we checking?', exact: true })).toBeVisible();
   }
   for (const view of ['incident-desk', 'payment-desk']) {
     await page.goto(`/#/${view}`);

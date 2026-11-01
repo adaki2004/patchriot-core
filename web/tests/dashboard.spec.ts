@@ -15,7 +15,7 @@ async function setup(page: Page, signedIn = false) {
 
 for (const dialog of [
   { name: 'sign-in', signedIn: false, trigger: 'Sign in ↗', field: 'Username', close: 'Close sign in' },
-  { name: 'pairing', signedIn: true, trigger: 'Pair a relay ↗', field: 'Pairing code', close: 'Close pairing' },
+  { name: 'pairing', signedIn: true, trigger: 'I already have a pairing code →', field: 'Pairing code', close: 'Close pairing' },
 ]) {
   test(`${dialog.name} focuses its code field and returns keyboard focus on close`, async ({ page }) => {
     await setup(page, dialog.signedIn);
@@ -41,9 +41,9 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.' })).toBeVisible();
   await expect(page.getByText('3 approved relays online')).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('Distinct operators');
-  await expect(page.getByText('Private access is explicit; active penetration tests follow.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Today, website agents inspect saved text offline.', { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await expect(page.getByRole('button', { name: 'Relay setup', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
   await expect(page.getByRole('heading', { name: 'This page is private.' })).toBeVisible();
   await expect(page.locator('.guide pre')).toHaveCount(0);
@@ -52,7 +52,7 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
 test('relay setup distinguishes fixture identities from agents and makes private work a separate opt-in', async ({ page }) => {
   await setup(page, true);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Relay setup', exact: true }).click();
+  await page.getByRole('button', { name: 'Pair an agent', exact: true }).click();
   const guide = page.getByRole('region', { name: 'Connect a machine you control.' });
   const commands = guide.locator('pre');
   await expect(guide.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
@@ -342,7 +342,7 @@ for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay li
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Pair a relay ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
     await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
     await page.getByLabel('I will use assigned data', { exact: false }).check();
     await page.getByRole('button', { name: 'Pair relay →', exact: true }).click();
@@ -385,7 +385,7 @@ for (const [code, status, guidance] of [
     return route.fulfill({ json: { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Pair a relay ↗', exact: true }).click();
+  await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
   await dialog.getByLabel('Operator name', { exact: true }).fill('My operator profile');

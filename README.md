@@ -11,6 +11,8 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 ## Use Patchriot
 
+The website includes a public **Docs** section at `/#/docs/start`, covering the review flow, privacy, payments and contribution. The incident notebook keeps dated public sources separate from private customer work.
+
 **Hosted beta: coming soon.** The current deployment is a private pilot. We will publish the website address here when the hosted beta opens.
 
 - **Request a review:** sign in to the hosted website, submit a site you have permission to assess, and read your private report. You need only a browser.
@@ -30,15 +32,7 @@ Start with: **“Has a third-party script changed what my visitors' browsers are
 
 ## How the swarm works
 
-```mermaid
-flowchart LR
-  U[Requester] --> C[Core: accounts and payments]
-  C --> D[Dispatcher: approved scope and assignments]
-  D --> I[Investigator]
-  I --> R[Reproducer]
-  R --> V[Challenger / patch review]
-  V --> P[Private report and evidence]
-```
+![Review flow: agree the scope, confirm sharing and access, run three review roles, inspect the evidence.](web/public/diagrams/review-flow.png)
 
 The investigator makes a specific claim. The reproducer checks it. The challenger questions the assumptions and tests the fix. Prefer different models and approved operators; report shared infrastructure honestly. Three devices on one VPS are still one shared machine.
 
@@ -102,7 +96,7 @@ Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are s
 
 To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing pilot login codes still work through **Use a pilot login code**. Password sign-in and setup are limited by username, socket peer and a shared backstop; forwarded IP headers are not trusted. A reverse proxy therefore shares the peer limit. Add edge rate limits before a public rollout. Google login and MFA are separate future integrations.
 
-In **Relay setup**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:
+In **Pair an agent**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:
 
 - **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
 - **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role. The browser shows the deployment’s time limit before submission: 35 minutes by default, up to 95 minutes for an explicitly configured CPU pilot.
@@ -141,7 +135,7 @@ Before an upgrade, back up PostgreSQL and retain the installed binary and web fi
 
 </details>
 
-**Pairing and agent information:** admitted users get deployment-specific instructions under **Relay setup**. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private gateway address as a fallback. A signed pairing challenge alone cannot enroll a device: an enabled account must claim it, then an admin approves it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
+**Pairing and agent information:** admitted users get deployment-specific instructions under **Pair an agent**. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private gateway address as a fallback. A signed pairing challenge alone cannot enroll a device: an enabled account must claim it, then an admin approves it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
 
 ## Website evidence
 
@@ -168,7 +162,7 @@ The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/ev
 
 </details>
 
-## The watch log
+## The incident notebook
 
 **Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries with touch or ↑/↓ keys.
 
@@ -285,7 +279,7 @@ The amount is in destination-token smallest units. `recipient_type` is `DESTINAT
 
 Writes require the owner's session, same-origin check and CSRF token. The browser cannot choose the price, treasury recipient or account. Changed consent or payment details need a new request ID; retries preserve the original deadline. Creation is limited to five orders per account per 15 minutes, with ten seconds between retries. A quote is not proof of payment or permission to assign work.
 
-In the browser, open a collected snapshot and choose **Choose review agents**. Paid mode shows the review price, payment token/network and refund address before **Reserve review & get quote**. The resulting order shows exact deposit instructions only while it remains payable. **I've sent it** hides the instructions; it does not confirm settlement. Reopen a pending order to explicitly recheck its instructions. Expiry, cancellation, processing or an unavailable status hides the address. Orders and quotes are kept on the server; deposit details are not saved in browser storage.
+In the browser, open a collected snapshot and choose **Prepare agent review**. Paid mode shows the review price, payment token/network and refund address before **Reserve review & get quote**. The resulting order shows exact deposit instructions only while it remains payable. **I've sent it** hides the instructions; it does not confirm settlement. Reopen a pending order to explicitly recheck its instructions. Expiry, cancellation, processing or an unavailable status hides the address. Orders and quotes are kept on the server; deposit details are not saved in browser storage.
 
 Quote replies include `request_id`, the original consent's retry key, and a separate server-assigned `review_id`. Check the request key against your submission; use the review ID to open the resulting report.
 
@@ -346,5 +340,14 @@ Use the same local service environment; browser smoke also needs `DATABASE_URL` 
 | [Dispatcher](https://github.com/adaki2004/patchriot-dispatcher) | Approval, assignments and review coordination |
 
 All three are private during development. Core and relay are intended for publication; dispatcher is private initially. Code visibility does not replace access controls or isolation.
+
+<details>
+<summary><strong>See the service boundaries</strong></summary>
+
+![Requester uses core; dispatcher assigns work to approved relays, each connecting an isolated agent and its local model. NEAR Intents handles checkout; JEV provides advisory request screening.](web/public/diagrams/architecture.png)
+
+Agents have no direct external network. The relay handles model calls, and reports return through dispatcher and core. Approved operators can see assigned plaintext.
+
+</details>
 
 Original code is [AGPL-3.0-only](LICENSE). The shared [protocol crate](crates/protocol) is [Apache-2.0](crates/protocol/LICENSE). Attribution is in [NOTICE](NOTICE). Credentials, customer source and reports stay out of Git.
