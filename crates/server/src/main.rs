@@ -10,6 +10,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|_| "database connection or migration failed")?;
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "review-code") {
+        if args.len() != 2 {
+            return Err("usage: patchriot-core review-code <label>".into());
+        }
+        let issued = patchriot_core::review_codes::issue(&pool, &args[1]).await?;
+        println!("{}", serde_json::to_string(&issued)?);
+        eprintln!(
+            "One-use website review code; expires unused after 7 days. Share privately with an invited user."
+        );
+        return Ok(());
+    }
+    if args.first().is_some_and(|a| a == "revoke-review-code") {
+        if args.len() != 2 {
+            return Err("usage: patchriot-core revoke-review-code <code-uuid>".into());
+        }
+        let id = args[1]
+            .parse::<uuid::Uuid>()
+            .map_err(|_| "invalid code ID")?;
+        if !patchriot_core::review_codes::revoke(&pool, id)
+            .await
+            .map_err(|_| "code revocation failed")?
+        {
+            return Err("code not found, already reserved or already revoked".into());
+        }
+        println!("Unused review code revoked.");
+        return Ok(());
+    }
     if args == ["payments-reconcile-once"] {
         let key = std::env::var("PATCHRIOT_1CLICK_API_KEY")
             .map_err(|_| "PATCHRIOT_1CLICK_API_KEY is required")?;
@@ -63,7 +90,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         && args != ["payments-cancel-once"]
     {
         return Err(
-            "expected serve, invite, invite-account, disable-account, payments-reconcile-once, payments-fund-once or payments-cancel-once"
+            "expected serve, invite, invite-account, disable-account, review-code, revoke-review-code, payments-reconcile-once, payments-fund-once or payments-cancel-once"
                 .into(),
         );
     }

@@ -6,6 +6,7 @@ mod auth;
 mod gateway;
 mod incidents;
 pub mod payments;
+pub mod review_codes;
 mod sites;
 
 use axum::{
@@ -162,6 +163,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/payments", get(payments::summary))
         .route("/api/admin/payments", get(payments::desk::list))
         .route("/api/checkout", get(payments::access::settings))
+        .route("/api/review-codes", get(review_codes::list))
+        .route("/api/review-codes/{id}/resume", post(review_codes::resume))
+        .route(
+            "/api/site-checks/{id}/review-code",
+            post(review_codes::redeem),
+        )
         .route(
             "/api/site-checks/{id}/checkout",
             post(payments::browser_checkout::create),
