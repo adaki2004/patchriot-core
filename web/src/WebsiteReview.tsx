@@ -108,7 +108,7 @@ export function WebsiteEvidence({ result, complete }: { result: WebsiteResult; c
       {result.assessment.findings.length === 0 && <p className="fine">The agent listed no findings. This does not establish that the site is safe.</p>}
       <p className="fine">LIMITATIONS REPORTED BY THE AGENT</p><ul>{result.assessment.limitations.map((item, i) => <li key={i}>{item}</li>)}</ul>
     </div>}
-    {result.raw_summary && <><p className="fine">MODEL RESPONSE / DID NOT MATCH THE REPORT FORMAT</p><pre className="agent-summary">{result.raw_summary}</pre></>}
+    {result.raw_summary && <details className="execution-details raw-response"><summary>Inspect unformatted model reply</summary><p className="fine">This reply did not match the report format. Treat its claims as unverified.</p><pre className="agent-summary">{result.raw_summary}</pre></details>}
     <details className="execution-details"><summary>Execution details</summary><dl><dt>Run state</dt><dd>{run.state.replaceAll('_', ' ')}</dd><dt>Snapshot read</dt><dd>{result.inspected_snapshot_sha256 === result.snapshot_sha256 ? 'Recorded for this snapshot' : 'Not confirmed'}</dd><dt>Model calls</dt><dd>{run.inference_calls}</dd><dt>Completed terminal calls</dt><dd>{run.terminal_calls}</dd><dt>Container cleanup</dt><dd>{run.cleanup_confirmed ? 'Reported complete' : 'Not confirmed'}</dd><dt>Snapshot SHA-256</dt><dd><code>{result.snapshot_sha256}</code></dd><dt>Model digest</dt><dd><code>{run.model_digest}</code></dd><dt>Agent image</dt><dd><code>{run.image_digest}</code></dd></dl><p className="fine">Terminal counts include the snapshot reader, which the runtime may run before inference. These records are reported by the operator.</p></details>
   </>;
 }
