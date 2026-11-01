@@ -13,6 +13,7 @@ async function setup(page: Page, admin = false) {
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 3, online_operators: 1, online_compute_groups: 1 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+  await page.route('**/api/review-codes', route => route.fulfill({ json: [] }));
   await page.route('**/api/site-checks', route => route.fulfill({ json: [pending] }));
   await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: pending }));
   await page.goto('/');

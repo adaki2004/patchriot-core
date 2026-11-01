@@ -103,8 +103,81 @@ test('admin saves separately from publication and cannot publish unsaved changes
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
+test('replacing an incident draft asks before discarding unsaved edits', async ({ page }) => {
+  await setup(page, 'admin');
+  const drafts = ['first', 'second'].map(id => ({ id, revision: 1, content: { ...content, title: `${id} draft` }, published_revision: null, published_at: null, updated_at: '2025-01-04T00:00:00Z' }));
+  await page.route('**/api/admin/incidents', route => route.fulfill({ json: drafts }));
+  const writes: unknown[] = [];
+  await page.route('**/api/admin/incidents/*', route => { writes.push(route.request().postDataJSON()); return route.abort(); });
+  let discard = false;
+  const confirmations: string[] = [];
+  page.on('dialog', async dialog => {
+    expect(dialog.type()).toBe('confirm'); confirmations.push(dialog.message());
+    if (discard) await dialog.accept(); else await dialog.dismiss();
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+  const list = page.getByRole('complementary', { name: 'Saved incident drafts' });
+  await list.getByRole('button').filter({ hasText: 'first draft' }).click();
+  await page.getByLabel('Title', { exact: true }).fill('Keep my source review');
+  for (const button of [page.getByRole('button', { name: 'New entry +' }), list.getByRole('button').filter({ hasText: 'second draft' }), list.getByRole('button').filter({ hasText: 'first draft' })]) {
+    await button.click();
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Keep my source review');
+  }
+  expect(confirmations).toHaveLength(3);
+  discard = true;
+  await list.getByRole('button').filter({ hasText: 'second draft' }).click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('second draft');
+  expect(confirmations).toHaveLength(4);
+  // Saved entries and untouched blank forms can be replaced without a warning.
+  await page.getByRole('button', { name: 'New entry +' }).click();
+  await page.getByRole('button', { name: 'New entry +' }).click();
+  expect(confirmations).toHaveLength(4);
+  expect(writes).toEqual([]);
+});
+
+test('declining an imported replacement preserves both the current edits and research JSON', async ({ page }) => {
+  await setup(page, 'admin');
+  await page.route('**/api/admin/incidents', route => route.fulfill({ json: [] }));
+  const writes: unknown[] = [];
+  await page.route('**/api/admin/incidents/*', route => { writes.push(route.request().postDataJSON()); return route.abort(); });
+  let discard = false;
+  const confirmations: string[] = [];
+  page.on('dialog', async dialog => {
+    confirmations.push(dialog.message());
+    if (discard) await dialog.accept(); else await dialog.dismiss();
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+  await page.getByRole('button', { name: 'New entry +' }).click();
+  await page.getByLabel('Title', { exact: true }).fill('Current unsaved review');
+  await page.getByRole('button', { name: 'Load research JSON' }).click();
+  const raw = JSON.stringify(content);
+  await page.getByLabel('Or paste one JSON entry').fill(raw);
+  await page.getByRole('button', { name: 'Open as unsaved draft →' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByLabel('Or paste one JSON entry')).toHaveValue(raw);
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Current unsaved review');
+  expect(confirmations).toHaveLength(1);
+  discard = true;
+  await page.getByRole('button', { name: 'Open as unsaved draft →' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(content.title);
+  discard = false;
+  await page.getByRole('button', { name: 'New entry +' }).click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(content.title);
+  expect(confirmations).toHaveLength(3);
+  expect(writes).toEqual([]);
+});
+
 for (const reopened of ['first', 'second']) test(`a delayed incident save preserves unsaved work after opening the ${reopened} draft`, async ({ page }) => {
   await setup(page, 'admin');
+  let discard = true;
+  const confirmations: string[] = [];
+  page.on('dialog', async dialog => {
+    confirmations.push(dialog.message());
+    if (discard) await dialog.accept(); else await dialog.dismiss();
+  });
   const drafts = ['first', 'second'].map(id => ({ id, revision: 1, content: { ...content, title: `${id} draft` }, published_revision: null, published_at: null, updated_at: '2025-01-04T00:00:00Z' }));
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
@@ -134,6 +207,11 @@ for (const reopened of ['first', 'second']) test(`a delayed incident save preser
     await expect(page.getByRole('region', { name: 'Incident editor' })).toContainText('Unsaved changes');
     await expect(page.getByRole('button', { name: 'Publish saved draft' })).toBeDisabled();
     expect(writes).toEqual([{ action: 'save', revision: 1, content: { ...content, title: 'First draft saved slowly' } }]);
+    // The old save must not clear the new editor's discard protection either.
+    discard = false;
+    await page.getByRole('button', { name: 'New entry +' }).click();
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Keep this newer unsaved wording');
+    expect(confirmations).toHaveLength(2);
     if (reopened === 'first') {
       // Reopening the same saved version does not silently adopt a later revision.
       // The server must still detect the conflict and preserve the unsaved text.

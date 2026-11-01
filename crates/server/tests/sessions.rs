@@ -20,6 +20,9 @@ mod sites;
 #[path = "orders/mod.rs"]
 mod orders;
 
+#[path = "review_codes/mod.rs"]
+mod review_codes;
+
 struct TestApp {
     app: Router,
     pool: PgPool,
@@ -29,6 +32,17 @@ struct TestApp {
 
 impl TestApp {
     async fn new(dispatcher: &str) -> Self {
+        Self::with_access(
+            dispatcher,
+            patchriot_core::payments::access::ReviewAccess::FreePilot,
+        )
+        .await
+    }
+
+    async fn with_access(
+        dispatcher: &str,
+        access: patchriot_core::payments::access::ReviewAccess,
+    ) -> Self {
         let url = std::env::var("PATCHRIOT_TEST_DATABASE_URL")
             .expect("set PATCHRIOT_TEST_DATABASE_URL to a local test PostgreSQL database");
         let admin_pool = PgPoolOptions::new()
@@ -66,7 +80,11 @@ impl TestApp {
             None,
         )
         .unwrap();
-        let app = router(AppState::new(pool.clone(), config).unwrap());
+        let app = router(
+            AppState::new(pool.clone(), config)
+                .unwrap()
+                .with_review_access(access),
+        );
         Self {
             app,
             pool,

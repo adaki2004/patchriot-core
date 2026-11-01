@@ -5,9 +5,17 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Prototype:** pairing, approval, a browser dashboard, a public incident log, private website snapshots and isolated agent reviews of their saved text. An owned example lets operators test their setup first. Configurable crypto checkout funds selected reviews; active penetration tests follow.
+**Working prototype:** connect approved agents, collect an authorized website snapshot, review it privately and inspect the evidence. The public watch log tracks reported incidents. Agents currently review saved text; live penetration testing comes later.
 
 **CPU pilot:** Pairing and tool execution work. Tested model configurations still produced false positives on clean examples; findings require human review.
+
+## Use Patchriot
+
+**Hosted beta: coming soon.** The current deployment is a private pilot. We will publish the website address here when the hosted beta opens.
+
+- **Request a review:** sign in to the hosted website, submit a site you have permission to assess, and read your private report. You need only a browser.
+- **Contribute an agent:** install the [relay](https://github.com/adaki2004/patchriot-relay) on your machine, pair it through the website and wait for approval. Patchriot runs the shared services.
+- **Develop or self-host:** use the local setup below. These commands are for running your own copy.
 
 ## What we're building
 
@@ -48,12 +56,14 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| NEAR Intents | Browser checkout, private orders, settlement ledger and review activation; payouts follow |
+| Review access | Single-use review codes, NEAR Intents checkout, private orders and settlement ledger; payouts follow |
 | Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
 | Incident feed | Admin drafts, dated research briefs, JSON import, reviewed publication and keyboard/touch browsing; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
-## Run locally
+## Developer setup: run your own copy
+
+This starts a separate local website and dispatcher. Beta testers use the hosted website; operators run the relay on their own machine.
 
 Keep `patchriot-core`, `patchriot-relay` and `patchriot-dispatcher` as sibling directories. Use **Rust 1.94.1, Node 24.22.1 and a dedicated PostgreSQL 17 database**. CI pins this [Node security release](https://nodejs.org/en/blog/release/v24.22.1); the API runs in Rust. Start the [dispatcher](https://github.com/adaki2004/patchriot-dispatcher) first.
 
@@ -117,6 +127,10 @@ Store the variables above in `/etc/patchriot/core.env`, readable only by root; s
 
 The unit limits the service to 512 MiB, two CPUs, a read-only system and loopback networking. For a database on a private container address, add only that address through a local `IPAddressAllow` service override. Use an authenticated tunnel for the private site. External identity or payment services need an explicit network-policy change; credentials stay in runtime configuration. `systemctl stop` allows 45 seconds for active requests to drain.
 
+Before an upgrade, back up PostgreSQL and retain the installed binary and web files. Start and check the new API before serving its UI. Older binaries reject applied migrations they do not know, so swapping back a binary alone is not a database rollback. Keep the new binary with `PATCHRIOT_REVIEW_MODE=closed` while investigating; that pauses new website-review access but preserves reports and payment records. Restoring a backup requires a separate decision about any data written since it was taken.
+
+**Diagnose a slow request:** API responses include `X-Request-Id` and `Server-Timing: core;dur=<milliseconds>`. The timing covers response preparation, including database and dispatcher waits; it excludes time before the middleware runs and body delivery to the browser. Compare it with the browser's total request time. Responses taking at least a second, or returning 5xx, produce a JSON journal entry with the generated ID, route template, status, timing and fixed error code. Logging is capped at one entry per second, with skipped events counted. It is diagnostic sampling, not a complete audit trail; request bodies, credentials, query strings and private record IDs are excluded.
+
 </details>
 
 ## Website evidence
@@ -138,7 +152,7 @@ To request **agent review**, open the snapshot and choose **Choose review agents
 
 Agents receive the saved text in a network-isolated container. Later roles see earlier claims and can challenge them; static inspection cannot reproduce live exploits. Reports separate model claims from matching quotations and execution evidence. **Reports received means the workflow finished, not that the site is safe.** Missing tools, invalid output or invented quotations leave the report marked **Needs review**. Raw snapshots expire after seven days; reports can retain short quotations. Assigned operators can see plaintext, and revocation cannot recall data already seen.
 
-The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/evidence`; `GET /:id/compare/:baseline_id` reads a comparison. `/:id/review-plan` lists eligible devices and `/:id/review` records consent and starts the review. Sessions protect every route, writes require CSRF and scope decisions require an admin. Reviews use the existing three-active-review limit and a saved deadline (35 minutes by default). This pilot does not charge funds.
+The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/evidence`; `GET /:id/compare/:baseline_id` reads a comparison. `/:id/review-plan` lists eligible devices and `/:id/review` starts a free pilot review. Sessions protect every route, writes require CSRF and scope decisions require an admin. Reviews use the existing three-active-review limit and a saved deadline (35 minutes by default). Coupon and paid modes use the access routes below.
 
 </details>
 
@@ -153,15 +167,43 @@ Need fresh research? Open the dialog's **research brief**, copy its dated 72-hou
 
 Saving an edit keeps the previous public version unchanged. Publish the correction explicitly, or withdraw the entry; the private draft and edit history remain. Concurrent edits are rejected rather than overwritten. The feed never imports customer reports, fetches source links or starts paid research automatically. An evidence label describes the source's claim, not independent verification by Patchriot.
 
+Opening another entry or loading research asks before replacing unsaved edits. Declining an import keeps both the current editor and the imported JSON. A save already sent may still finish; changing entries does not cancel it.
+
 **Load research JSON** accepts one entry from a local file or pasted JSON, up to 12 KB. It fills an **unsaved, editable** draft. Saving and publishing remain separate actions; imported claims still need review. The dialog shows the format: `title`, `occurred_on` (UTC date), `evidence` (`reported`, `confirmed` or `advisory`), `summary`, `takeaway`, and 1–4 `sources` with `label` and public HTTPS `url`. Use the original sources, not a private customer report. No upload, link fetch or publication happens when opening the file.
 
 </details>
 
-## Payments: record funds before starting work
+## Price and payments
 
-Paid reviews use **NEAR Intents / 1Click**: reserve the agreed work, record a matching settlement, then release it to the selected agents. The default pilot is free.
+The intended beta offer is **$10 for one bounded website review**, or a **single-use review code**. This covers the agreed snapshot, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented; the current private pilot remains free.
+
+Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
+
+**Test status:** checkout and work activation passed simulated-provider tests. No live payment has been verified. The example below sets a 10 USDC service price; it does not fetch a USD exchange rate.
+
+**Operator payments:** the pilot does not calculate earnings or send payouts. A returned report is an activity count, not a payment entitlement. A reward schedule and payout records must be added before offering paid participation. Customer payments go to the configured service wallet, not directly to agents.
 
 **Orders** tracks a requester's payment and review separately; admins have a **Payment desk**. Cancellation closes checkout and asks the agents to stop; it does not reverse transfers or issue a refund. Refunds and payouts are not automated. Test the full payment flow and establish refund accounting before accepting live funds.
+
+<details>
+<summary><strong>Give an invited tester one review</strong></summary>
+
+Set `PATCHRIOT_REVIEW_MODE=coupons` to require a code without configuring payments. In `paid` mode, users can choose a code instead of payment. Both modes keep the same ownership, sharing-consent, approved-agent and capacity checks.
+
+With the normal private database configuration:
+
+```sh
+target/debug/patchriot-core review-code "Invited tester"
+target/debug/patchriot-core revoke-review-code <code-uuid>
+```
+
+Issuance prints the ID, secret code and expiry once. Share the code privately with an invited account. The database stores its hash; unused codes expire after seven days and can be revoked. The label appears in the recipient's review history, so avoid private administrative notes.
+
+The tester opens a saved snapshot, chooses three agents, accepts sharing and enters the code. Once reserved, it stays tied to that account, snapshot, selected agents and request. If the reply is lost, open **Reviews → Sponsored reviews** to recover it. This uses the saved request without entering the code again. Cancellation does not restore the code. If admission keeps failing, the operator must investigate before issuing a replacement.
+
+`POST /api/site-checks/:id/review-code` accepts `{code, consent}`. `GET /api/review-codes` returns the owner's latest reservations; `POST /api/review-codes/:id/resume` accepts `{}`. Writes require the session, same origin and CSRF token. Codes create no invoice, cash balance or earnings. `closed` mode pauses new and resumed starts while preserving history.
+
+</details>
 
 <details>
 <summary><strong>Settlement, retries and cancellation</strong></summary>
@@ -207,14 +249,14 @@ cargo run --locked -p patchriot-core -- payments-cancel-once
 
 ### Configure checkout
 
-`PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `closed` (no new website reviews or deposit instructions), or `paid`. Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Paid mode also blocks the free website-review route. Existing order reads and payment workers remain available when new checkout is closed.
+`PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `coupons` (review codes only), `paid` (payment or a code), or `closed` (no new website reviews or deposit instructions). Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Coupon and paid modes block the free website-review route. Existing order reads and payment workers remain available when new checkout is closed.
 
 The configuration fixes the service price, recipient and allowed input tokens. Copy exact asset IDs, decimals and chain names from the [supported-token catalog](https://docs.near-intents.org/api-reference/oneclick/get-supported-tokens), verify the treasury destination, and replace every placeholder below. This is a format example, not a usable payment configuration.
 
 ```json
 {
   "destination": { "asset_id": "nep141:<catalog-id>", "symbol": "USDC", "decimals": 6, "blockchain": "base" },
-  "amount": "1000000",
+  "amount": "10000000",
   "recipient": "<treasury-address>",
   "recipient_type": "DESTINATION_CHAIN",
   "inputs": [{ "asset_id": "nep141:<catalog-id>", "symbol": "USDC", "decimals": 6, "blockchain": "base" }]
@@ -254,6 +296,8 @@ The current ledger records receipts only. Add durable refund accounting and a te
 </details>
 
 ## Verify it
+
+GitHub checks run when a ready PR targets `main` and when that PR changes. Draft PRs and ordinary branch pushes do not run checks; newer PR commits cancel superseded runs. Run the commands below locally while developing.
 
 Set `PATCHRIOT_TEST_DATABASE_URL` to a dedicated local test database. Its test administrator needs permission to create schemas, temporary databases and roles; the startup test checks a separate, restricted service role and removes its generated database and role afterward. Do not use these test-administrator permissions for the running service.
 

@@ -13,6 +13,7 @@ pub const SLIPPAGE_BPS: u16 = 100;
 pub enum ReviewAccess {
     #[default]
     FreePilot,
+    Coupons,
     Closed,
     Paid(Arc<CheckoutService>),
 }
@@ -25,10 +26,10 @@ impl ReviewAccess {
         key: Option<&str>,
     ) -> Result<Self, PaymentError> {
         match mode {
-            "pilot" | "closed" if policy.is_none() => Ok(if mode == "pilot" {
-                Self::FreePilot
-            } else {
-                Self::Closed
+            "pilot" | "closed" | "coupons" if policy.is_none() => Ok(match mode {
+                "pilot" => Self::FreePilot,
+                "coupons" => Self::Coupons,
+                _ => Self::Closed,
             }),
             "paid" => {
                 let bytes = policy
@@ -224,6 +225,7 @@ pub(crate) async fn settings(
     auth::require_session(&headers, &state).await?;
     let (mode, offer) = match &state.review_access {
         ReviewAccess::FreePilot => ("pilot", None),
+        ReviewAccess::Coupons => ("coupons", None),
         ReviewAccess::Closed => ("closed", None),
         ReviewAccess::Paid(service) => (
             "paid",

@@ -243,6 +243,42 @@ async fn age(db: &TestDb) {
         .unwrap();
 }
 
+#[tokio::test]
+async fn a_sponsored_request_cannot_also_prepare_a_paid_order() {
+    let db = TestDb::new().await;
+    let network = Network::start().await;
+    let policy = policy();
+    let browser = Browser::new(&db, &network, network.access(&policy)).await;
+    let body = input(&policy);
+    let site = Uuid::new_v4();
+    let issued = crate::review_codes::issue(&db.pool, "Sponsored request fixture")
+        .await
+        .unwrap();
+    // Reserve through the real session route. This fixture lacks /review, so
+    // admission is unconfirmed; its saved key must still be excluded from payment.
+    let (status, _) = browser
+        .call(
+            "POST",
+            &format!("/api/site-checks/{site}/review-code"),
+            json!({"code":issued.code,"consent":body["consent"]}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, reply) = browser
+        .call("POST", &format!("/api/site-checks/{site}/checkout"), body)
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{reply}");
+    assert_eq!(reply["error"], "request_conflict");
+    assert_eq!(network.count("admission"), 0);
+    assert_eq!(network.count("quote"), 0);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM checkout_orders")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    db.finish().await;
+}
+
 #[test]
 fn paid_policy_is_explicit_and_rejects_ambiguous_metadata_or_addresses() {
     let valid = serde_json::to_value(policy()).unwrap();

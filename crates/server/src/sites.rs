@@ -179,6 +179,12 @@ pub async fn create_review(
     let session = auth::require_write(&headers, &state).await?;
     match state.review_access {
         crate::payments::access::ReviewAccess::FreePilot => {}
+        crate::payments::access::ReviewAccess::Coupons => {
+            return Err(ApiError::new(
+                StatusCode::PAYMENT_REQUIRED,
+                "review_code_required",
+            ));
+        }
         crate::payments::access::ReviewAccess::Paid(_) => {
             return Err(ApiError::new(
                 StatusCode::PAYMENT_REQUIRED,

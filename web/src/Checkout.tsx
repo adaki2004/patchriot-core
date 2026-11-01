@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 export type PaymentToken = { asset_id: string; symbol: string; decimals: number; blockchain: string };
 export type CheckoutOffer = { id: string; price: { asset: string; amount: string }; destination: PaymentToken; inputs: PaymentToken[]; payment_window_seconds: number };
-export type CheckoutSettings = { mode: 'pilot' | 'closed' | 'paid'; offer: CheckoutOffer | null };
+export type CheckoutSettings = { mode: 'pilot' | 'closed' | 'paid' | 'coupons'; offer: CheckoutOffer | null };
 export type Deposit = {
   order_id: string; request_id: string; review_id: string; invoice_id: string;
   input: { token: PaymentToken; amount: string }; output: { token: PaymentToken; amount: string };

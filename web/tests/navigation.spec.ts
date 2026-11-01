@@ -24,6 +24,7 @@ async function setup(page: Page, signedIn = true, permitted = true) {
     if (!signedIn) return route.fulfill({ status: 401, json: { error: 'sign_in_required' } });
     if (path === '/api/devices') return route.fulfill({ json: [] });
     if (path === '/api/checkout') return route.fulfill({ json: { mode: 'paid', offer: { id: 'b'.repeat(64), price: order.price, destination: token, inputs: [token], payment_window_seconds: 300 } } });
+    if (path === '/api/review-codes') return route.fulfill({ json: [] });
     if (path === '/api/reviews') return route.fulfill({ json: permitted ? [review] : [] });
     if (path === '/api/site-checks') return route.fulfill({ json: permitted ? [site] : [] });
     if (path === '/api/orders') return route.fulfill({ json: permitted ? [order] : [] });

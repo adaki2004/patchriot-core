@@ -183,6 +183,16 @@ async fn save(
     if enabled != Some(true) {
         return Err(ApiError::denied());
     }
+    let sponsored: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM review_codes WHERE account_id = $1 AND request_id = $2)",
+    )
+    .bind(account)
+    .bind(input.consent.request_id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if sponsored {
+        return Err(error(CheckoutError::ConflictingTerms));
+    }
     let saved: Option<Saved> = sqlx::query_as("SELECT terms, state, expires_at, updated_at FROM checkout_orders WHERE account_id = $1 AND request_id = $2")
         .bind(account).bind(input.consent.request_id).fetch_optional(&mut *tx).await?;
     let terms = if let Some(saved) = saved {
