@@ -3,6 +3,7 @@
 //! integration; an invitation must never be presented as a verified Google identity.
 
 mod auth;
+mod diagnostics;
 mod gateway;
 mod incidents;
 pub mod payments;
@@ -215,6 +216,7 @@ pub fn router(state: AppState) -> Router {
             "/api",
             axum::routing::any(|| async { ApiError::new(StatusCode::NOT_FOUND, "not_found") }),
         );
+    routes = routes.layer(axum::middleware::from_fn(diagnostics::response_time));
     if let Some(root) = &state.config.web_root {
         routes = routes.fallback_service(
             ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
@@ -249,12 +251,15 @@ impl ApiError {
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(ErrorBody { error: self.code })).into_response()
+        let mut response = (self.status, Json(ErrorBody { error: self.code })).into_response();
+        response
+            .extensions_mut()
+            .insert(diagnostics::ErrorCode(self.code));
+        response
     }
 }
 impl From<sqlx::Error> for ApiError {
     fn from(_: sqlx::Error) -> Self {
-        eprintln!("core database operation failed");
         Self::new(StatusCode::SERVICE_UNAVAILABLE, "database_unavailable")
     }
 }
