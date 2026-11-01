@@ -37,12 +37,12 @@ function Login({ onLogin, onClose }: { onLogin: () => Promise<void>; onClose: ()
       setCode(''); await onLogin(); onClose();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
-  return <dialog ref={dialog} onCancel={onClose} aria-labelledby="login-title">
-    <button className="close" onClick={onClose} aria-label="Close sign in">×</button>
+  return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="login-title">
+    <button className="close" onClick={onClose} disabled={busy} aria-label="Close sign in">×</button>
     <p className="eyebrow">PRIVATE ALPHA</p><h2 id="login-title">Welcome to the watch.</h2>
     <p>Use your one-use invitation to open your workspace. Invitations expire after 24 hours.</p>
     <form onSubmit={submit}>
-      <label>Invitation code<input autoFocus type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} required minLength={64} maxLength={64} spellCheck={false} /></label>
+      <label>Invitation code<input autoFocus type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} disabled={busy} required minLength={64} maxLength={64} spellCheck={false} /></label>
       {error && <Notice error>{error}</Notice>}
       <button className="primary full" disabled={busy}>{busy ? 'Signing in…' : 'Open workspace →'}</button>
     </form>
@@ -66,15 +66,15 @@ function Pair({ account, csrf, onPaired, onClose }: { account: Account; csrf: st
       onPaired(); onClose();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
-  return <dialog ref={dialog} onCancel={onClose} aria-labelledby="pair-title">
-    <button className="close" onClick={onClose} aria-label="Close pairing">×</button>
+  return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="pair-title">
+    <button className="close" onClick={onClose} disabled={busy} aria-label="Close pairing">×</button>
     <p className="eyebrow">CONNECT YOUR MACHINE</p><h2 id="pair-title">Bring a relay online.</h2>
     <p>Run the relay’s <code>pair</code> command, then enter its five-minute code here. Approval is a separate step.</p>
     <form onSubmit={submit}>
-      <label>Pairing code<input name="code" placeholder="ABCD-EF01-2345" autoComplete="off" maxLength={14} minLength={14} required autoFocus spellCheck={false} /></label>
-      <label>Operator name<input name="name" defaultValue={account.display_name} maxLength={80} required /></label>
-      <label>Where does it run?<select name="hosting"><option value="own_machine">My own computer</option><option value="vps">A VPS I control</option></select></label>
-      <label className="check"><input type="checkbox" name="rules" required /><span>I will use assigned data only for its review, keep it private and follow the agreed scope.</span></label>
+      <label>Pairing code<input name="code" placeholder="ABCD-EF01-2345" autoComplete="off" maxLength={14} minLength={14} disabled={busy} required autoFocus spellCheck={false} /></label>
+      <label>Operator name<input name="name" defaultValue={account.display_name} maxLength={80} disabled={busy} required /></label>
+      <label>Where does it run?<select name="hosting" disabled={busy}><option value="own_machine">My own computer</option><option value="vps">A VPS I control</option></select></label>
+      <label className="check"><input type="checkbox" name="rules" disabled={busy} required /><span>I will use assigned data only for its review, keep it private and follow the agreed scope.</span></label>
       {error && <Notice error>{error}</Notice>}
       <button className="primary full" disabled={busy}>{busy ? 'Pairing…' : 'Pair relay →'}</button>
     </form>
@@ -97,13 +97,13 @@ function Decision({ device, action, csrf, onDone, onClose }: { device: Device; a
       onDone(); onClose();
     } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
   }
-  return <dialog ref={dialog} onCancel={onClose} aria-labelledby="decision-title">
-    <button className="close" onClick={onClose} aria-label="Close decision">×</button>
+  return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="decision-title">
+    <button className="close" onClick={onClose} disabled={busy} aria-label="Close decision">×</button>
     <p className="eyebrow">DEVICE ACCESS</p><h2 id="decision-title">{decisionLabels[action]}: {device.label}?</h2>
     <p>{action === 'approve_private' ? 'Permit this device to handle private website snapshots. Check the operator and isolation setup first. A requester must still choose this device and agree to share their data.' : action === 'revoke_private' ? 'Stop private reviews involving this device and remove its evidence access. It can still run owned examples. Data already seen by its operator cannot be recalled.' : action === 'approve' ? 'Allow this device to join the prototype fleet. This does not verify its model, sandbox or operator identity.' : 'Its key will stop being accepted. Reconnecting will require a new device key and approval.'}</p>
     <form onSubmit={submit}>
-      <label>{action === 'approve_private' ? 'What did you check?' : 'Reason (optional)'}<textarea value={reason} onChange={e => setReason(e.target.value)} required={action === 'approve_private'} minLength={action === 'approve_private' ? 12 : undefined} maxLength={300} rows={3} /></label>
-      {action === 'approve_private' && <label className="check"><input type="checkbox" required /><span>I reviewed this operator and the isolated runtime for this private pilot.</span></label>}
+      <label>{action === 'approve_private' ? 'What did you check?' : 'Reason (optional)'}<textarea value={reason} onChange={e => setReason(e.target.value)} disabled={busy} required={action === 'approve_private'} minLength={action === 'approve_private' ? 12 : undefined} maxLength={300} rows={3} /></label>
+      {action === 'approve_private' && <label className="check"><input type="checkbox" disabled={busy} required /><span>I reviewed this operator and the isolated runtime for this private pilot.</span></label>}
       {error && <Notice error>{error}</Notice>}
       <button className={action.startsWith('revoke') ? 'danger full' : 'primary full'} disabled={busy}>{busy ? 'Saving…' : decisionLabels[action]}</button>
     </form>

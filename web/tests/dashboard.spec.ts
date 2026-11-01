@@ -104,10 +104,19 @@ test('an expired session can leave the workspace through sign out', async ({ pag
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
-for (const status of [200, 401]) test(`a late ${status} from the previous login does not change the new workspace`, async ({ page }) => {
+for (const status of [200, 401]) test(`a late ${status} from an expired login does not change the new workspace`, async ({ page }) => {
   await setup(page, true);
   let releaseClaim!: () => void;
   const pending = new Promise<void>(resolve => { releaseClaim = resolve; });
+  let releaseExpiry!: () => void;
+  const expiry = new Promise<void>(resolve => { releaseExpiry = resolve; });
+  let firstDeviceRead = true;
+  await page.route('**/api/devices', async route => {
+    if (!firstDeviceRead) return route.fulfill({ json: [] });
+    firstDeviceRead = false;
+    await expiry;
+    return route.fulfill({ status: 401, json: { error: 'sign_in_required' } });
+  });
   let claimStarted = false;
   await page.route('**/api/pairings/claim', async route => {
     claimStarted = true;
@@ -116,7 +125,6 @@ for (const status of [200, 401]) test(`a late ${status} from the previous login 
       ? { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' }
       : { error: 'sign_in_required' } });
   });
-  await page.route('**/api/auth/logout', route => route.fulfill({ json: { ok: true } }));
   await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
   try {
     await page.goto('/');
@@ -126,8 +134,11 @@ for (const status of [200, 401]) test(`a late ${status} from the previous login 
     await page.getByLabel('I will use assigned data', { exact: false }).check();
     await page.getByRole('button', { name: 'Pair relay →', exact: true }).click();
     await expect.poll(() => claimStarted).toBe(true);
-    await page.getByRole('button', { name: 'Close pairing', exact: true }).click();
-    await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    // A background read can expire the session while the claim is still pending.
+    // The form must close even though its ordinary close button is disabled.
+    releaseExpiry();
+    await expect(page.getByRole('status')).toContainText('Your session has ended');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: 'new-account', display_name: 'Another member' }, csrf_token: 'new-csrf' } }));
     await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
@@ -142,7 +153,7 @@ for (const status of [200, 401]) test(`a late ${status} from the previous login 
     await expect(page.getByRole('status').filter({ hasText: 'Your session has ended' })).toHaveCount(0);
     await expect(page.getByRole('status').filter({ hasText: 'Relay paired' })).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);
-  } finally { releaseClaim(); }
+  } finally { releaseClaim(); releaseExpiry(); }
 });
 
 for (const startupFirst of [true, false]) test(`sign-in survives a delayed startup session reply (${startupFirst ? 'startup first' : 'login first'})`, async ({ page }) => {
@@ -168,6 +179,10 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect.poll(() => loginStarted).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Close sign in', exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Invitation code', { exact: true })).toBeDisabled();
     const startupReply = page.waitForResponse(response => response.url().endsWith('/api/session') && response.headers()['x-fixture-startup'] === 'true');
     if (startupFirst) {
       releaseStartup(); await (await startupReply).finished();
@@ -191,6 +206,8 @@ for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay li
   await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, role }, csrf_token: 'test-csrf' } }));
   let submission: Record<string, unknown> | undefined;
   let decisions = 0;
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/api/devices', route => route.fulfill({ json: submission ? [{
     id: '00000000-0000-4000-8000-000000000002', operator_id: account.id,
     operator_name: account.display_name, label: 'Newly paired relay', runtime: 'owned_fixture',
@@ -202,22 +219,73 @@ for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay li
     expect(route.request().headers()['x-patchriot-role']).toBeUndefined();
     expect(route.request().headers()['authorization']).toBeUndefined();
     submission = route.request().postDataJSON();
+    await pending;
     await route.fulfill({ json: { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' } });
   });
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Pair a relay ↗', exact: true }).click();
-  await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
-  await page.getByLabel('I will use assigned data', { exact: false }).check();
-  await page.getByRole('button', { name: 'Pair relay →', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Check its approval and connection status below');
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: role === 'admin' ? 'Fleet & approvals' : 'Your relays', exact: true })).toBeVisible();
-  const row = page.getByRole('row').filter({ hasText: 'Newly paired relay' });
-  await expect(row).toContainText('Awaiting approval');
-  await expect(row).toContainText('No heartbeat yet');
-  expect(submission).toEqual({ user_code: 'ABCD-EF01-2345', display_name: 'Test operator', hosting: 'own_machine', accepts_private_work_rules: true });
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(role === 'admin' ? 1 : 0);
-  expect(decisions).toBe(0);
+  try {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Pair a relay ↗', exact: true }).click();
+    await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
+    await page.getByLabel('I will use assigned data', { exact: false }).check();
+    await page.getByRole('button', { name: 'Pair relay →', exact: true }).click();
+    await expect.poll(() => submission).toBeDefined();
+    await page.keyboard.press('Escape');
+    const pairing = page.getByRole('dialog');
+    await expect(pairing).toBeVisible();
+    await expect(pairing.getByRole('button', { name: 'Close pairing', exact: true })).toBeDisabled();
+    for (const input of await pairing.locator('input, select').all()) await expect(input).toBeDisabled();
+    release();
+    await expect(page.getByRole('status')).toContainText('Check its approval and connection status below');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: role === 'admin' ? 'Fleet & approvals' : 'Your relays', exact: true })).toBeVisible();
+    const row = page.getByRole('row').filter({ hasText: 'Newly paired relay' });
+    await expect(row).toContainText('Awaiting approval');
+    await expect(row).toContainText('No heartbeat yet');
+    expect(submission).toEqual({ user_code: 'ABCD-EF01-2345', display_name: 'Test operator', hosting: 'own_machine', accepts_private_work_rules: true });
+    await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(role === 'admin' ? 1 : 0);
+    expect(decisions).toBe(0);
+  } finally { release(); }
+});
+
+test('a pending device decision stays visible and an error leaves its reason editable', async ({ page }) => {
+  await setup(page, true);
+  await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, role: 'admin' }, csrf_token: 'test-csrf' } }));
+  await page.route('**/api/devices', route => route.fulfill({ json: [{
+    id: '00000000-0000-4000-8000-000000000002', operator_id: account.id,
+    operator_name: account.display_name, label: 'Review agent', runtime: 'hermes',
+    runtime_version: 'test', declared_model: 'test-model', compute_group: 'test-machine',
+    approval: 'approved', private_work_approved: false, state: 'online', last_seen_at: null,
+  }] }));
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  const submissions: unknown[] = [];
+  await page.route('**/api/devices/*/decision', async route => {
+    submissions.push(route.request().postDataJSON());
+    await pending;
+    await route.fulfill({ status: 503, json: { error: 'dispatcher_unavailable' } });
+  });
+  try {
+    await page.goto('/#/devices');
+    await page.getByRole('button', { name: 'Allow private reviews', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('What did you check?', { exact: true }).fill('Reviewed this operator and isolated example execution.');
+    await dialog.getByRole('checkbox').check();
+    await dialog.getByRole('button', { name: 'Allow private reviews', exact: true }).click();
+    await expect.poll(() => submissions.length).toBe(1);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Close decision', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('textbox')).toBeDisabled();
+    await expect(dialog.getByRole('checkbox')).toBeDisabled();
+    release();
+    await expect(dialog.getByRole('alert')).toContainText('dispatcher is unavailable');
+    await expect(dialog.getByRole('textbox')).toBeEditable();
+    await expect(dialog.getByRole('checkbox')).toBeEnabled();
+    await expect(dialog.getByRole('button', { name: 'Close decision', exact: true })).toBeEnabled();
+    expect(submissions).toEqual([{ action: 'approve_private', reason: 'Reviewed this operator and isolated example execution.' }]);
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+  } finally { release(); }
 });
 
 test('renders operator-controlled names as text and exposes no admin actions to members', async ({ page }) => {
