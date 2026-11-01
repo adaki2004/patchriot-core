@@ -12,6 +12,10 @@ pub struct CreateSiteCheck {
     pub scope: WebsiteScope,
     pub authorized: bool,
     pub authority_note: String,
+    /// Explicit permission to send this scope and note to JEV through OpenRouter.
+    /// Older clients retain manual review without external screening.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub accepts_screening: bool,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -51,6 +55,36 @@ pub struct SiteCheckView {
     pub summary: Option<WebsiteSummary>,
     pub evidence_available: bool,
     pub evidence_expires_at: Option<i64>,
+    #[serde(default = "screening_not_requested")]
+    pub screening_state: String,
+    #[serde(default)]
+    pub screening: Option<RequestScreening>,
+}
+
+fn screening_not_requested() -> String {
+    "not_requested".into()
+}
+
+/// Advisory request classification. None of these fields grants permission,
+/// expands scope, confirms ownership or establishes that a target is safe.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct RequestScreening {
+    pub policy_version: String,
+    pub input_sha256: String,
+    pub rubric_sha256: String,
+    pub model: String,
+    pub evaluated_at: i64,
+    pub assessment: ScreeningAssessment,
+    pub within_scope: f64,
+    pub bypass_attempt: f64,
+    pub harmful_intent: f64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreeningAssessment {
+    Routine,
+    Review,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -39,9 +39,41 @@ test('submission fixes scope and permission without pretending to start a scan',
   await page.getByRole('button', { name: 'Request approval →' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Website evidence' })).toContainText('No website requests have been made.');
-  expect(submitted).toMatchObject({ scope: { homepage: 'https://example.com', script_origins: ['https://cdn.example.com'] }, authorized: true, authority_note: 'I operate this owned website.' });
+  expect(submitted).toMatchObject({ scope: { homepage: 'https://example.com', script_origins: ['https://cdn.example.com'] }, authorized: true, authority_note: 'I operate this owned website.', accepts_screening: false });
   await expect(page.getByRole('button', { name: 'Record decision' })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('external screening needs consent and pending advice cannot be mistaken for approval', async ({ page }) => {
+  await setup(page, true);
+  let state = 'queued';
+  let accepted = false;
+  await page.route('**/api/site-checks', async route => {
+    if (route.request().method() === 'POST') {
+      accepted = route.request().postDataJSON().accepts_screening;
+      return route.fulfill({ json: { ...pending, screening_state: state } });
+    }
+    return route.fulfill({ json: [pending] });
+  });
+  await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: { ...pending, screening_state: state, screening: state === 'complete' ? { assessment: 'routine', model: 'typesafe/jev-1.13', policy_version: 'test', within_scope: 0.99, bypass_attempt: 0.01, harmful_intent: 0.01, evaluated_at: 1793448000 } : null } }));
+  await page.getByRole('button', { name: 'New website snapshot +' }).click();
+  await page.getByLabel('Website origin', { exact: true }).fill('https://example.com');
+  await page.getByLabel('Your permission to review this site').fill('I operate this owned website.');
+  await page.getByLabel('I own this site or have permission').check();
+  const consent = page.getByLabel('Allow JEV, through OpenRouter');
+  await expect(consent).not.toBeChecked();
+  await consent.check();
+  await page.getByRole('button', { name: 'Request approval →' }).click();
+  await expect(page.getByText('Approval waits for this check.', { exact: false })).toBeVisible();
+  expect(accepted).toBe(true);
+  await expect(page.getByRole('option', { name: 'Approve this exact scope' })).toHaveJSProperty('disabled', true);
+  await expect(page.getByRole('button', { name: 'Record decision' })).toBeDisabled();
+  state = 'complete';
+  await page.getByRole('button', { name: 'Refresh snapshot ↻' }).click();
+  await expect(page.getByText('No concern flagged in the request.', { exact: true })).toBeVisible();
+  await expect(page.getByText('cannot verify ownership or approve work', { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Awaiting approval', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Approve this exact scope' })).toHaveJSProperty('disabled', false);
 });
 
 test('invalid origins stay in the form and retries keep the same request identity', async ({ page }) => {
@@ -84,6 +116,7 @@ test('admin decision binds the displayed scope and hostile notes stay text', asy
   const detail = page.getByRole('region', { name: 'Website evidence' });
   await expect(detail).toContainText('<img src=x onerror=alert(1)>');
   await expect(detail.locator('img, script')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Decision', exact: true }).selectOption('approve');
   await page.getByLabel('Decision note').fill('Verified ownership of this exact fixture.');
   await page.getByLabel('I reviewed the listed origins').check();
   await page.getByRole('button', { name: 'Record decision' }).click();

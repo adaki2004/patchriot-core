@@ -9,7 +9,8 @@ import { SiteComparison } from './SiteComparison';
 
 type Scope = { homepage: string; script_origins: string[] };
 type Summary = { homepage_sha256: string; external_scripts: number; inline_scripts: number; skipped_scripts: number; script_limit_reached: boolean; captured_response_bytes: number; requests_made: number; finished_at: number };
-type Site = { id: string; request_id: string; requester_id: string; scope: Scope; scope_sha256: string; authority_note: string; state: string; created_at: number; deadline_at: number; decision_note: string | null; attempts: number; error: string | null; summary: Summary | null; evidence_available: boolean; evidence_expires_at: number | null };
+type Screening = { assessment: 'routine' | 'review'; model: string; policy_version: string; within_scope: number; bypass_attempt: number; harmful_intent: number; evaluated_at: number };
+type Site = { id: string; request_id: string; requester_id: string; scope: Scope; scope_sha256: string; authority_note: string; state: string; created_at: number; deadline_at: number; decision_note: string | null; attempts: number; error: string | null; summary: Summary | null; evidence_available: boolean; evidence_expires_at: number | null; screening_state?: string; screening?: Screening | null };
 const states: Record<string, string> = { pending_approval: 'Awaiting approval', queued: 'Approved · waiting', collecting: 'Collecting evidence', collected: 'Snapshot ready', failed: 'Collection incomplete', cancelled: 'Cancelled', rejected: 'Not approved' };
 const active = (state: string) => ['pending_approval', 'queued', 'collecting'].includes(state);
 const label = (state: string) => states[state] ?? state.replaceAll('_', ' ');
@@ -36,7 +37,7 @@ function NewSite({ csrf, onCreated, onClose }: { csrf: string; onCreated: (site:
       const script_origins = String(form.get('origins') ?? '').split('\n').map(value => value.trim()).filter(Boolean).map(origin);
       if (script_origins.length > 3) throw new Error('List at most three additional script origins.');
       setBusy(true);
-      const site = await write<Site>('/site-checks', csrf, { request_id: requestId.current, scope: { homepage, script_origins }, authorized: form.get('authorized') === 'on', authority_note: String(form.get('authority') ?? '').trim() });
+      const site = await write<Site>('/site-checks', csrf, { request_id: requestId.current, scope: { homepage, script_origins }, authorized: form.get('authorized') === 'on', authority_note: String(form.get('authority') ?? '').trim(), accepts_screening: form.get('screening') === 'on' });
       onCreated(site); onClose();
     } catch (error) { setError(error instanceof TypeError ? 'Enter a complete HTTPS address for each origin.' : (error as Error).message); }
     finally { setBusy(false); }
@@ -51,6 +52,7 @@ function NewSite({ csrf, onCreated, onClose }: { csrf: string; onCreated: (site:
         <label>Additional script origins <span className="subtle">(optional)</span><textarea name="origins" rows={3} maxLength={6150} placeholder="https://cdn.your-site.com" /><small>One per line, up to three. Only scripts referenced by the homepage can be fetched.</small></label>
         <label>Your permission to review this site<textarea name="authority" minLength={12} maxLength={1200} rows={2} placeholder="I operate this website, or…" required /></label>
         <label className="check"><input type="checkbox" name="authorized" required /><span>I own this site or have permission to review the listed scope.</span></label>
+        <label className="check"><input type="checkbox" name="screening" /><span>Allow JEV, through OpenRouter, to check this scope and permission note for suspicious requests. No website content is sent in this step. Optional; an admin reviews every request.</span></label>
         <details className="execution-details"><summary>What gets collected?</summary><p>The public homepage and up to four external scripts. No JavaScript execution, login, redirects or active attacks. Evidence is private to you and admins and downloadable for seven days. This pilot is free.</p></details>
         {error && <div className="notice error" role="alert">{error}</div>}
         <button className="primary full" disabled={busy}>{busy ? 'Submitting…' : 'Request approval →'}</button>
@@ -65,8 +67,9 @@ function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onCheckout, o
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reviewing, setReviewing] = useState(false);
+  const [decision, setDecision] = useState('');
   const site = detail.data;
-  useEffect(() => { panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView({ block: 'start' }); }, [id]);
+  useEffect(() => { setDecision(''); panel.current?.focus({ preventScroll: true }); panel.current?.scrollIntoView({ block: 'start' }); }, [id]);
   useEffect(() => { if (site) onChange(); }, [site?.state, site?.evidence_available, onChange]);
   async function decide(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); if (!site) return;
@@ -90,6 +93,7 @@ function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onCheckout, o
       <dl className="site-scope"><dt>Homepage</dt><dd><code>{site.scope.homepage}</code></dd><dt>Additional script origins</dt><dd>{site.scope.script_origins.length ? site.scope.script_origins.map(origin => <code key={origin}>{origin}<br /></code>) : 'None — homepage origin only'}</dd><dt>Permission supplied by requester</dt><dd>{site.authority_note}</dd>{admin && <><dt>Requester</dt><dd><code>{site.requester_id}</code></dd></>}{site.decision_note && <><dt>Admin decision</dt><dd>{site.decision_note}</dd></>}</dl>
       <div className="review-actions"><button className="quiet" onClick={detail.refresh}>Refresh snapshot ↻</button>{site.evidence_available && <a className="text-button" href={`/api/site-checks/${id}/evidence`} download>Download snapshot JSON ↓</a>}{active(site.state) && <button className="quiet" disabled={busy} onClick={() => void cancel()}>Cancel collection</button>}</div>
       {site.state === 'pending_approval' && <p className="notice">No website requests have been made. Approval is needed by {date(site.deadline_at)}.</p>}
+      <ScreeningNotice state={site.screening_state} result={site.screening} />
       {['queued', 'collecting'].includes(site.state) && <p className="notice">Approved scope expires at {date(site.deadline_at)}. Only one collection runs at a time; each collection has a 30-second limit.</p>}
       {site.error && <p className="notice error">Collection stopped: {site.error.replaceAll('_', ' ')}. No security verdict was produced.</p>}
       {site.summary && <>
@@ -98,12 +102,20 @@ function SiteDetail({ id, csrf, admin, accountId, sites, onReview, onCheckout, o
         <p className="fine">Captured {date(site.summary.finished_at)} · {site.summary.requests_made} HTTP requests{site.evidence_available && site.evidence_expires_at ? ` · Download until ${date(site.evidence_expires_at)}` : ' · Saved bodies have expired'}</p>
         <details className="execution-details"><summary>Evidence fingerprint</summary><p className="fine">Homepage SHA-256: <code>{site.summary.homepage_sha256}</code></p><p className="fine">Approved scope SHA-256: <code>{site.scope_sha256}</code></p></details>
         {site.evidence_available && <SiteComparison siteId={site.id} candidates={sites.filter(other => other.id !== site.id && other.requester_id === site.requester_id && other.scope_sha256 === site.scope_sha256 && other.state === 'collected' && other.evidence_available && other.summary && other.summary.finished_at <= site.summary!.finished_at).map(other => ({ id: other.id, finished_at: other.summary!.finished_at }))} />}
-        {site.evidence_available && site.requester_id === accountId && <div className="site-review-cta"><h3>Have agents review the snapshot.</h3><p>Choose three approved devices and consent to sharing this evidence. Reports appear under Reviews.</p><button className="primary" onClick={() => setReviewing(true)}>Prepare agent review →</button></div>}
+        {site.evidence_available && site.requester_id === accountId && <div className="site-review-cta"><h3>Have agents review the snapshot.</h3><p>Check the proposed team and confirm sharing this evidence. Reports appear under Reviews.</p><button className="primary" onClick={() => setReviewing(true)}>Prepare agent review →</button></div>}
       </>}
-      {admin && site.state === 'pending_approval' && <form className="site-form site-decision" onSubmit={decide}><fieldset disabled={busy}><h3>Check authority before allowing requests.</h3><label>Decision<select name="decision" defaultValue="approve"><option value="approve">Approve this exact scope</option><option value="reject">Reject this request</option></select></label><label>Decision note<textarea name="reason" minLength={12} maxLength={1200} rows={2} required placeholder="How was permission checked, or why is it refused?" /></label><label className="check"><input type="checkbox" required /><span>I reviewed the listed origins and the requester’s authority.</span></label><button className="primary" disabled={busy}>{busy ? 'Recording…' : 'Record decision'}</button></fieldset></form>}
+      {admin && site.state === 'pending_approval' && <form className="site-form site-decision" onSubmit={decide}><fieldset disabled={busy}><h3>Check authority before allowing requests.</h3><label>Decision<select name="decision" value={decision} required onChange={event => setDecision(event.target.value)}><option value="" disabled>Choose a decision</option><option value="approve" disabled={['queued', 'running'].includes(site.screening_state ?? '')}>Approve this exact scope</option><option value="reject">Reject this request</option></select></label><label>Decision note<textarea name="reason" minLength={12} maxLength={1200} rows={2} required placeholder="How was permission checked, or why is it refused?" /></label><label className="check"><input type="checkbox" required /><span>I reviewed the listed origins, the requester’s authority and any screening result.</span></label><button className="primary" disabled={busy || !decision || (decision === 'approve' && ['queued', 'running'].includes(site.screening_state ?? ''))}>{busy ? 'Recording…' : 'Record decision'}</button></fieldset></form>}
     </>}
     {reviewing && <WebsiteReviewSetup siteId={id} csrf={csrf} onCreated={onReview} onCheckout={onCheckout} onClose={() => setReviewing(false)} />}
   </section>;
+}
+
+function ScreeningNotice({ state, result }: { state?: string; result?: Screening | null }) {
+  if (!state || state === 'not_requested') return <p className="fine">Manual review only. This request was not shared with JEV.</p>;
+  if (state === 'queued' || state === 'running') return <p className="notice">JEV is checking the submitted scope and permission note. Approval waits for this check.</p>;
+  if (state === 'cancelled') return <p className="fine">Request screening stopped. No result is being used.</p>;
+  if (state !== 'complete' || !result) return <p className="notice">JEV screening was unavailable. An admin must review the request without that assessment.</p>;
+  return <div className="notice"><strong>{result.assessment === 'routine' ? 'No concern flagged in the request.' : 'This request needs a closer look.'}</strong><p>JEV checks wording and scope. It cannot verify ownership or approve work, and this is not a verdict on the website.</p><details><summary>Screening details</summary><p className="fine">{result.model} · {result.policy_version} · {date(result.evaluated_at)}</p><dl className="site-scope"><dt>Fits current scope</dt><dd>{Math.round(result.within_scope * 100)}%</dd><dt>Possible rule bypass</dt><dd>{Math.round(result.bypass_attempt * 100)}%</dd><dt>Possible harmful intent</dt><dd>{Math.round(result.harmful_intent * 100)}%</dd></dl><p className="fine">Model estimates, not measured odds of an attack.</p></details></div>;
 }
 
 export function Sites({ csrf, admin, accountId, selected, onSelect, onReview, onCheckout }: { csrf: string; admin: boolean; accountId: string; selected: string | null; onSelect: (id: string | null) => void; onReview: (id: string) => void; onCheckout: (quote: Deposit) => void }) {
