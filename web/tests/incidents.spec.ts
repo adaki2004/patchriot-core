@@ -134,6 +134,44 @@ test('research import stays local and unsaved until the admin saves the editable
   await expect(page.getByRole('button', { name: 'Publish saved draft' })).toBeDisabled();
 });
 
+test('research brief copies a dated public-only request without starting work or publishing', async ({ page }) => {
+  await setup(page, 'admin');
+  await page.route('**/api/admin/incidents', route => route.fulfill({ json: [{ id: 'private-draft', revision: 1, published_revision: null, updated_at: '2025-01-04T00:00:00Z', content: { ...content, title: 'Private draft canary' } }] }));
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+  await expect(page.getByText('Private draft canary', { exact: true })).toBeVisible();
+  const before = Date.now();
+  await page.getByRole('button', { name: 'Load research JSON' }).click();
+  await page.getByText('Need a brief for your research agent?', { exact: true }).click();
+  const brief = page.getByLabel('Research brief', { exact: true });
+  await expect(brief).toHaveAttribute('readonly', '');
+  const text = await brief.inputValue();
+  const window = text.match(/Research window: (\S+) to (\S+) \(UTC\)/)!;
+  expect(window).not.toBeNull();
+  const start = Date.parse(window[1]), end = Date.parse(window[2]);
+  expect(end - start).toBe(72 * 60 * 60 * 1000);
+  expect(end).toBeGreaterThanOrEqual(before);
+  expect(end).toBeLessThanOrEqual(Date.now());
+  for (const privateValue of ['Private draft canary', 'admin-test', 'Test editor', 'test-csrf']) expect(text).not.toContain(privateValue);
+  expect(text).toContain('one JSON object');
+  expect(text).toContain('human source review');
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { document.documentElement.dataset.copiedBrief = value; } } }));
+  await page.getByRole('button', { name: 'Copy research brief', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Research brief copied.');
+  expect(await page.evaluate(() => document.documentElement.dataset.copiedBrief)).toBe(text);
+  await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new Error('Clipboard denied'); } } }));
+  await page.getByRole('button', { name: 'Copy research brief', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('copy it manually');
+  await expect(brief).toHaveValue(text);
+  expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Open as unsaved draft →' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Close research import' }).click();
+  expect(writes).toEqual([]);
+  await expect(page.getByRole('region', { name: 'Incident editor' })).toHaveCount(0);
+});
+
 test('research import rejects oversized files, extra fields and incomplete reports without saving', async ({ page }) => {
   await setup(page, 'admin');
   await page.route('**/api/admin/incidents', route => route.fulfill({ json: [] }));
