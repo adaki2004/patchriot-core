@@ -64,9 +64,10 @@ export class SessionChangedError extends Error {
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const revision = sessionRevision;
+  const method = (options.method ?? 'GET').toUpperCase();
   // Only these GET responses contain no account-specific data. An old write
   // may already have completed on the server; discard its reply, not the work.
-  const publicRead = (options.method ?? 'GET').toUpperCase() === 'GET' && ['/fleet', '/incidents'].includes(path);
+  const publicRead = method === 'GET' && ['/fleet', '/incidents'].includes(path);
   const checkSession = () => { if (!publicRead && revision !== sessionRevision) throw new SessionChangedError(); };
   let response: Response;
   try {
@@ -78,6 +79,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     });
   } catch (error) {
     checkSession();
+    if (method === 'GET' && error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('Patchriot took too long to respond. Try refreshing.');
+    }
     if (options.signal?.aborted) throw error;
     throw new Error('Cannot reach Patchriot. Check your connection and try again.');
   }
