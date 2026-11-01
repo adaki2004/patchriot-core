@@ -124,6 +124,9 @@ export function IncidentLog() {
   const tabs = useRef<Array<HTMLButtonElement | null>>([]);
   const entries = feed.data ?? [];
   const selected = entries.find(entry => entry.id === selectedId) ?? entries[0];
+  const visibleId = selected?.id ?? '';
+  // Remember the initial/fallback article too, so new entries do not replace it.
+  useEffect(() => { select(visibleId); }, [visibleId]);
   function navigate(event: KeyboardEvent, index: number) {
     let next: number;
     switch (event.key) {
