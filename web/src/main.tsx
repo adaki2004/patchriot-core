@@ -227,7 +227,7 @@ function App() {
     </main>
     <footer><span>patchriot. <span className="subtle">A swarm of rebels. A safer internet.</span></span><span>Inspect the code. Question the evidence.</span></footer>
     {login && <Login onLogin={loadSession} onClose={() => setLogin(false)} />}
-    {pairing && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => changed('Relay paired. Check its approval and live status in My relays.')} onClose={() => setPairing(false)} />}
+    {pairing && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => { setView('devices'); changed('Relay paired. Check its approval and connection status below.'); }} onClose={() => setPairing(false)} />}
     {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(`${decisionLabels[decision.action]}: saved.`)} onClose={() => setDecision(null)} />}
   </>;
 }

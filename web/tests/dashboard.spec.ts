@@ -186,9 +186,17 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
   } finally { releaseStartup(); releaseLogin(); }
 });
 
-test('pairing collects consent, sends the session CSRF and does not self-approve', async ({ page }) => {
+for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay list without self-approving`, async ({ page }) => {
   await setup(page, true);
+  await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, role }, csrf_token: 'test-csrf' } }));
   let submission: Record<string, unknown> | undefined;
+  let decisions = 0;
+  await page.route('**/api/devices', route => route.fulfill({ json: submission ? [{
+    id: '00000000-0000-4000-8000-000000000002', operator_id: account.id,
+    operator_name: account.display_name, label: 'Newly paired relay', runtime: 'owned_fixture',
+    runtime_version: '0.0.1', compute_group: 'my-machine', approval: 'pending', state: 'pending', last_seen_at: null,
+  }] : [] }));
+  await page.route('**/api/devices/*/decision', route => { decisions++; return route.fulfill({ json: { ok: true } }); });
   await page.route('**/api/pairings/claim', async route => {
     expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
     expect(route.request().headers()['x-patchriot-role']).toBeUndefined();
@@ -197,14 +205,19 @@ test('pairing collects consent, sends the session CSRF and does not self-approve
     await route.fulfill({ json: { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'My relays', exact: true }).click();
-  await page.getByRole('button', { name: 'Pair a relay +' }).click();
+  await page.getByRole('button', { name: 'Pair a relay ↗', exact: true }).click();
   await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
   await page.getByLabel('I will use assigned data', { exact: false }).check();
   await page.getByRole('button', { name: 'Pair relay →', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Check its approval and live status');
+  await expect(page.getByRole('status')).toContainText('Check its approval and connection status below');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: role === 'admin' ? 'Fleet & approvals' : 'Your relays', exact: true })).toBeVisible();
+  const row = page.getByRole('row').filter({ hasText: 'Newly paired relay' });
+  await expect(row).toContainText('Awaiting approval');
+  await expect(row).toContainText('No heartbeat yet');
   expect(submission).toEqual({ user_code: 'ABCD-EF01-2345', display_name: 'Test operator', hosting: 'own_machine', accepts_private_work_rules: true });
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(role === 'admin' ? 1 : 0);
+  expect(decisions).toBe(0);
 });
 
 test('renders operator-controlled names as text and exposes no admin actions to members', async ({ page }) => {

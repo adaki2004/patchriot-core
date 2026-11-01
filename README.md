@@ -86,7 +86,7 @@ Delayed replies from an earlier login cannot update a new workspace. This discar
 
 Workspace views, reviews, snapshots and orders have bookmarkable URLs, such as `/#/reviews/<review-id>`. Refresh and browser Back/Forward keep the selected page. Private links still require an authorized account; they contain record IDs, never invitations or payment instructions. Opening an order link only reads its status. Payment instructions require a separate, explicit request.
 
-In **Relay setup**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:
+In **Relay setup**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:
 
 - **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
 - **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role. The browser shows the deployment’s time limit before submission: 35 minutes by default, up to 95 minutes for an explicitly configured CPU pilot.
