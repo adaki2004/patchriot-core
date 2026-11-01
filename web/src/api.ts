@@ -69,23 +69,30 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   // may already have completed on the server; discard its reply, not the work.
   const publicRead = method === 'GET' && ['/fleet', '/incidents'].includes(path);
   const checkSession = () => { if (!publicRead && revision !== sessionRevision) throw new SessionChangedError(); };
+  const signal = options.signal ?? AbortSignal.timeout(12_000);
   let response: Response;
+  let body;
   try {
     response = await fetch(`/api${path}`, {
       credentials: 'same-origin',
       ...options,
-      signal: options.signal ?? AbortSignal.timeout(12_000),
+      signal,
       headers: { 'content-type': 'application/json', ...options.headers },
+    });
+    // Body delivery can time out after the response headers have arrived.
+    body = await response.json().catch(error => {
+      if (error instanceof SyntaxError) return null;
+      throw error;
     });
   } catch (error) {
     checkSession();
-    if (method === 'GET' && error instanceof DOMException && error.name === 'TimeoutError') {
+    const reason = signal.aborted ? signal.reason : error;
+    if (method === 'GET' && reason instanceof DOMException && reason.name === 'TimeoutError') {
       throw new Error('Patchriot took too long to respond. Try refreshing.');
     }
     if (options.signal?.aborted) throw error;
     throw new Error('Cannot reach Patchriot. Check your connection and try again.');
   }
-  const body = await response.json().catch(() => null);
   checkSession();
   if (!response.ok) {
     if (response.status === 401 && body?.error === 'sign_in_required') {

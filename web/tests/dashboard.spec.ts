@@ -91,6 +91,40 @@ test('an outage keeps the previous count and displays the failure', async ({ pag
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
+for (const phase of ['headers', 'body']) test(`a read timeout during ${phase} preserves the workspace and can recover`, async ({ page }) => {
+  await setup(page, true);
+  await page.route('**/api/devices', route => route.fulfill({ json: [{ id: 'private-device', operator_id: account.id, operator_name: account.display_name, label: 'My private relay', runtime: 'owned_fixture', runtime_version: '0.0.1', compute_group: 'my-machine', approval: 'approved', state: 'online', last_seen_at: null }] }));
+  await page.addInitScript(phase => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (input, options) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString(), location.href);
+      if (url.pathname !== '/api/devices' || sessionStorage.getItem('interrupt-read') !== 'yes') return originalFetch(input, options);
+      const signal = options?.signal;
+      if (!signal) throw new Error('The interrupted read needs its real request deadline.');
+      if (signal.aborted) throw signal.reason;
+      if (phase === 'headers') return new Promise<Response>((_, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+      // Headers arrived, but JSON has only partly arrived when the deadline fires.
+      return new Response(new ReadableStream({ start(controller) {
+        controller.enqueue(new TextEncoder().encode('{'));
+        signal.addEventListener('abort', () => controller.error(signal.reason), { once: true });
+      } }), { headers: { 'content-type': 'application/json' } });
+    };
+  }, phase);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'My relays', exact: true }).click();
+  await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
+  await page.evaluate(() => sessionStorage.setItem('interrupt-read', 'yes'));
+  await page.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Patchriot took too long to respond', { timeout: 15_000 });
+  await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
+  await page.evaluate(() => sessionStorage.removeItem('interrupt-read'));
+  await page.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('session expiry clears private views and open dialogs while an outage preserves the workspace', async ({ page }) => {
   await setup(page, true);
   let failure = 0;
