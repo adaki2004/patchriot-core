@@ -127,6 +127,8 @@ Store the variables above in `/etc/patchriot/core.env`, readable only by root; s
 
 The unit limits the service to 512 MiB, two CPUs, a read-only system and loopback networking. For a database on a private container address, add only that address through a local `IPAddressAllow` service override. Use an authenticated tunnel for the private site. External identity or payment services need an explicit network-policy change; credentials stay in runtime configuration. `systemctl stop` allows 45 seconds for active requests to drain.
 
+Before an upgrade, back up PostgreSQL and retain the installed binary and web files. Start and check the new API before serving its UI. Older binaries reject applied migrations they do not know, so swapping back a binary alone is not a database rollback. Keep the new binary with `PATCHRIOT_REVIEW_MODE=closed` while investigating; that pauses new review access but preserves reports and payment records. Restoring a backup requires a separate decision about any data written since it was taken.
+
 </details>
 
 ## Website evidence
