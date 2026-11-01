@@ -7,6 +7,8 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 **Prototype:** pairing, approval, a browser dashboard, a public incident log, private website snapshots and isolated agent reviews of their saved text. An owned example lets operators test their setup first. Configurable crypto checkout funds selected reviews; active penetration tests follow.
 
+**CPU pilot:** Pairing and tool execution work. Tested model configurations still produced false positives on clean examples; findings require human review.
+
 ## What we're building
 
 | Bring an authorized target | Get useful evidence |
