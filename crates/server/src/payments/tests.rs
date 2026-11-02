@@ -95,14 +95,14 @@ async fn provider_deposit_grace_does_not_extend_the_customers_payment_window() {
     db.finish().await;
 }
 
-struct TestDb {
-    pool: PgPool,
+pub(super) struct TestDb {
+    pub(super) pool: PgPool,
     admin: PgPool,
     schema: String,
-    account: Uuid,
+    pub(super) account: Uuid,
 }
 impl TestDb {
-    async fn new() -> Self {
+    pub(super) async fn new() -> Self {
         let url = std::env::var("PATCHRIOT_TEST_DATABASE_URL")
             .expect("set PATCHRIOT_TEST_DATABASE_URL to a local test PostgreSQL database");
         let admin = PgPoolOptions::new()
@@ -147,7 +147,7 @@ impl TestDb {
             account,
         }
     }
-    fn quote(&self) -> (InvoiceTerms, QuoteResponse) {
+    pub(super) fn quote(&self) -> (InvoiceTerms, QuoteResponse) {
         let deadline = (Utc::now() + Duration::minutes(5)).to_rfc3339();
         let request = json!({
             "dry":false, "swapType":"EXACT_OUTPUT", "depositType":"ORIGIN_CHAIN",
@@ -198,7 +198,7 @@ impl TestDb {
         sqlx::query_as("SELECT (SELECT count(*) FROM payment_ledger), (SELECT count(*) FROM payment_funding_events)")
             .fetch_one(&self.pool).await.unwrap()
     }
-    async fn finish(self) {
+    pub(super) async fn finish(self) {
         self.pool.close().await;
         sqlx::query(sqlx::AssertSqlSafe(format!(
             "DROP SCHEMA {} CASCADE",
@@ -216,6 +216,30 @@ fn status(quote: &QuoteResponse, state: &str) -> Value {
         "correlationId":Uuid::new_v4(), "quoteResponse":quote, "status":state, "updatedAt":Utc::now(),
         "swapDetails":{"amountOut":"1000000", "intentHashes":["fixture-intent"], "nearTxHashes":["fixture-transaction"]}
     })
+}
+
+#[test]
+fn status_may_omit_processing_defaults_but_never_payment_terms() {
+    let saved = json!({"insured":false,"quoteWaitingTimeMs":2000,"recipient":"treasury.near","amount":"10000000","refundTo":"payer.near"});
+    let echo = json!({"recipient":"treasury.near","amount":"10000000","refundTo":"payer.near","referral":null,"virtualChainRecipient":null,"virtualChainRefundRecipient":null});
+    assert!(matches_status_request(&saved, &echo));
+    for field in ["recipient", "amount", "refundTo"] {
+        let mut bad = echo.clone();
+        bad.as_object_mut().unwrap().remove(field);
+        assert!(!matches_status_request(&saved, &bad));
+    }
+    let mut bad = saved.clone();
+    bad["insured"] = json!(true);
+    assert!(!matches_status_request(&bad, &echo));
+    for field in [
+        "referral",
+        "virtualChainRecipient",
+        "virtualChainRefundRecipient",
+    ] {
+        let mut bad = echo.clone();
+        bad[field] = json!("other.near");
+        assert!(!matches_status_request(&saved, &bad));
+    }
 }
 
 #[tokio::test]

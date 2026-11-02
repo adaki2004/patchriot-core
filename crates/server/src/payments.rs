@@ -520,6 +520,39 @@ fn transaction_evidence(details: &Value, recipient_type: &Value) -> bool {
     }
 }
 
+fn matches_status_request(saved: &Value, echo: &Value) -> bool {
+    // Live status omits these request-processing defaults. Neither chooses the
+    // asset, amount, recipient or refund route; all payment terms stay exact.
+    let mut echo = echo.clone();
+    let Some(echo_fields) = echo.as_object_mut() else {
+        return false;
+    };
+    for field in [
+        "referral",
+        "virtualChainRecipient",
+        "virtualChainRefundRecipient",
+    ] {
+        if saved.get(field).is_none() && echo_fields.get(field) == Some(&Value::Null) {
+            echo_fields.remove(field);
+        }
+    }
+    let mut saved = saved.clone();
+    let Some(object) = saved.as_object_mut() else {
+        return false;
+    };
+    if echo.get("quoteWaitingTimeMs").is_none()
+        && object
+            .get("quoteWaitingTimeMs")
+            .is_some_and(|v| v.as_u64().is_some_and(|n| n <= 30_000))
+    {
+        object.remove("quoteWaitingTimeMs");
+    }
+    if echo.get("insured").is_none() && object.get("insured") == Some(&Value::Bool(false)) {
+        object.remove("insured");
+    }
+    saved == echo
+}
+
 async fn apply_status(
     pool: &PgPool,
     id: Uuid,
@@ -545,7 +578,7 @@ async fn apply_status(
         .correlation_id
         .as_ref()
         .is_some_and(|id| id != &invoice.correlation_id)
-        || response.quote_request != invoice.quote_request
+        || !matches_status_request(&invoice.quote_request, &response.quote_request)
         || response.quote != invoice.quote
     {
         reason = Some("quote_binding_mismatch");
