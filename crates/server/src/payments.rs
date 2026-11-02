@@ -20,6 +20,7 @@ pub(crate) mod browser_checkout;
 pub mod cancellation;
 pub mod checkout;
 pub(crate) mod desk;
+pub mod earnings;
 pub mod funding;
 pub(crate) mod orders;
 pub mod worker;

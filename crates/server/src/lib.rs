@@ -178,6 +178,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/session", get(auth::session))
         .route("/api/payments", get(payments::summary))
+        .route("/api/earnings", get(payments::earnings::list))
         .route("/api/admin/payments", get(payments::desk::list))
         .route("/api/checkout", get(payments::access::settings))
         .route("/api/review-codes", get(review_codes::list))
