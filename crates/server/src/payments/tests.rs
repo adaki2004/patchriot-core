@@ -11,6 +11,8 @@ fn provider_defaults_cannot_change_recipients_amounts_or_routing() {
     echo["appFees"] = json!([{"recipient":"provider.near","fee":1}]);
     assert!(matches_request(&request, &echo));
     assert_eq!(app_fee_bps(&echo["appFees"]), Some(1));
+    echo["appFees"][0]["limitOrderId"] = Value::Null;
+    assert!(matches_request(&request, &echo));
     for (field, value) in [
         ("recipient", json!("someone-else.near")),
         ("refundTo", json!("someone-else.near")),
@@ -28,6 +30,14 @@ fn provider_defaults_cannot_change_recipients_amounts_or_routing() {
             json!([{"recipient":"provider.near","fee":60},{"recipient":"another.near","fee":60}]),
         ),
         ("appFees", json!([{"recipient":"provider.near","fee":-1}])),
+        (
+            "appFees",
+            json!([{"recipient":"provider.near","fee":1,"limitOrderId":"other-order"}]),
+        ),
+        (
+            "appFees",
+            json!([{"recipient":"provider.near","fee":1,"unknown":null}]),
+        ),
     ] {
         let mut changed = echo.clone();
         changed[field] = value;
@@ -57,6 +67,33 @@ use std::{
         atomic::{AtomicUsize, Ordering},
     },
 };
+
+#[tokio::test]
+async fn provider_deposit_grace_does_not_extend_the_customers_payment_window() {
+    let db = TestDb::new().await;
+    let (terms, mut quote) = db.quote();
+    let requested = date(&terms.quote_request["deadline"]).unwrap();
+    quote.quote["deadline"] = json!(requested + Duration::days(3));
+    quote.quote["timeWhenInactive"] = quote.quote["deadline"].clone();
+    quote.quote_request["appFees"] =
+        json!([{"recipient":"provider.near","fee":1,"limitOrderId":null}]);
+    let (deadline, _, _) = validate_quote(&terms, &quote).unwrap();
+    assert_eq!(deadline, requested);
+    let id = record_quote(&db.pool, &terms, &quote).await.unwrap();
+    let invoice: Invoice = sqlx::query_as("SELECT * FROM payment_invoices WHERE id=$1")
+        .bind(id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        invoice.deadline.timestamp_millis(),
+        requested.timestamp_millis()
+    );
+    assert!(invoice.watch_until > date(&quote.quote["deadline"]).unwrap());
+    quote.quote["deadline"] = json!(requested + Duration::days(3) + Duration::seconds(1));
+    assert!(validate_quote(&terms, &quote).is_err());
+    db.finish().await;
+}
 
 struct TestDb {
     pool: PgPool,
@@ -364,7 +401,7 @@ async fn quote_response_cannot_change_payment_or_refund_terms() {
         ("/quote/amountIn", json!("0")),
         ("/quote/depositAddress", json!("")),
         ("/quote/deadline", json!(Utc::now() - Duration::seconds(1))),
-        ("/quote/deadline", json!(Utc::now() + Duration::minutes(10))),
+        ("/quote/deadline", json!(Utc::now() + Duration::days(4))),
         ("/correlationId", json!("")),
     ] {
         let mut response = json!(expected);

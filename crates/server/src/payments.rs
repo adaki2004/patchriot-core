@@ -193,7 +193,12 @@ fn app_fee_bps(value: &Value) -> Option<u64> {
     let mut total = 0_u64;
     for fee in fees {
         let fee = fee.as_object()?;
-        if fee.len() != 2
+        if fee
+            .keys()
+            .any(|key| !["recipient", "fee", "limitOrderId"].contains(&key.as_str()))
+            || fee
+                .get("limitOrderId")
+                .is_some_and(|value| !value.is_null())
             || !access::Blockchain::Near.accepts_address(fee.get("recipient")?.as_str()?)
         {
             return None;
@@ -247,13 +252,16 @@ fn validate_quote<'a>(
     let now = Utc::now();
     let requested_deadline = validate_quote_request(terms, now)?;
     let quote = &response.quote;
-    let deadline = date(&quote["deadline"]).ok_or(PaymentError::InvalidQuote)?;
+    let provider_deadline = date(&quote["deadline"]).ok_or(PaymentError::InvalidQuote)?;
+    // Live 1Click deposits can remain active for three days after the requested
+    // deadline. Our payment window stays shorter; late receipts are held for
+    // review. The existing seven-day poll window covers that provider grace.
+    let deadline = provider_deadline.min(requested_deadline);
     if !matches_request(&terms.quote_request, &response.quote_request)
         || atom_amount(&quote["amountOut"]) != Some(terms.required_amount)
         || !positive_input_amount(&quote["amountIn"])
         || deadline <= now
-        || deadline > now + Duration::hours(1)
-        || deadline > requested_deadline
+        || provider_deadline > requested_deadline + Duration::days(3)
         || text(&Value::String(response.correlation_id.clone())).is_none()
         || [
             "virtualChainRecipient",
