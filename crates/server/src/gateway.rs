@@ -1,7 +1,7 @@
 use crate::{ApiError, AppState, auth};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -9,12 +9,38 @@ use patchriot_protocol::{
     AgentSummary, CancelReview, ClaimPairing, CreateReview, DeviceDecision, DeviceView,
     FleetSummary, PairingDeployment, PairingStatus, ReviewView,
 };
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 // Up to 200 devices or 50 review summaries, including escaped operator labels
 // and saved payment terms. Individual responses retain the smaller default.
 const LIST_RESPONSE_MAX_BYTES: usize = 512 * 1024;
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ListScope {
+    Mine,
+    #[default]
+    All,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ListFilter {
+    #[serde(default)]
+    scope: ListScope,
+}
+
+impl ListFilter {
+    /// A personal list must stay personal even for an administrator. Narrow
+    /// this request's downstream role; never grant privileges from a query.
+    pub(crate) fn restrict(&self, mut session: auth::Session) -> auth::Session {
+        if matches!(self.scope, ListScope::Mine) {
+            session.role = "member".into();
+        }
+        session
+    }
+}
 
 pub(crate) async fn request<T: Serialize, R: DeserializeOwned>(
     state: &AppState,
@@ -251,9 +277,10 @@ pub async fn decision(
 
 pub async fn reviews(
     State(state): State<AppState>,
+    Query(filter): Query<ListFilter>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<ReviewView>>, ApiError> {
-    let session = auth::require_session(&headers, &state).await?;
+    let session = filter.restrict(auth::require_session(&headers, &state).await?);
     request_with_limit::<(), _>(
         &state,
         reqwest::Method::GET,

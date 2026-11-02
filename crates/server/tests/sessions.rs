@@ -29,6 +29,67 @@ mod review_codes;
 mod access;
 
 #[tokio::test]
+async fn personal_audit_lists_narrow_admin_reads_without_elevating_members() {
+    let seen = Arc::new(Mutex::new(Vec::<(String, String, String)>::new()));
+    let captured = seen.clone();
+    let downstream = Router::new().fallback(move |headers: HeaderMap, uri: axum::http::Uri| {
+        let captured = captured.clone();
+        async move {
+            captured.lock().unwrap().push((
+                uri.path().to_owned(),
+                headers["x-patchriot-account"].to_str().unwrap().to_owned(),
+                headers["x-patchriot-role"].to_str().unwrap().to_owned(),
+            ));
+            Json(json!([]))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    for role in ["admin", "member"] {
+        let (cookie, session) = test.login(role).await;
+        for path in ["/api/reviews", "/api/site-checks", "/api/sources"] {
+            for scope in ["mine", "all"] {
+                let response = test
+                    .request(
+                        "GET",
+                        &format!("{path}?scope={scope}"),
+                        Value::Null,
+                        &[("cookie", cookie.as_str()), ("x-patchriot-role", "admin")],
+                    )
+                    .await;
+                assert_eq!(response.0, StatusCode::OK);
+                let last = seen.lock().unwrap().last().unwrap().clone();
+                assert_eq!(last.1, session["account"]["id"].as_str().unwrap());
+                assert_eq!(last.2, if scope == "mine" { "member" } else { role });
+            }
+            let response = test
+                .request(
+                    "GET",
+                    &format!("{path}?scope=other-account"),
+                    Value::Null,
+                    &[("cookie", cookie.as_str())],
+                )
+                .await;
+            assert_eq!(response.0, StatusCode::BAD_REQUEST);
+        }
+    }
+    for path in [
+        "/api/reviews?scope=mine",
+        "/api/site-checks?scope=mine",
+        "/api/sources?scope=mine",
+    ] {
+        assert_eq!(
+            test.request("GET", path, Value::Null, &[]).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    server.abort();
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn pairing_setup_and_agent_metadata_require_an_enabled_account() {
     let downstream = Router::new().fallback(|headers: HeaderMap, uri: axum::http::Uri| async move {
         assert!(headers.contains_key("authorization"));
