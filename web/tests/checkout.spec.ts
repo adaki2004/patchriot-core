@@ -237,6 +237,28 @@ test('paid review shows the price before an exact network-specific deposit and n
   await page.getByRole('region', { name: 'Order details' }).screenshot({ path: info.outputPath('checkout-deposit.png') });
 });
 
+for (const blockchain of ['eth', 'sol']) for (const symbol of ['USDC', 'USDT']) test(`${symbol} on ${blockchain} pays a fixed USDC review fee`, async ({ page }) => {
+  const state = await setup(page);
+  const selected = { asset_id: `nep141:${blockchain}-fixture.${symbol.toLowerCase()}.near`, symbol, decimals: 6, blockchain };
+  state.settings = { mode: 'paid', offer: { ...offer, inputs: [selected] } };
+  const address = blockchain === 'sol' ? 'So11111111111111111111111111111111111111112' : '0x1111111111111111111111111111111111111111';
+  state.quote = { ...state.quote, input: { token: selected, amount: '1000123' }, deposit_address: address, refund_address: address, deposit_memo: null };
+  await choose(page);
+  await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
+  const network = blockchain === 'sol' ? 'Solana' : 'Ethereum';
+  await page.getByLabel('Pay with', { exact: true }).selectOption({ label: `${symbol} · ${network}` });
+  if (blockchain === 'sol') await expect(page.getByRole('dialog')).toContainText('Use your Solana wallet address, not its token account.');
+  await page.getByLabel(`Refund address on ${network}`, { exact: false }).fill(address);
+  await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
+  const instructions = page.getByRole('region', { name: 'Payment instructions' });
+  await expect(instructions.getByRole('heading', { name: `Send 1.000123 ${symbol}`, exact: true })).toBeVisible();
+  await expect(instructions).toContainText(network);
+  await expect(instructions).toContainText('1 USDC');
+  expect(state.submissions[0].origin_asset).toBe(selected.asset_id);
+  expect(state.submissions[0].refund_address).toBe(address);
+  expect(state.freeSubmissions).toBe(0);
+});
+
 test('a lost preparation reply keeps the same request and warns before creating another payment', async ({ page }) => {
   const state = await setup(page); state.quoteError = true;
   await prepare(page);

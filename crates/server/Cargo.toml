@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 argon2 = { version = "0.6", features = ["getrandom"] }
 axum = "0.8.9"
+bs58 = "0.5.1"
 chrono = { version = "0.4", features = ["serde"] }
 getrandom = "0.4"
 hex = "0.4.3"

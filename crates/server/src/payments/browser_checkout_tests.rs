@@ -135,7 +135,7 @@ impl Network {
                     calls.push(("quote".into(),body.clone(),String::new()));
                     Json(json!({"correlationId":Uuid::new_v4(),"quoteRequest":body,"quote":{
                         "amountOut":body["amount"],"amountIn":"1000000000000000000000000",
-                        "depositAddress":if bad.load(Ordering::SeqCst) {"invalid/address".into()} else {format!("deposit-{}.near",Uuid::new_v4())},
+                        "depositAddress":if bad.load(Ordering::SeqCst) {"invalid/address".into()} else if body["originAsset"].as_str().unwrap().starts_with("nep141:sol-") {"So11111111111111111111111111111111111111112".into()} else {format!("deposit-{}.near",Uuid::new_v4())},
                         "deadline":body["deadline"],"unexpectedProviderField":"must not reach the browser"
                     }}))
                 }
@@ -364,6 +364,59 @@ fn paid_policy_is_explicit_and_rejects_ambiguous_metadata_or_addresses() {
     assert!(Blockchain::Base.accepts_address("0x1111111111111111111111111111111111111111"));
     assert!(!Blockchain::Near.accepts_address("Account.NEAR"));
     assert!(!Blockchain::Near.accepts_address("a..near"));
+}
+
+#[test]
+fn solana_addresses_are_nonzero_32_byte_base58_values() {
+    assert!(Blockchain::Sol.accepts_address("So11111111111111111111111111111111111111112"));
+    for address in [
+        "0x1111111111111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "111111111111111111111111111111111",
+        "11111111111111111111111111111111111",
+        "So1111111111111111111111111111111111111111O",
+        "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        " So11111111111111111111111111111111111111112",
+    ] {
+        assert!(!Blockchain::Sol.accepts_address(address), "{address}");
+    }
+}
+
+#[tokio::test]
+async fn solana_checkout_keeps_the_usdc_price_and_rejects_wrong_network_refunds() {
+    let db = TestDb::new().await;
+    let network = Network::start().await;
+    let mut policy = policy();
+    policy.inputs = vec![PaymentToken {
+        asset_id: "nep141:sol-fixture.usdt.near".into(),
+        symbol: "USDT".into(),
+        decimals: 6,
+        blockchain: Blockchain::Sol,
+    }];
+    let browser = Browser::new(&db, &network, network.access(&policy)).await;
+    let path = format!("/api/site-checks/{}/checkout", Uuid::new_v4());
+    let mut body = input(&policy);
+    body["refund_address"] = json!("0x1111111111111111111111111111111111111111");
+    assert_eq!(
+        browser.call("POST", &path, body.clone()).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(network.count("admission"), 0);
+    assert_eq!(network.count("quote"), 0);
+    body["refund_address"] = json!("So11111111111111111111111111111111111111112");
+    let (status, quote) = browser.call("POST", &path, body.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{quote}");
+    assert_eq!(quote["input"]["token"]["blockchain"], "sol");
+    assert_eq!(quote["input"]["token"]["symbol"], "USDT");
+    assert_eq!(quote["output"]["token"]["symbol"], "USDC");
+    assert_eq!(quote["output"]["amount"], policy.amount);
+    assert_eq!(quote["refund_address"], body["refund_address"]);
+    assert_eq!(network.count("quote"), 1);
+    // A retry returns the original deposit details, without a second quote.
+    age(&db).await;
+    assert_eq!(browser.call("POST", &path, body).await.1, quote);
+    assert_eq!(network.count("quote"), 1);
+    db.finish().await;
 }
 
 #[tokio::test]

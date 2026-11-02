@@ -11,7 +11,7 @@ export type Deposit = {
 };
 
 export function chainName(chain: string) {
-  return ({ near: 'NEAR', eth: 'Ethereum', base: 'Base', arb: 'Arbitrum', op: 'Optimism', pol: 'Polygon', bsc: 'BNB Chain', avax: 'Avalanche' } as Record<string, string>)[chain] ?? chain;
+  return ({ near: 'NEAR', sol: 'Solana', eth: 'Ethereum', base: 'Base', arb: 'Arbitrum', op: 'Optimism', pol: 'Polygon', bsc: 'BNB Chain', avax: 'Avalanche' } as Record<string, string>)[chain] ?? chain;
 }
 
 /** Keep every token digit; Number would round 18- and 24-decimal amounts. */
@@ -27,7 +27,7 @@ export function tokenAmount(amount: string, token: PaymentToken): string | null 
 export function checkedDeposit(value: Deposit): Deposit {
   const tokenValid = (token?: PaymentToken) => token && typeof token.asset_id === 'string' && token.asset_id.startsWith('nep141:')
     && typeof token.symbol === 'string' && /^[A-Za-z0-9._-]{1,16}$/.test(token.symbol)
-    && ['near', 'eth', 'base', 'arb', 'op', 'pol', 'bsc', 'avax'].includes(token.blockchain);
+    && ['near', 'sol', 'eth', 'base', 'arb', 'op', 'pol', 'bsc', 'avax'].includes(token.blockchain);
   const text = (s: unknown) => typeof s === 'string' && s.length > 0 && s.length <= 256 && !/\s/.test(s);
   if (!value || ![value.order_id, value.request_id, value.review_id, value.invoice_id, value.deposit_address, value.refund_address].every(text)
     || !tokenValid(value.input?.token) || !tokenValid(value.output?.token)
@@ -55,7 +55,7 @@ export function PaymentFields({ offer, asset, refund, onAsset, onRefund }: { off
   return <div className="checkout-fields">
     <div className="checkout-price"><span>Three-agent snapshot review</span><strong>{tokenAmount(offer.price.amount, offer.destination) ?? 'Price unavailable'}</strong><small>Review fee. Your transfer amount includes the quoted swap costs; your wallet may also charge network gas.</small></div>
     <label>Pay with<select aria-label="Pay with" required value={asset} onChange={event => onAsset(event.target.value)}><option value="">Choose a token and network</option>{offer.inputs.map(token => <option key={token.asset_id} value={token.asset_id}>{token.symbol} · {chainName(token.blockchain)}</option>)}</select></label>
-    <label>Refund address{token ? ` on ${chainName(token.blockchain)}` : ''}<input required autoComplete="off" spellCheck={false} maxLength={64} value={refund} onChange={event => onRefund(event.target.value)} placeholder={token?.blockchain === 'near' ? 'your-account.near' : 'An address you control on this network'} /><small>Used by the payment provider if the swap is refunded. A cancelled review does not automatically refund a settled payment.</small></label>
+    <label>Refund address{token ? ` on ${chainName(token.blockchain)}` : ''}<input required autoComplete="off" spellCheck={false} maxLength={64} value={refund} onChange={event => onRefund(event.target.value)} placeholder={token?.blockchain === 'near' ? 'your-account.near' : 'An address you control on this network'} /><small>{token?.blockchain === 'sol' ? 'Use your Solana wallet address, not its token account. ' : ''}Used by the payment provider if the swap is refunded. A cancelled review does not automatically refund a settled payment.</small></label>
     <p className="fine">The quote lasts {Math.floor(offer.payment_window_seconds / 60)} minutes from preparation. Preparing it reserves the chosen review; work starts only after payment is confirmed.</p>
   </div>;
 }
