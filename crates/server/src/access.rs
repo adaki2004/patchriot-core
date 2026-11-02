@@ -58,7 +58,7 @@ fn text(value: &str, max: usize) -> bool {
     !value.trim().is_empty() && value.len() <= max && !value.chars().any(char::is_control)
 }
 
-fn contact(value: &str) -> Result<String, ApiError> {
+pub(crate) fn contact(value: &str) -> Result<String, ApiError> {
     let value = value.trim().to_ascii_lowercase();
     let valid = value.split_once('@').is_some_and(|(local, domain)| {
         !local.is_empty()
@@ -116,7 +116,12 @@ async fn verify_password(
     .map_err(|_| ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "login_unavailable"))
 }
 
-async fn rate(pool: &PgPool, key: &str, limit: i32, seconds: i32) -> Result<(), ApiError> {
+pub(crate) async fn rate(
+    pool: &PgPool,
+    key: &str,
+    limit: i32,
+    seconds: i32,
+) -> Result<(), ApiError> {
     let used: Option<i32> = sqlx::query_scalar("INSERT INTO auth_attempts (key,started_at,attempts) VALUES ($1,now(),1) ON CONFLICT (key) DO UPDATE SET started_at = CASE WHEN auth_attempts.started_at <= now() - make_interval(secs => $3) THEN now() ELSE auth_attempts.started_at END, attempts = CASE WHEN auth_attempts.started_at <= now() - make_interval(secs => $3) THEN 1 ELSE auth_attempts.attempts + 1 END WHERE auth_attempts.started_at <= now() - make_interval(secs => $3) OR auth_attempts.attempts < $2 RETURNING attempts")
         .bind(auth::hash(key)).bind(limit).bind(f64::from(seconds)).fetch_optional(pool).await?;
     used.map(|_| ()).ok_or_else(busy)
@@ -292,7 +297,7 @@ pub(crate) async fn request_access(
     Ok((StatusCode::ACCEPTED, Json(serde_json::json!({"ok": true}))))
 }
 
-async fn admin(
+pub(crate) async fn admin(
     state: &AppState,
     headers: &HeaderMap,
     write: bool,
@@ -308,7 +313,10 @@ async fn admin(
     Ok(session)
 }
 
-async fn lock_admin(tx: &mut Transaction<'_, Postgres>, id: Uuid) -> Result<(), ApiError> {
+pub(crate) async fn lock_admin(
+    tx: &mut Transaction<'_, Postgres>,
+    id: Uuid,
+) -> Result<(), ApiError> {
     let permitted: bool = sqlx::query_scalar(
         "SELECT role = 'admin' AND NOT disabled FROM accounts WHERE id = $1 FOR UPDATE",
     )

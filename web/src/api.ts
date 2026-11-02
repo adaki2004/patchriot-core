@@ -27,6 +27,9 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  invalid_inquiry: 'Add your name, company or team, email and a message of 20–3,000 characters.',
+  inquiry_changed: 'This inquiry changed after being saved. Refresh the page before sending another.',
+  inquiry_not_found: 'This inquiry is no longer available. Refresh the inbox.',
   withdrawals_unavailable: 'Withdrawals are not enabled on this installation.',
   invalid_withdrawal: 'Check the amount, receiving network and wallet address. The minimum is 10 USDC.',
   insufficient_earnings: 'There are not enough available earnings for this withdrawal.',
@@ -104,7 +107,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const method = (options.method ?? 'GET').toUpperCase();
   // Only these GET responses contain no account-specific data. An old write
   // may already have completed on the server; discard its reply, not the work.
-  const publicRead = method === 'GET' && ['/fleet', '/incidents'].includes(path);
+  const publicRead = method === 'GET' && ['/fleet', '/incidents', '/contact'].includes(path);
   const checkSession = () => { if (!publicRead && revision !== sessionRevision) throw new SessionChangedError(); };
   const signal = options.signal ?? AbortSignal.timeout(12_000);
   let response: Response;

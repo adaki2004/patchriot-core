@@ -33,6 +33,12 @@ DNS proof belongs to this account and exact request. It expires with the scope a
 
 **Hosted beta: coming soon.** The current deployment is a private pilot. The website address will be published here after deployment checks. The local instructions below run a separate installation.
 
+## Enterprise inquiries
+
+Use **Set up your network** on the homepage to discuss a private installation. The form saves the inquiry in **Administration → Contact inbox**; it does not send automated email, create an account or approve testing. Only administrators can read or mark inquiries handled. Set `PATCHRIOT_CONTACT_EMAIL` to an inbox you operate to also show a public email link. When unset, the form remains available without inventing an address.
+
+The form accepts 10 submissions per socket peer per 15 minutes, 100 globally per 15 minutes and three per email per day. Caller-supplied forwarding headers cannot bypass these limits. Behind a proxy, the peer limit is shared. Contact and sign-in limits are separate.
+
 ## How reviews work
 
 ![Review flow: scope, permission, team consent, three roles and inspectable evidence.](web/public/diagrams/review-flow.png)
@@ -46,12 +52,13 @@ An investigator makes a claim, a reproducer checks it and a challenger questions
 | Area | Current state |
 | --- | --- |
 | Website | Collective design, one App entry, personal dashboard, private reports and recent-events feed |
+| Enterprise | Public inquiry form and private staff inbox; optional configured contact email |
 | Access | Approved accounts; staff-only pairing; domain verification before live-test approval and execution |
 | Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
 | Agents | Isolated Hermes execution and a three-role live HTTP pilot on managed Kali machines |
 | Payments | Single-use codes, NEAR Intents checkout, 90/10 accounting and reserved operator withdrawals; live-test billing remains separate |
 | Existing tools | Approved saved-page and source-text reviews remain accessible |
-| In development | Broader OWASP checks, clearer evidence packs, enterprise inquiries and public deployment |
+| In development | Broader OWASP checks, clearer evidence packs and public deployment |
 | Later | Authenticated testing, recurring checks, managed private networks and confidential execution |
 
 ## Developer setup: run your own copy
@@ -76,6 +83,7 @@ Set these through your **private environment**:
 | `PATCHRIOT_INTERNAL_KEY` | The same generated service secret as dispatcher |
 | `PATCHRIOT_PUBLIC_ORIGIN` | `http://127.0.0.1:7410` |
 | `PATCHRIOT_DISPATCHER_URL` | `http://127.0.0.1:7411` |
+| `PATCHRIOT_CONTACT_EMAIL` | Optional public email; leave unset until configured |
 | `PATCHRIOT_RELAY_ORIGIN` | Relay-facing URL; locally `http://127.0.0.1:7411` |
 | `PATCHRIOT_WEB_ROOT` | `web/dist` |
 

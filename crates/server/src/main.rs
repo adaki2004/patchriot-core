@@ -148,7 +148,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("invalid PATCHRIOT_RELAY_ORIGIN".into()),
     };
-    let mut state = AppState::new(pool, config.with_relay_origin(relay_origin)?)?;
+    let contact_email = match std::env::var("PATCHRIOT_CONTACT_EMAIL") {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(_) => return Err("invalid PATCHRIOT_CONTACT_EMAIL".into()),
+    };
+    let mut state = AppState::new(
+        pool,
+        config
+            .with_relay_origin(relay_origin)?
+            .with_contact_email(contact_email)?,
+    )?;
     if let Some(path) = std::env::var_os("PATCHRIOT_TREASURY_CONFIG") {
         use std::io::Read;
         let mut bytes = Vec::new();

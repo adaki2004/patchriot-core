@@ -29,6 +29,7 @@ import { Landing, RequestWork } from './Product';
 import { Docs } from './Docs';
 import { Sources } from './Sources';
 import { Earnings } from './Earnings';
+import { EnterpriseContact, ContactInbox } from './Contact';
 
 function Mark() {
   return <img className="brand-mark" src="/brand/white-hat.png" alt="" width="44" height="44" />;
@@ -117,9 +118,9 @@ function App() {
   const devices = useLive<Device[]>('/devices', Boolean(session?.account));
   const account = session?.account;
   const isAdmin = account?.role === 'admin';
-  const privateView = !['home', 'overview', 'incidents', 'docs'].includes(view);
-  const appView = Boolean(account) && !['home', 'docs', 'incidents'].includes(view);
-  const adminView = view === 'audit-desk' || view === 'incident-desk' || view === 'payment-desk' || view === 'access-desk';
+  const privateView = !['home', 'overview', 'incidents', 'docs', 'contact'].includes(view);
+  const appView = Boolean(account) && !['home', 'docs', 'incidents', 'contact'].includes(view);
+  const adminView = ['audit-desk', 'incident-desk', 'payment-desk', 'access-desk', 'contact-inbox'].includes(view);
   useEffect(() => {
     const nav = workspaceNav.current;
     const active = nav?.querySelector<HTMLButtonElement>('button.active');
@@ -184,7 +185,7 @@ function App() {
         {isAdmin && <button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><UIIcon name="plus" className="nav-icon" />Pair an agent</button>}
         <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}><UIIcon name="agent" className="nav-icon" />{isAdmin ? 'Agent approvals' : 'My agents'}</button>
 
-        {isAdmin && <details className="admin-navigation" open={adminView}><summary>Administration</summary><button className={view === 'audit-desk' ? 'active' : ''} onClick={() => setView('audit-desk')}>Audit approvals</button><button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button><button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button><button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button></details>}
+        {isAdmin && <details className="admin-navigation" open={adminView}><summary>Administration</summary><button className={view === 'audit-desk' ? 'active' : ''} onClick={() => setView('audit-desk')}>Audit approvals</button><button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button><button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button><button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button><button className={view === 'contact-inbox' ? 'active' : ''} onClick={() => setView('contact-inbox')}>Contact inbox</button></details>}
         <div className="workspace-nav-bottom"><span className="workspace-avatar" aria-hidden="true">{account.display_name.slice(0, 1).toUpperCase()}</span><div><strong>{account.display_name}</strong><small>Your private workspace</small></div></div>
       </nav>}
       <div className="page-content">
@@ -200,6 +201,7 @@ function App() {
       {['orders', 'earnings', 'agents'].includes(view) && account && <div className="audit-breadcrumb"><button className="text-button" onClick={() => setView('overview')}>← Dashboard</button></div>}
       {view === 'request' && account && <RequestWork onLive={() => navigate('pentests')} onWebsite={() => { setStartAudit('sites'); setView('sites'); }} onSource={() => { setStartAudit('sources'); setView('sources'); }} />}
       {view === 'docs' && <Docs page={route.id} onPage={page => navigate('docs', page)} />}
+      {view === 'contact' && <EnterpriseContact />}
       {view === 'devices' && account && <>
         <section className="section-heading fleet-heading"><div><p className="eyebrow">{isAdmin ? 'OPERATOR CONSOLE' : 'YOUR CONTRIBUTION'}</p><h1 className="page-title">{isAdmin ? 'Agent approvals' : 'Your agents'}</h1><p className="subtle">Pairing proves a device key. Approval is a separate decision.</p></div>{isAdmin && <button className="primary" onClick={() => setPairing(true)}>Pair a relay +</button>}</section>
         {devices.error && <Notice error>{devices.error} <button className="inline" onClick={devices.refresh}>Retry</button></Notice>}
@@ -220,6 +222,7 @@ function App() {
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}
       {view === 'payment-desk' && isAdmin && <PaymentDesk />}
       {view === 'access-desk' && isAdmin && session?.csrf_token && <AccessDesk csrf={session.csrf_token} />}
+      {view === 'contact-inbox' && isAdmin && session?.csrf_token && <ContactInbox key={account?.id} csrf={session.csrf_token} />}
       </div>
     </main>
     <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><span>Inspect the code. Question the evidence.</span></footer>

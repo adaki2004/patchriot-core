@@ -19,7 +19,7 @@ function Command({ children }: { children: string }) {
 }
 
 export function PairingClosed() {
-  return <section className="panel"><p className="eyebrow">MANAGED NETWORK</p><h1 className="page-title">Public pairing is not open yet.</h1><p>Patchriot operates the agents in this beta. You can request a review; contributing your own machine is disabled.</p><p>For a network operated by your team, <a href="#/docs/infrastructure">read about private infrastructure →</a>.</p></section>;
+  return <section className="panel"><p className="eyebrow">MANAGED NETWORK</p><h1 className="page-title">Public pairing is not open yet.</h1><p>Patchriot operates the agents in this beta. You can request a review; contributing your own machine is disabled.</p><p>For a network operated by your team, <a href="#/contact">contact us about private infrastructure →</a>.</p></section>;
 }
 
 export function Guide({ onPair }: { onPair: () => void }) {

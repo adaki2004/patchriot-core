@@ -4,6 +4,7 @@
 
 mod access;
 mod auth;
+mod contact;
 mod diagnostics;
 mod gateway;
 mod incidents;
@@ -49,9 +50,17 @@ pub struct Config {
     pub internal_key: String,
     pub web_root: Option<PathBuf>,
     pub secure_cookies: bool,
+    /// Optional public contact address. Inquiry delivery is the private inbox.
+    pub contact_email: Option<String>,
 }
 
 impl Config {
+    pub fn with_contact_email(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        self.contact_email = value
+            .map(|value| access::contact(&value).map_err(|_| "invalid PATCHRIOT_CONTACT_EMAIL"))
+            .transpose()?;
+        Ok(self)
+    }
     fn origin(value: &str) -> Result<url::Url, &'static str> {
         let url = url::Url::parse(value).map_err(|_| "invalid service URL")?;
         let local = match url.host() {
@@ -101,6 +110,7 @@ impl Config {
             public_origin: public.origin().ascii_serialization(),
             dispatcher_url: dispatcher.origin().ascii_serialization(),
             relay_origin: None,
+            contact_email: None,
             internal_key,
             web_root,
         })
@@ -184,6 +194,9 @@ pub fn router(state: AppState) -> Router {
             }),
         )
         .route("/api/session", get(auth::session))
+        .route("/api/contact", get(contact::details).post(contact::create))
+        .route("/api/admin/inquiries", get(contact::inbox))
+        .route("/api/admin/inquiries/{id}", post(contact::decide))
         .route("/api/payments", get(payments::summary))
         .route("/api/earnings", get(payments::earnings::list))
         .route(

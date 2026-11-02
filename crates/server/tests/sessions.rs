@@ -1402,3 +1402,201 @@ async fn renewed_invites_keep_the_same_account_and_cannot_enable_disabled_accoun
     assert_eq!(response.0, StatusCode::BAD_REQUEST);
     test.finish().await;
 }
+
+#[tokio::test]
+async fn enterprise_inquiries_are_private_retry_safe_and_do_not_grant_access() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let body = json!({"request_id":Uuid::new_v4(),"name":"Example owner","email":"Owner@EXAMPLE.com","organization":"Owned example","message":"Please discuss a private network for our staging systems."});
+    let id = body["request_id"].as_str().unwrap();
+    assert_eq!(
+        test.request("POST", "/api/contact", body.clone(), &[])
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    for _ in 0..2 {
+        let (status, _, saved) = test
+            .request("POST", "/api/contact", body.clone(), &[("origin", ORIGIN)])
+            .await;
+        assert_eq!(status, StatusCode::ACCEPTED);
+        assert_eq!(saved, json!({"received":true}));
+    }
+    let mut altered = body.clone();
+    altered["message"] = json!("This different message must not overwrite the original.");
+    assert_eq!(
+        test.request("POST", "/api/contact", altered, &[("origin", ORIGIN)])
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM enterprise_inquiries")
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    let accounts: i64 = sqlx::query_scalar("SELECT count(*) FROM accounts")
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(accounts, 0);
+    assert_eq!(
+        test.request("GET", "/api/admin/inquiries", Value::Null, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        test.request("GET", "/api/contact", Value::Null, &[])
+            .await
+            .2,
+        json!({"email":null})
+    );
+    let (member, ms) = test.login("member").await;
+    let member_headers = [
+        ("cookie", member.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", ms["csrf_token"].as_str().unwrap()),
+        ("x-patchriot-role", "admin"),
+    ];
+    assert_eq!(
+        test.request("GET", "/api/admin/inquiries", Value::Null, &member_headers)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let path = format!("/api/admin/inquiries/{id}");
+    assert_eq!(
+        test.request("POST", &path, json!({"handled":true}), &member_headers)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let (admin, session) = test.login("admin").await;
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            json!({"handled":true}),
+            &[("cookie", admin.as_str()), ("origin", ORIGIN)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let headers = [
+        ("cookie", admin.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    let inbox = test
+        .request("GET", "/api/admin/inquiries", Value::Null, &headers)
+        .await;
+    assert_eq!(inbox.0, StatusCode::OK);
+    assert_eq!(inbox.2[0]["email"], "owner@example.com");
+    assert_eq!(inbox.2[0]["message"], body["message"]);
+    for handled in [true, true, false] {
+        assert_eq!(
+            test.request("POST", &path, json!({"handled":handled}), &headers)
+                .await
+                .0,
+            StatusCode::OK
+        );
+        let state: String =
+            sqlx::query_scalar("SELECT state FROM enterprise_inquiries WHERE id=$1")
+                .bind(Uuid::parse_str(id).unwrap())
+                .fetch_one(&test.pool)
+                .await
+                .unwrap();
+        assert_eq!(state, if handled { "handled" } else { "open" });
+    }
+    let actor: Uuid = sqlx::query_scalar("SELECT updated_by FROM enterprise_inquiries WHERE id=$1")
+        .bind(Uuid::parse_str(id).unwrap())
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        actor.to_string(),
+        session["account"]["id"].as_str().unwrap()
+    );
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn enterprise_inquiry_validation_and_rate_limits_are_separate_from_login() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let body = json!({"request_id":Uuid::new_v4(),"name":"Owner","email":"owner@example.com","organization":"Example","message":"We need a private network for owned infrastructure."});
+    for (key, value) in [
+        ("name", json!("line\nbreak")),
+        ("message", json!("tiny")),
+        ("email", json!("broken")),
+        ("organization", json!("")),
+    ] {
+        let mut bad = body.clone();
+        bad[key] = value;
+        assert_eq!(
+            test.request("POST", "/api/contact", bad, &[("origin", ORIGIN)])
+                .await
+                .0,
+            StatusCode::BAD_REQUEST
+        );
+        sqlx::query("DELETE FROM auth_attempts")
+            .execute(&test.pool)
+            .await
+            .unwrap();
+    }
+    for i in 0..4 {
+        let mut body = body.clone();
+        body["request_id"] = json!(Uuid::new_v4());
+        let headers = [
+            ("origin", ORIGIN),
+            (
+                "x-forwarded-for",
+                if i % 2 == 0 { "1.1.1.1" } else { "8.8.8.8" },
+            ),
+        ];
+        let status = test.request("POST", "/api/contact", body, &headers).await.0;
+        assert_eq!(
+            status,
+            if i < 3 {
+                StatusCode::ACCEPTED
+            } else {
+                StatusCode::TOO_MANY_REQUESTS
+            }
+        );
+    }
+    let _ = test.login("member").await; // Contact spam cannot consume the sign-in budget.
+    let raw: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM auth_attempts WHERE key LIKE '%owner%' OR key LIKE '%peer%')",
+    )
+    .fetch_one(&test.pool)
+    .await
+    .unwrap();
+    assert!(!raw);
+    test.finish().await;
+}
+
+#[test]
+fn public_contact_address_is_explicit_and_validated() {
+    let config = || {
+        Config::new(
+            ORIGIN.into(),
+            "http://127.0.0.1:1".into(),
+            "x".repeat(40),
+            None,
+        )
+        .unwrap()
+    };
+    assert!(
+        config()
+            .with_contact_email(Some("not-an-address".into()))
+            .is_err()
+    );
+    assert_eq!(
+        config()
+            .with_contact_email(Some("Contact@EXAMPLE.com".into()))
+            .unwrap()
+            .contact_email
+            .as_deref(),
+        Some("contact@example.com")
+    );
+}
