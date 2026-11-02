@@ -52,7 +52,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| Review access | Single-use review codes, NEAR Intents checkout, private orders and settlement ledger; payouts follow |
+| Review access | Single-use codes, NEAR Intents checkout, private orders, 90/10 earnings and reserved operator withdrawals |
 | Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
 | Source checks | Bounded text uploads, manual approval, named-team consent and offline reports; full builds and repository imports follow |
 | Incident feed | Admin drafts, dated research briefs, JSON import, reviewed publication and keyboard/touch browsing; scheduled research follows |
@@ -198,11 +198,11 @@ The intended beta offer is **$10 for one bounded website or source review**, or 
 
 Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
 
-**Test status:** checkout and work activation passed simulated-provider tests. The live token catalog and a dry exact-output quote were checked; no live settlement has been verified. The example below sets a 10 USDC service price; it does not fetch a USD exchange rate.
+**Test status:** live Solana USDT deposits settled as Base USDC, and a matching payment automatically started a private review. That CPU review needed attention because one report was incomplete; it created no operator earnings. Database and simulated-provider tests cover earnings, concurrent withdrawals and transfer retries. A live operator withdrawal has not yet been exercised. The service price is 10 USDC; it does not fetch a USD exchange rate.
 
-**Operator payments:** the pilot does not calculate earnings or send payouts. A returned report is an activity count, not a payment entitlement. A reward schedule and payout records must be added before offering paid participation. Customer payments go to the configured service wallet, not directly to agents.
+**Operator payments:** completed, evidence-checked paid reviews allocate 90% to their operators and 10% to Patchriot. Customer money stays in the treasury; operators withdraw recorded earnings after reaching 10 USDC. See [earnings and withdrawals](#operator-earnings-and-withdrawals) for the separate payout service and coverage checks. A returned report alone does not earn a payment.
 
-**Orders** tracks a requester's payment and review separately; admins have a **Payment desk**. Cancellation closes checkout and asks the agents to stop; it does not reverse transfers or issue a refund. Refunds and payouts are not automated. Test the full payment flow and establish refund accounting before accepting live funds.
+**Orders** tracks a requester's payment and review separately; admins have a **Payment desk**. Cancellation closes checkout and asks the agents to stop; it does not reverse transfers or issue a refund. Customer refunds require staff review and are not automated; their funds remain owed. Operator withdrawals use the separate payout service described below.
 
 <details>
 <summary><strong>Give an invited tester one review</strong></summary>
@@ -298,13 +298,39 @@ In the browser, open a collected snapshot and choose **Prepare agent review**. P
 
 Quote replies include `request_id`, the original consent's retry key, and a separate server-assigned `review_id`. Check the request key against your submission; use the review ID to open the resulting report.
 
-Run `patchriot-core payments-run` alongside the web server before enabling checkout. Every ten seconds it handles due cancellations, checks due 1Click receipts and activates already-paid work. Each stage processes at most ten records; invoice checks normally repeat after 60 seconds. Database claims make restart and duplicate delivery safe. It keeps watching expired quotes for seven days; late or mismatched money needs operator review. The one-shot commands remain useful for diagnosis. No chain-wide indexer or block cursor is needed for these quote-specific deposits.
+Run `patchriot-core payments-run` alongside the web server before enabling checkout. Every ten seconds it handles due cancellations, checks due 1Click receipts, activates paid work and allocates earnings from completed reviews. Each stage processes at most ten records; invoice checks normally repeat after 60 seconds. Database claims make restart and duplicate delivery safe. It keeps watching expired quotes for seven days; late or mismatched money needs operator review. No chain-wide indexer or block cursor is needed for these quote-specific deposits.
 
 For Linux, [deploy/patchriot-payments.service](deploy/patchriot-payments.service) uses the same installed core binary. Put `DATABASE_URL`, `PATCHRIOT_PUBLIC_ORIGIN`, `PATCHRIOT_DISPATCHER_URL`, `PATCHRIOT_INTERNAL_KEY` and `PATCHRIOT_1CLICK_API_KEY` in root-readable `/etc/patchriot/payments.env`. Never add a wallet private key. Install the unit, run `systemctl daemon-reload`, then `systemctl enable --now patchriot-payments`. Inspect fixed status counts with `journalctl -u patchriot-payments`. Both checkout and this worker need DNS/HTTPS access to `1click.chaindefuser.com`; the core pilot unit’s loopback-only network policy must be adjusted explicitly for paid checkout. Browser requests never trigger reconciliation or confirm their own payment.
 
-The quote keeps the recipient, refund destination, asset, amount and deadline bound to the saved order. Known provider defaults and timestamp formatting are accepted; other changes are rejected. A provider may keep its deposit address active for up to three additional days; Patchriot still closes payment instructions after its five-minute window and holds late receipts for review. Provider app fees are capped at 100 basis points (1%) and shown as part of the exact transfer amount. The complete accepted provider response is saved and must match later status replies. `GET /api/payments` exposes the signed-in account’s recorded totals. Payouts and held-fund release remain separate; none of these services has a treasury signing key.
+The quote keeps the recipient, refund destination, asset, amount and deadline bound to the saved order. Known provider defaults and timestamp formatting are accepted; other changes are rejected. A provider may keep its deposit address active for up to three additional days; Patchriot still closes payment instructions after its five-minute window and holds late receipts for review. Provider app fees are capped at 100 basis points (1%) and shown as part of the exact transfer amount. Saved payment terms must match later status replies; missing tracing IDs and empty optional metadata do not change those terms. `GET /api/payments` exposes the signed-in account’s recorded receipt totals. Checkout and reconciliation never hold a treasury signing key.
 
 Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It reads the newest 50 invoices, exact integer amounts, ledger credits, delivery errors and cancellation facts from the database, including disabled customer accounts. It does not contact the provider or reveal deposit instructions. It is recent history, not a complete reconciliation report; an attention flag does not authorize a refund.
+
+### Operator earnings and withdrawals
+
+For v0.0.2 accounting, settle checkout into **native USDC on Base**. Customers can pay USDC/USDT on Ethereum or Solana through 1Click. Supporting another treasury asset requires an explicit accounting and signer adapter; a matching symbol is not enough.
+
+A completed $10 review allocates **$1 to Patchriot and $3 to each of its three roles**. Multiple roles belonging to one operator accumulate in that account. All three reports must pass the dispatcher's evidence checks. Failed, incomplete and cancelled reviews keep their customer funds for staff review; coupons create no cash earnings. Model conclusions are still claims to inspect. Runtime and model names are recorded but do not increase payment. Receipts, allocations and payout records cannot be edited or deleted; replay cannot credit a role twice.
+
+Operators open **Earnings** to inspect work and request a withdrawal of at least **10 USDC**. They choose USDC or USDT on Ethereum or Solana, enter their wallet address, inspect the exact quote and confirm. Conversion and delivery fees come from the requested amount. An unsigned request can be cancelled. Once signed, funds remain reserved until its outcome is known. Unknown, reverted or refunded transfers require staff review; they never silently restore a spendable balance.
+
+Enable withdrawals with `PATCHRIOT_TREASURY_CONFIG`, a private JSON file shared by core and the payout process:
+
+```json
+{
+  "recipient": "YOUR_DEDICATED_BASE_TREASURY_ADDRESS",
+  "rpc_url": "https://YOUR_BASE_RPC",
+  "buffer_amount": "1000000",
+  "maximum_claim": "100000000",
+  "maximum_gas_wei": "1000000000000"
+}
+```
+
+Amounts use six-decimal USDC units; this example requires a 1 USDC reserve and caps each claim at 100 USDC. `maximum_gas_wei` caps execution gas; Base also charges L1 data fees. Fund the dedicated treasury with USDC backing and ETH for gas. Do not use its key for unrelated transactions or remove funds backing balances.
+
+Only the **separate payout process** receives `PATCHRIOT_TREASURY_KEY_FILE`, an owner-only (0600) hex-key file. It runs `patchriot-core payouts-once` periodically. The supplied [service](deploy/patchriot-payouts.service) and [timer](deploy/patchriot-payouts.timer) use a separate `patchriot-payouts` OS account and `/etc/patchriot/payouts.env`. Configure the usual database/service URLs, `PATCHRIOT_INTERNAL_KEY`, `PATCHRIOT_1CLICK_API_KEY`, treasury config path and key-file path there. Do not place that key in core, dispatcher, relay or browser environments.
+
+Before signing, the process checks Base USDC balances at a finalized block and at latest, using the lower balance. It requires coverage for **all unpaid customer/operator balances plus the reserve**. A single signing lane prevents nonce gaps; signed bytes are saved before broadcast and retried unchanged after a lost response. Completion requires a finalized matching Base transfer and a matching 1Click success receipt. Destination delivery relies on 1Click’s report. Administrators see balances owed, platform revenue, claims and the last chain observation in **Payment desk**. A saved observation cannot guarantee coverage after someone spends treasury funds outside this process.
 
 </details>
 
@@ -316,7 +342,7 @@ Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It read
 3. Distinguish a provider refund of an unfinished swap from a refund of funds already received by the service. Check for earlier transfers and refund records before sending anything.
 4. Verify the recipient separately and record the approved amount, network, transaction and confirmation. Keep the treasury signer outside core, dispatcher and agents.
 
-The current ledger records receipts only. Add durable refund accounting and a tested execution procedure before enabling live checkout; an external transfer must not be hidden by deleting or editing a receipt.
+Customer refund debits and automated refund execution are not implemented. Keep unsuccessful customer payments reserved for staff review; do not hide an external refund by editing a receipt. Add a tested, durable refund record before offering routine refunds.
 
 </details>
 

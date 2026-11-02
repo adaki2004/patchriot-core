@@ -19,6 +19,7 @@ import { Guide, AgentList } from './Pairing';
 import { Landing, WorkspaceHome, RequestWork } from './Product';
 import { Docs } from './Docs';
 import { Sources } from './Sources';
+import { Earnings } from './Earnings';
 
 function Mark() {
   return <img className="brand-mark" src="/brand/white-hat.png" alt="" width="44" height="44" />;
@@ -153,6 +154,7 @@ function App() {
       <nav ref={workspaceNav} className={appView ? 'workspace-nav' : 'public-nav'} aria-label="Workspace">
         <button className={view === 'overview' ? 'active' : ''} onClick={() => setView('overview')}>{account ? (appView ? 'Overview' : 'Workspace') : 'Home'}</button>
         {account && appView && <><button className={view === 'request' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('request')}>Request an audit</button><button className={view === 'guide' ? 'active nav-primary' : 'nav-primary'} onClick={() => setView('guide')}>Pair an agent</button><button className={view === 'reviews' ? 'active' : ''} onClick={() => setView('reviews')}>Reviews</button><button className={view === 'sites' ? 'active' : ''} onClick={() => setView('sites')}>Website checks</button><button className={view === 'sources' ? 'active' : ''} onClick={() => setView('sources')}>Source reviews</button><button className={view === 'orders' ? 'active' : ''} onClick={() => setView('orders')}>Orders</button><button className={view === 'agents' ? 'active' : ''} onClick={() => setView('agents')}>Agents</button><button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}>{isAdmin ? 'Fleet & approvals' : 'My relays'}</button></>}
+        {account && appView && <button className={view === 'earnings' ? 'active' : ''} onClick={() => setView('earnings')}>Earnings</button>}
         <button className={view === 'incidents' ? 'active' : ''} onClick={() => setView('incidents')}>Watch log</button><button className={view === 'docs' ? 'active' : ''} onClick={() => navigate('docs', 'start')}>Docs</button>
         {isAdmin && appView && <><span className="nav-group">ADMIN</span><button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button><button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button><button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button></>}
         <span className="nav-note">DON’T TRUST. VERIFY.</span>
@@ -179,6 +181,7 @@ function App() {
       {view === 'sites' && account && session?.csrf_token && <Sites csrf={session.csrf_token} admin={isAdmin} accountId={account.id} selected={route.id} onSelect={id => navigate('sites', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'sources' && account && session?.csrf_token && <Sources csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => navigate('sources', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'guide' && account && <Guide onPair={() => setPairing(true)} />}
+      {view === 'earnings' && account && session?.csrf_token && <Earnings csrf={session.csrf_token} />}
       {view === 'agents' && account && <AgentList />}
       {view === 'incidents' && <IncidentLog />}
       {view === 'incident-desk' && isAdmin && session?.csrf_token && <IncidentDesk csrf={session.csrf_token} />}

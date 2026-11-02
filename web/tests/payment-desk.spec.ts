@@ -18,6 +18,7 @@ async function setup(page: Page, role: 'admin' | 'member' | null = 'admin') {
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+  await page.route('**/api/admin/treasury', route => route.fulfill({ json: { liabilities: '20000000', platform_revenue: '0', observation: null, claims: [], work: [] } }));
   await page.route('**/api/admin/payments', route => {
     expect(route.request().method()).toBe('GET'); state.calls++;
     return route.fulfill(state.status === 200 ? { json: state.rows } : { status: state.status, json: { error: state.status === 403 ? 'admin_required' : state.status === 401 ? 'sign_in_required' : 'database_unavailable' } });

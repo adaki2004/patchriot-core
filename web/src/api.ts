@@ -26,6 +26,11 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  withdrawals_unavailable: 'Withdrawals are not enabled on this installation.',
+  invalid_withdrawal: 'Check the amount, receiving network and wallet address. The minimum is 10 USDC.',
+  insufficient_earnings: 'There are not enough available earnings for this withdrawal.',
+  withdrawal_in_progress: 'A withdrawal is already reserved. Check its saved status.',
+  withdrawal_changed: 'This withdrawal changed or has expired. Refresh its status before continuing.',
   source_file_count: 'Choose 1–12 source files.',
   invalid_source_path: 'Use supported text files with simple, unique paths. No hidden files, archives or credential files.',
   invalid_source_text: 'Each file must be nonempty UTF-8 text, at most 16 KiB, without binary or hidden direction-control characters.',
