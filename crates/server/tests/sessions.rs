@@ -15,6 +15,59 @@ use uuid::Uuid;
 const ORIGIN: &str = "https://patchriot.example";
 
 #[tokio::test]
+async fn ownership_refresh_requires_session_csrf_and_forwards_only_the_authenticated_identity() {
+    let id = Uuid::new_v4();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let records = seen.clone();
+    let downstream = Router::new().fallback(move |headers: HeaderMap, uri: axum::http::Uri| {
+        let records = records.clone();
+        async move {
+            records.lock().unwrap().push((headers["x-patchriot-account"].to_str().unwrap().to_owned(), headers["x-patchriot-role"].to_str().unwrap().to_owned(), uri.path().to_owned()));
+            Json(json!({"pentest_id":id,"scope_sha256":"a".repeat(64),"verified":false,"challenges":[],"private_connection":"never forward"}))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let path = format!("/api/pentests/{id}/ownership/refresh");
+    let body = json!({"scope_sha256":"a".repeat(64)});
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &[("origin", ORIGIN)])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (cookie, session) = test.login("member").await;
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &[("cookie", &cookie)])
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert!(seen.lock().unwrap().is_empty());
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+        ("x-patchriot-role", "admin"),
+    ];
+    for (method, path, body) in [
+        ("POST", path, body),
+        ("GET", format!("/api/pentests/{id}/ownership"), Value::Null),
+    ] {
+        let reply = test.request(method, &path, body, &headers).await;
+        assert_eq!(reply.0, StatusCode::OK);
+        assert!(reply.2.get("private_connection").is_none());
+    }
+    assert!(seen.lock().unwrap().iter().all(|(account, role, _)| account
+        == session["account"]["id"].as_str().unwrap()
+        && role == "member"));
+    server.abort();
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn live_pilot_requires_session_csrf_and_cannot_bypass_coupon_or_closed_access() {
     use patchriot_core::payments::access::ReviewAccess;
     for mode in [ReviewAccess::Coupons, ReviewAccess::Closed] {
@@ -130,7 +183,7 @@ async fn personal_audit_lists_narrow_admin_reads_without_elevating_members() {
 }
 
 #[tokio::test]
-async fn pairing_setup_and_agent_metadata_require_an_enabled_account() {
+async fn pairing_setup_requires_staff_and_agent_metadata_requires_an_enabled_account() {
     let downstream = Router::new().fallback(|headers: HeaderMap, uri: axum::http::Uri| async move {
         assert!(headers.contains_key("authorization"));
         assert!(headers.contains_key("x-patchriot-account"));
@@ -150,7 +203,31 @@ async fn pairing_setup_and_agent_metadata_require_an_enabled_account() {
             StatusCode::UNAUTHORIZED
         );
     }
-    let (cookie, session) = test.login("member").await;
+    let (member_cookie, member_session) = test.login("member").await;
+    let member_headers = [
+        ("cookie", member_cookie.as_str()),
+        ("origin", ORIGIN),
+        (
+            "x-csrf-token",
+            member_session["csrf_token"].as_str().unwrap(),
+        ),
+        ("x-patchriot-role", "admin"),
+    ];
+    let denied = test
+        .request("GET", "/api/pairing-info", Value::Null, &member_headers)
+        .await;
+    assert_eq!(denied.0, StatusCode::FORBIDDEN);
+    assert_eq!(denied.2, json!({"error":"public_pairing_disabled"}));
+    let denied = test.request("POST", "/api/pairings/claim", json!({"user_code":"ABCD-EF01-2345","display_name":"Example operator","hosting":"own_machine","accepts_private_work_rules":true}), &member_headers).await;
+    assert_eq!(denied.0, StatusCode::FORBIDDEN);
+    assert_eq!(denied.2, json!({"error":"public_pairing_disabled"}));
+    assert_eq!(
+        test.request("GET", "/api/agents", Value::Null, &member_headers)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let (cookie, session) = test.login("admin").await;
     let headers = [("cookie", cookie.as_str())];
     assert_eq!(
         test.request("GET", "/api/pairing-info", Value::Null, &headers)
@@ -1084,7 +1161,7 @@ async fn pairing_recovery_errors_are_specific_without_forwarding_private_dispatc
     let url = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
     let test = TestApp::new(&url).await;
-    let (cookie, session) = test.login("member").await;
+    let (cookie, session) = test.login("admin").await;
     let headers = [
         ("cookie", cookie.as_str()),
         ("origin", ORIGIN),

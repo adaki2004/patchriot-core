@@ -243,6 +243,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/agents", get(gateway::agents))
         .route("/api/pairing-info", get(gateway::pairing_info))
         .route("/api/pairings/claim", post(gateway::claim))
+        .route("/api/pentests/{id}/ownership", get(pentests::ownership))
+        .route(
+            "/api/pentests/{id}/ownership/refresh",
+            post(pentests::refresh_ownership),
+        )
         .route("/api/devices/{id}/decision", post(gateway::decision))
         .route(
             "/api/reviews",

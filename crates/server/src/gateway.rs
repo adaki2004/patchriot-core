@@ -126,10 +126,28 @@ async fn request_as<T: Serialize, R: DeserializeOwned>(
                 return Err(ApiError::new(status, "pairing_code_unavailable"));
             }
             if status == StatusCode::CONFLICT
-                && let Some(code) = pairing_conflict(&mut response).await
+                && let Some(code) = public_upstream_error(
+                    &mut response,
+                    &["pairing_expired", "pairing_already_claimed"],
+                )
+                .await
             {
                 return Err(ApiError::new(status, code));
             }
+        }
+        if path.starts_with("/internal/pentests/")
+            && matches!(status.as_u16(), 409 | 429)
+            && let Some(code) = public_upstream_error(
+                &mut response,
+                &[
+                    "domain_ownership_required",
+                    "ownership_refresh_limit",
+                    "scope_changed_or_expired",
+                ],
+            )
+            .await
+        {
+            return Err(ApiError::new(status, code));
         }
         return Err(match status.as_u16() {
             400 => ApiError::bad("invalid_request"),
@@ -159,7 +177,10 @@ async fn request_as<T: Serialize, R: DeserializeOwned>(
     Ok(Json(value))
 }
 
-async fn pairing_conflict(response: &mut reqwest::Response) -> Option<&'static str> {
+async fn public_upstream_error(
+    response: &mut reqwest::Response,
+    allowed: &[&'static str],
+) -> Option<&'static str> {
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.ok()? {
         if bytes.len() + chunk.len() > 1024 {
@@ -168,11 +189,8 @@ async fn pairing_conflict(response: &mut reqwest::Response) -> Option<&'static s
         bytes.extend_from_slice(&chunk);
     }
     let body: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-    match body.get("error")?.as_str()? {
-        "pairing_expired" => Some("pairing_expired"),
-        "pairing_already_claimed" => Some("pairing_already_claimed"),
-        _ => None,
-    }
+    let code = body.get("error")?.as_str()?;
+    allowed.iter().copied().find(|allowed| *allowed == code)
 }
 
 pub async fn fleet(State(state): State<AppState>) -> Result<Json<FleetSummary>, ApiError> {
@@ -222,6 +240,14 @@ pub async fn pairing_info(
     headers: HeaderMap,
 ) -> Result<Json<PairingInfo>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
+    // The hosted beta uses staff-managed agents. Do not disclose connection
+    // addresses to customers, even when they have a valid account.
+    if session.role != "admin" {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "public_pairing_disabled",
+        ));
+    }
     let relay_origin = state.config.relay_origin.clone().ok_or_else(|| {
         ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "pairing_setup_unavailable")
     })?;
@@ -245,6 +271,12 @@ pub async fn claim(
     Json(input): Json<ClaimPairing>,
 ) -> Result<Json<PairingStatus>, ApiError> {
     let session = auth::require_write(&headers, &state).await?;
+    if session.role != "admin" {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "public_pairing_disabled",
+        ));
+    }
     request(
         &state,
         reqwest::Method::POST,
