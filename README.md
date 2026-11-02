@@ -5,13 +5,17 @@ The internet needs more defenders. Patchriot brings together agents with securit
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Working prototype:** connect approved agents, collect an authorized website snapshot or upload source files, review them privately and inspect the evidence. The public watch log tracks reported incidents. Agents currently review saved text; live penetration testing comes later.
+**Working prototype:** connect approved agents, collect an authorized website snapshot or upload source files, review them privately and inspect the evidence. The public incident notebook tracks reported incidents. Agents currently review saved text; live penetration testing comes later.
 
 **CPU pilot:** Pairing and tool execution work. Tested model configurations still produced false positives on clean examples; findings require human review.
 
 ## Use Patchriot
 
-The website includes a public **Docs** section at `/#/docs/start`, covering the review flow, privacy, payments and contribution. The incident notebook keeps dated public sources separate from private customer work.
+Sign in or request access in the landing-page form. Your dashboard brings together **audits, orders and earnings**, with two main actions: **Request an audit** and **Pair an agent**. **Audits** links your website snapshots or source uploads to the agents’ reports. The agent directory is shared; staff tools live under **Administration** and **Agent approvals**.
+
+The public **Docs** section at `/#/docs/start` has eight numbered chapters, from an overview diagram to service boundaries. The incident notebook contains public sources, separate from customer work. Organizational deployments with their own approved operators are a planned use of the infrastructure; hosted team isolation is not available yet.
+
+Four optional design previews cover the landing page and workspace: `?design=paper`, `?design=signal`, `?design=terminal` and `?design=studio`. They use different local fonts and layouts. The selector changes presentation only; account, payment and approval rules are shared.
 
 **Hosted beta: coming soon.** The current deployment is a private pilot. We will publish the website address here when the hosted beta opens.
 
@@ -48,7 +52,7 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 
 | Area | Working now / next |
 | --- | --- |
-| Accounts and dashboard | Approved access requests, password login, account-bound coupons and admin views; Google login and stronger authentication follow |
+| Accounts and dashboard | Inline access, personal audits/orders/earnings, separate staff views and four design previews; Google login and stronger authentication follow |
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
@@ -93,11 +97,11 @@ target/debug/patchriot-core bootstrap-admin your_username ../admin-password.txt
 
 Open **http://127.0.0.1:7410** and sign in with that username and the generated password. Keep the password file private, outside Git. **Access & users** lets you approve requests, create member accounts and include a one-use review coupon. Share the setup link privately; the recipient chooses their own password. No email is sent automatically.
 
-Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are stored as Argon2id hashes. A judge’s coupon is tied to their account and expires unused after seven days. **Renew setup link** replaces outstanding invitations; completing setup ends old sessions. **Issue coupon** replaces unused coupons but leaves already-started reviews intact. Disabling login ends browser sessions; revoke devices separately in Fleet & approvals.
+Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are stored as Argon2id hashes. A judge’s coupon is tied to their account and expires unused after seven days. **Renew setup link** replaces outstanding invitations; completing setup ends old sessions. **Issue coupon** replaces unused coupons but leaves already-started reviews intact. Disabling login ends browser sessions; revoke devices separately in Agent approvals.
 
 To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing pilot login codes still work through **Use a pilot login code**. Password sign-in and setup are limited by username, socket peer and a shared backstop; forwarded IP headers are not trusted. A reverse proxy therefore shares the peer limit. Add edge rate limits before a public rollout. Google login and MFA are separate future integrations.
 
-In **Pair an agent**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Fleet & approvals**, then choose **Reviews → New example review**:
+In **Pair an agent**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. The setup guide explains where to download and verify the binary, how to select a CPU or GPU machine, and which relay address this deployment provides. A loopback address works only on that machine or through an explicitly configured tunnel. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Agent approvals**, then choose **Audits → Saved material and test examples → Reports & examples → New example review**:
 
 - **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
 - **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role. The browser shows the deployment’s time limit before submission: 35 minutes by default, up to 95 minutes for an explicitly configured CPU pilot.
@@ -140,7 +144,7 @@ Before an upgrade, back up PostgreSQL and retain the installed binary and web fi
 
 ## Website evidence
 
-Open **Website checks → New website snapshot**, enter the HTTPS homepage origin, optionally add up to three script origins, and explain your permission to review the site. An admin must approve the exact scope before any collection. A checkbox alone is not proof of ownership.
+Open **Request an audit → Check a website**, enter the HTTPS homepage origin, optionally add up to three script origins, and explain your permission to review the site. An admin must approve the exact scope before any collection. A checkbox alone is not proof of ownership.
 
 The optional **JEV check** sends only that scope and permission note to TypeSafe through OpenRouter. It flags suspicious or unclear requests for the admin; it does not verify ownership or assess the website. No page content is sent in this step. Every request still needs approval, including when screening is unavailable. Existing requests and clients retain manual review without external sharing.
 
@@ -158,6 +162,8 @@ Only the requester and admins can read or download the collected evidence. Raw b
 To request **agent review**, open the snapshot and choose **Prepare agent review**. Inspect the three proposed devices for investigator, reproducer and challenger, then consent to sharing this snapshot and earlier reports. Each device needs separate private-work approval and operator opt-in. Admins cannot give sharing consent on the requester's behalf. There are no automatic replacement devices.
 
 Agents receive the saved text in a network-isolated container. Later roles see earlier claims and can challenge them; static inspection cannot reproduce live exploits. Reports separate model claims from matching quotations and execution evidence. **Reports received means the workflow finished, not that the site is safe.** Missing tools, invalid output or invented quotations leave the report marked **Needs review**. Raw snapshots expire after seven days; reports can retain short quotations. Assigned operators can see plaintext, and revocation cannot recall data already seen.
+
+Personal lists use `?scope=mine` on `/api/reviews`, `/api/site-checks` and `/api/sources`, including for admins. Staff audit lists use `?scope=all`; this preserves the caller’s existing permissions and never elevates a member. Omitting the filter preserves the previous API behavior.
 
 The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/evidence`; `GET /:id/compare/:baseline_id` reads a comparison. `/:id/review-plan` lists eligible devices and `/:id/review` starts a free pilot review. Sessions protect every route, writes require CSRF and scope decisions require an admin. Reviews use the existing three-active-review limit and a saved deadline (35 minutes by default). Coupon and paid modes use the access routes below.
 
@@ -177,7 +183,9 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 ## The incident notebook
 
-**Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries with touch or ↑/↓ keys.
+**Administration → Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries with touch or ↑/↓ keys.
+
+The [November research batch](content/incidents/2026-11-02.json) contains four cited entries. Import an individual object from its `entries` array, review its sources and publish it in the desk. This file is not published automatically.
 
 Need fresh research? Open the dialog's **research brief**, copy its dated 72-hour window and format instructions into your research agent, then import the result here. The brief contains no account or draft data. Copying it starts no external job; source review and publication stay with the admin.
 
@@ -194,7 +202,7 @@ Opening another entry or loading research asks before replacing unsaved edits. D
 
 ## Price and payments
 
-The intended beta offer is **$10 for one bounded website or source review**, or a **single-use review code**. This covers the agreed snapshot, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented; the current private pilot remains free.
+The intended beta offer is **$10 for one bounded website or source review**, or a **single-use review code**. This covers the agreed snapshot, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented. The deployment chooses whether checkout is enabled; a coupon can cover an approved pilot review.
 
 Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
 
@@ -218,7 +226,7 @@ target/debug/patchriot-core revoke-review-code <code-uuid>
 
 Issuance prints the ID, secret code and expiry once. Share the code privately with an invited account. The database stores its hash; unused codes expire after seven days and can be revoked. The label appears in the recipient's review history, so avoid private administrative notes.
 
-The tester opens a saved snapshot, chooses three agents, accepts sharing and enters the code. Once reserved, it stays tied to that account, snapshot, selected agents and request. If the reply is lost, open **Reviews → Sponsored reviews** to recover it. This uses the saved request without entering the code again. Cancellation does not restore the code. If admission keeps failing, the operator must investigate before issuing a replacement.
+The tester opens a saved snapshot, chooses three agents, accepts sharing and enters the code. Once reserved, it stays tied to that account, snapshot, selected agents and request. If the reply is lost, open **Audits → Saved material and test examples → Reports & examples → Sponsored reviews** to recover it. This uses the saved request without entering the code again. Cancellation does not restore the code. If admission keeps failing, the operator must investigate before issuing a replacement.
 
 `POST /api/site-checks/:id/review-code` accepts `{code, consent}`. `GET /api/review-codes` returns the owner's latest reservations; `POST /api/review-codes/:id/resume` accepts `{}`. Writes require the session, same origin and CSRF token. Codes create no invoice, cash balance or earnings. `closed` mode pauses new and resumed starts while preserving history.
 

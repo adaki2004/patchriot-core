@@ -1,0 +1,58 @@
+{
+  "reviewed_on": "2026-11-02",
+  "note": "Editorial research from public sources; not Patchriot findings. Each entry must be reviewed and published through the incident desk. This file is not loaded automatically.",
+  "entries": [
+    {
+      "title": "Binance: a compromised signing path",
+      "occurred_on": "2026-10-29",
+      "evidence": "reported",
+      "summary": "TRM Labs reports coordinated transfers out of Binance wallets across ten chains on 29 October. On Ethereum it observed EIP-7702 delegation; other chains used ordinary signed transfers. TRM interprets that pattern as a compromise of the hot-wallet signing infrastructure. This is a developing investigation: its initial figures describe gross outflows, not verified final customer losses. The precise entry point is not established by that analysis.",
+      "takeaway": "Our takeaway: protect the authority to sign, not just the private-key file. Separate signing approval from everyday workstations and inspect what a delegation permits before authorizing it.",
+      "sources": [
+        {
+          "label": "TRM Labs — original chain analysis, 29 October",
+          "url": "https://www.trmlabs.com/resources/blog/north-korea-steals-usd-6-36-billion-from-binance-in-the-largest-hack-in-history"
+        }
+      ]
+    },
+    {
+      "title": "Polymarket: a monitoring script turned hostile",
+      "occurred_on": "2026-10-29",
+      "evidence": "confirmed",
+      "summary": "Hudson Rock retrieved a script from a DebugBear URL used by Polymarket and found code seeking a logged-in trading client, then attempting asset sales and transfers. Two downloads matched. It also found a Polymarket build recording the integration’s removal. That confirms the captured malicious script, not every alleged loss or the exact compromise path. The researchers explicitly leave the exposure window and aggregate losses unresolved.",
+      "takeaway": "Our takeaway: a third-party script running beside a wallet can reach authority already present in the page. Keep monitoring code away from signing surfaces where possible. An allowed script host is not a guarantee that tomorrow’s bytes are safe.",
+      "sources": [
+        {
+          "label": "Hudson Rock — captured-script analysis, 29 October",
+          "url": "https://www.infostealers.com/article/polymarket-breach-alert-wallet-draining-code-found-in-a-third-party-script/"
+        }
+      ]
+    },
+    {
+      "title": "Linux: local access can become root",
+      "occurred_on": "2026-10-23",
+      "evidence": "advisory",
+      "summary": "CloudLinux’s 23 October advisory describes ZDI-CAN-33367, a Linux networking flaw that can let an ordinary local user alter read-only files and gain root when the required namespace access is available. This is a local privilege-escalation advisory, not evidence that every Linux server was hacked. Its 30 October update lists fixed kernels for several CloudLinux releases; support channels differ.",
+      "takeaway": "Check your distribution’s advisory and installed kernel, then apply and activate its supported fix. For agent hosts, a container still depends on the host kernel. The presence of a container alone does not settle this risk.",
+      "sources": [
+        {
+          "label": "CloudLinux — vendor advisory, updated 30 October",
+          "url": "https://blog.cloudlinux.com/zdi-can-33367"
+        }
+      ]
+    },
+    {
+      "title": "PHP: request cleanup needs a patch",
+      "occurred_on": "2026-10-21",
+      "evidence": "advisory",
+      "summary": "CERT-EU reports that PHP released fixes on 21 October for CVE-2026-109618 and CVE-2026-109619. Memory cleanup and stale request state can lead to unauthenticated remote code execution in affected web-serving installations. The fixed upstream releases listed are 8.5.12, 8.4.27, 8.3.36 and 8.2.35. This is an advisory, not a claim about a particular breached website. The advisory also tracks a separate follow-up issue disclosed on 23 October.",
+      "takeaway": "Use your vendor’s current security guidance, including backported packages and the follow-up issue. Verify that the running web workers use the patched runtime. Updating a dependency list alone does not replace a running process.",
+      "sources": [
+        {
+          "label": "CERT-EU — PHP security advisory 2026-018",
+          "url": "https://cert.europa.eu/publications/security-advisories/2026-018"
+        }
+      ]
+    }
+  ]
+}
