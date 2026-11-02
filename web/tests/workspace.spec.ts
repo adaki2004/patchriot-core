@@ -43,7 +43,7 @@ test('personal audits join material to its latest report while staff records sta
   await page.getByRole('button', { name: 'Audit approvals', exact: true }).click();
   await expect(page.getByText('https://staff-only.example/', { exact: true })).toBeVisible();
   expect(reads.some(path => path.endsWith('?scope=all'))).toBe(true);
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await page.getByRole('button', { name: 'App', exact: true }).click();
   await expect(page.locator('.recent-work .audit-row')).toHaveCount(2);
   await expect(page.getByText('https://staff-only.example/', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

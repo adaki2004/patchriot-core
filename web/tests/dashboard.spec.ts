@@ -7,8 +7,8 @@ test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 const account = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Test operator', role: 'member', auth_method: 'invite' };
 const fleet = { online_devices: 3, online_operators: 1, online_compute_groups: 1 };
 
-async function setup(page: Page, signedIn = false) {
-  await page.route('**/api/session', route => route.fulfill({ json: { account: signedIn ? account : null, csrf_token: signedIn ? 'test-csrf' : null } }));
+async function setup(page: Page, signedIn = false, role = 'member') {
+  await page.route('**/api/session', route => route.fulfill({ json: { account: signedIn ? { ...account, role } : null, csrf_token: signedIn ? 'test-csrf' : null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: fleet }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/pairing-info', route => route.fulfill({ json: { relay_origin: 'https://relay.example', audience: 'test-deployment' } }));
@@ -20,7 +20,7 @@ for (const dialog of [
   { name: 'pairing', signedIn: true, trigger: 'I already have a pairing code →', field: 'Pairing code', close: 'Close pairing' },
 ]) {
   test(`${dialog.name} focuses its code field and returns keyboard focus on close`, async ({ page }) => {
-    await setup(page, dialog.signedIn);
+    await setup(page, dialog.signedIn, 'admin');
     await page.goto('/');
     await page.evaluate(() => { location.hash = '/guide'; });
     const trigger = page.getByRole('button', { name: dialog.trigger, exact: true });
@@ -41,11 +41,11 @@ for (const dialog of [
 test('shows real fleet dimensions, prototype scope and usable mobile layout', async ({ page }) => {
   await setup(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENCE NETWORK.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
-  await expect(page.locator('.tm-footnote')).toContainText('Each request has an approved scope.');
-  await expect(page.locator('.tm-footnote')).toContainText('Live HTTP testing is available in a separate pilot.');
+  await expect(page.locator('.tm-footnote')).toContainText('scoped HTTP testing');
+  await expect(page.locator('.tm-footnote')).toContainText('Agent agreement is not a security guarantee.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
@@ -54,9 +54,9 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
 });
 
 test('relay setup explains installation, remote addresses and private-work consent', async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   await page.goto('/#/guide');
-  const guide = page.getByRole('region', { name: 'Your machine. Our shared defence.' });
+  const guide = page.getByRole('region', { name: 'Your machine. Our shared defense.' });
   const steps = page.getByRole('navigation', { name: 'Pairing steps' });
   const commands = guide.locator('pre');
   await expect(guide.getByRole('radio', { name: 'Try the connection first', exact: false })).toBeChecked();
@@ -107,7 +107,7 @@ test('an outage keeps the previous count and displays the failure', async ({ pag
 });
 
 test('setup does not invent a deployment endpoint and the agent directory shows only safe fields', async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   await page.route('**/api/pairing-info', route => route.fulfill({ status: 503, json: { error: 'pairing_setup_unavailable' } }));
   await page.route('**/api/agents', route => route.fulfill({ json: [{ id: '00000000-0000-4000-8000-000000000002', reported_os: null, runtime: 'hermes', runtime_version: 'example', declared_model: 'local-model', state: 'offline', last_seen_at: null }] }));
   await page.goto('/#/guide');
@@ -155,13 +155,13 @@ for (const phase of ['headers', 'body']) test(`a read timeout during ${phase} pr
 });
 
 test('session expiry clears private views and open dialogs while an outage preserves the workspace', async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   let failure = 0;
   await page.route('**/api/devices', route => route.fulfill(failure
     ? { status: failure, json: { error: failure === 401 ? 'sign_in_required' : 'dispatcher_unavailable' } }
     : { json: [{ id: 'private-device', operator_id: account.id, operator_name: account.display_name, label: 'My private relay', runtime: 'owned_fixture', runtime_version: '0.0.1', compute_group: 'my-machine', approval: 'approved', state: 'online', last_seen_at: null }] }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'My agents', exact: true }).click();
+  await page.getByRole('button', { name: 'Agent approvals', exact: true }).click();
   await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
   failure = 503;
   await page.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
@@ -171,12 +171,12 @@ test('session expiry clears private views and open dialogs while an outage prese
   await page.getByRole('button', { name: 'Pair a relay +', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   failure = 401;
-  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('My private relay', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'My agents', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Agent approvals', exact: true })).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Your session has ended');
-  await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
+  await page.getByRole('button', { name: 'App', exact: true }).click();
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
 });
 
@@ -185,12 +185,12 @@ test('an expired session can leave the workspace through sign out', async ({ pag
   await page.route('**/api/auth/logout', route => route.fulfill({ status: 401, json: { error: 'sign_in_required' } }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'App', exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 for (const status of [200, 401]) test(`a late ${status} from an expired login does not change the new workspace`, async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   let releaseClaim!: () => void;
   const pending = new Promise<void>(resolve => { releaseClaim = resolve; });
   let releaseExpiry!: () => void;
@@ -213,7 +213,7 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
   await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'My agents', exact: true }).click();
+    await page.getByRole('button', { name: 'Agent approvals', exact: true }).click();
     await page.getByRole('button', { name: 'Pair a relay +', exact: true }).click();
     await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
     await page.getByLabel('I will use assigned data', { exact: false }).check();
@@ -225,7 +225,7 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
     await expect(page.getByRole('status')).toContainText('Your session has ended');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: 'new-account', display_name: 'Another member' }, csrf_token: 'new-csrf' } }));
-    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
+    await page.getByRole('button', { name: 'App', exact: true }).click();
     await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
@@ -262,7 +262,7 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
+    await page.getByRole('button', { name: 'App', exact: true }).click();
     await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
@@ -307,7 +307,7 @@ test('an accepted invitation can retry loading the workspace without redeeming t
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
+    await page.getByRole('button', { name: 'App', exact: true }).click();
     await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
@@ -331,7 +331,7 @@ test('an accepted invitation can retry loading the workspace without redeeming t
   } finally { release(); }
 });
 
-for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay list without self-approving`, async ({ page }) => {
+for (const role of ['admin']) test(`pairing opens the ${role} relay list without self-approving`, async ({ page }) => {
   await setup(page, true);
   await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, role }, csrf_token: 'test-csrf' } }));
   let submission: Record<string, unknown> | undefined;
@@ -383,7 +383,7 @@ for (const [code, status, guidance] of [
   ['pairing_code_unavailable', 404, /Copy the latest code.*same state directory/],
   ['pairing_already_claimed', 409, /different account.*separate state directory/],
 ] as const) test(`pairing recovers from ${code} without losing the operator profile`, async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   const requests: Record<string, unknown>[] = [];
   let accepted = false;
   await page.route('**/api/devices', route => route.fulfill({ json: accepted ? [{

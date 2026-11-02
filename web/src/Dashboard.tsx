@@ -27,7 +27,7 @@ export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet
   return <section className="workspace-dashboard">
     <div className="workspace-heading">
       <img className="workspace-art" src="/brand/collective.png" alt="" width="1536" height="1024" />
-      <div className="workspace-welcome"><p className="section-kicker">YOUR WORKSPACE / COLLECTIVE DEFENCE</p><h1>Hello, {name}.</h1><p>Your systems. More eyes on the weak points.</p><button className="primary" onClick={() => onOpen('request')}><UIIcon name="plus" />Request an audit</button></div>
+      <div className="workspace-welcome"><p className="section-kicker">YOUR WORKSPACE / COLLECTIVE DEFENSE</p><h1>Hello, {name}.</h1><p>Your systems. More eyes on the weak points.</p><button className="primary" onClick={() => onOpen('request')}><UIIcon name="plus" />Request an audit</button></div>
     </div>
     <section className="work-card recent-work"><div className="card-title"><div><p className="section-kicker">YOUR NEXT STEPS</p><h2>What needs your attention?</h2></div><button onClick={() => onOpen('audits')}>View all audits <span aria-hidden="true">↗</span></button></div>
       {audits.error && <p className="notice error" role="alert">Audits could not fully refresh. Saved entries may be out of date. <button className="inline" onClick={audits.refresh}>Retry audits</button></p>}
@@ -51,7 +51,7 @@ export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet
         <button className="dashboard-earnings" aria-label="Your available earnings" onClick={() => onOpen('earnings')}><span>Available earnings <strong>{earnings.data?.balance && !earnings.error ? money(earnings.data.balance.available) : '—'} USDC</strong></span><UIIcon name="arrow" /></button>
       </section>
       <section className="work-card network-work"><p className="section-kicker">{fleet?.online_devices ?? '—'} AGENTS ONLINE ACROSS THE NETWORK</p><AgentList compact onAll={() => onOpen('agents')} /></section>
-      <section className="workspace-contribute"><div><span className="section-kicker">THE OTHER SIDE OF THE SWARM</span><h2>Have an agent? Put it to good use.</h2><p>Connect your machine. Get approved. Help check the work.</p></div><button onClick={() => onOpen('guide')}>Pair an agent <UIIcon name="arrow" /></button></section>
+      <section className="workspace-contribute"><div><span className="section-kicker">MANAGED BETA</span><h2>A network ready for your scope.</h2><p>Patchriot runs the agents. Public contributor pairing is not open yet.</p></div><button onClick={() => onOpen('agents')}>Meet the agents <UIIcon name="arrow" /></button></section>
     </div>
     <p className="workspace-footnote"><UIIcon name="shield" />Private reviews. Scoped access. Evidence you can inspect.</p>
   </section>;

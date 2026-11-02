@@ -7,12 +7,12 @@ test('Collective shows the selected hero, logo and consistent navigation', async
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.goto('/#/home');
   await expect(page.locator('html')).toHaveAttribute('data-design', 'collective');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('BUILD YOURDEFENCE NETWORK.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('BUILD YOURDEFENSE NETWORK.');
   await expect(page.locator('header .brand-mark')).toHaveAttribute('src', '/brand/white-hat.png');
   expect((await page.locator('header .brand-mark').boundingBox())!.width).toBeGreaterThanOrEqual(64);
   const navigation = page.getByRole('navigation', { name: 'Website' });
-  await expect(navigation.getByRole('button')).toHaveText(['Home', 'Recent events', 'Docs', 'Dashboard ↗']);
-  await navigation.getByRole('button', { name: 'Dashboard', exact: false }).click();
+  await expect(navigation.getByRole('button')).toHaveText(['Home', 'Recent events', 'Docs', 'App ↗']);
+  await navigation.getByRole('button', { name: 'App', exact: false }).click();
   await expect(page.getByRole('dialog', { name: 'Sign in or request access' }).getByLabel('Username', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
 });
@@ -41,10 +41,8 @@ test('Public/private comparison, motion and access work with a keyboard', async 
   await expect(slider).toHaveValue('50');
   // A later generic input style must not hide the comparison artwork again.
   expect(await slider.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
-  const roles = page.getByRole('tablist', { name: 'Review roles' });
-  await roles.getByRole('tab', { name: '01 Investigate', exact: false }).focus();
-  await page.keyboard.press('ArrowRight');
-  await expect(page.locator('.method-content')).toContainText('Make it hold up.');
+  await expect(page.getByRole('heading', { name: 'OWASP BLACK-BOX ETHICAL HACKING ENGINE.' })).toBeVisible();
+  await expect(page.getByText('NO SOLO', { exact: false })).toHaveCount(0);
   await page.getByRole('button', { name: 'PUT THE SWARM TO WORK', exact: false }).click();
   const access = page.getByRole('dialog', { name: 'Sign in or request access' });
   await expect(access.getByLabel('Your name', { exact: true })).toBeInViewport();
@@ -52,7 +50,7 @@ test('Public/private comparison, motion and access work with a keyboard', async 
   await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(access).toHaveCount(0);
-  const opener = page.locator('header').getByRole('button', { name: 'Sign in or request access' });
+  const opener = page.locator('header').getByRole('button', { name: 'App' });
   await opener.click();
   await expect(access.getByLabel('Username', { exact: true })).toBeFocused();
   await access.getByRole('button', { name: 'Request access', exact: true }).click();
@@ -78,7 +76,7 @@ test('the same header keeps Dashboard visible on public and private pages', asyn
   await expect(nav.getByRole('button')).toHaveCount(4);
   await expect(nav.locator('.workspace-nav-bottom')).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await nav.getByRole('button', { name: 'Dashboard', exact: false }).click();
+  await nav.getByRole('button', { name: 'App', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Review owner.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Request an audit', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -86,7 +84,7 @@ test('the same header keeps Dashboard visible on public and private pages', asyn
   await expect(page.getByRole('button', { name: 'Access & users', exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Audits', exact: true }).click();
   await expect(page).toHaveURL(/#\/audits$/);
-  await expect(nav.getByRole('button')).toHaveText(['Home', 'Recent events', 'Docs', 'Dashboard ↗']);
+  await expect(nav.getByRole('button')).toHaveText(['Home', 'Recent events', 'Docs', 'App ↗']);
   expect(reads.filter(path => /\/api\/(reviews|site-checks|sources)/.test(path)).every(path => path.endsWith('?scope=mine'))).toBe(true);
 });
 

@@ -115,3 +115,23 @@
 @media (max-width: 360px) {
   .textmode-ui .site-header .brand { font-size: 28px; gap: 5px; }.textmode-ui .site-header .brand-mark { width: 58px; height: 58px; }.textmode-ui .header-account .header-login { padding: 10px; }.header-account .account-name { display: none; }.site-navigation { gap: 8px; }.site-navigation .dashboard-destination { gap: 7px; padding-inline: 9px; }.tm-hero-actions { flex-wrap: wrap; }
 }
+
+/* DNS proof is a prerequisite, not a test result. Keep long TXT values usable. */
+.domain-ownership { margin-block: 24px; padding-block: 24px; border-block: 1px solid var(--line); }
+.domain-challenge { border: 1px solid var(--line); padding: 20px; margin-block: 16px; }
+.domain-challenge h4 { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.domain-challenge dl { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; }
+.domain-challenge dd { margin: 0; min-width: 0; }
+.domain-challenge code { overflow-wrap: anywhere; user-select: all; }
+.domain-ownership > details { margin-top: 20px; }
+@media (max-width: 540px) { .domain-challenge { padding: 14px; }.domain-challenge dl { grid-template-columns: minmax(0, 1fr); gap: 6px; }.domain-challenge dd { margin-bottom: 12px; } }
+
+.product-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); }
+.product-steps article { padding: 28px; border-right: 1px solid var(--line); }
+.product-steps article:last-child { border: 0; }
+.product-steps article > span { font-size: 10px; color: var(--muted); }
+.product-steps h3 { font: 32px/1.1 var(--heading-font); margin: 28px 0 16px; }
+.product-steps p { font-size: 12px; color: var(--muted); }
+.tm-product > .primary { margin-top: 20px; }
+.map-requester { color: var(--ink); }
+@media (max-width: 700px) { .product-steps { grid-template-columns: 1fr; }.product-steps article { border-right: 0; border-bottom: 1px solid var(--line); padding: 22px; }.product-steps h3 { margin-top: 16px; } }

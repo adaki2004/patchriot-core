@@ -44,6 +44,10 @@ const messages: Record<string, string> = {
 
   live_test_pilot_only: 'Live tests are available only in the approved pilot; paid and coupon checkout for live tests is not enabled.',
   pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
+  public_pairing_disabled: 'Public pairing is not open yet. Patchriot operates the agents in this beta.',
+  domain_ownership_required: 'Verify every domain with the supplied DNS TXT records before requesting approval.',
+  ownership_refresh_limit: 'This request has used its six DNS refresh windows. Check your DNS records before creating a new request.',
+  scope_changed_or_expired: 'This scope has changed or expired. Open the current request before continuing.',
   invalid_credentials: 'The username or password is incorrect, or this account is unavailable.',
   invalid_username: 'Use 3–40 letters, numbers, dots, hyphens or underscores. Start with a letter or number.',
   username_unavailable: 'That username is already taken. Choose another.',

@@ -82,7 +82,7 @@ test('a forbidden or unavailable refresh hides cached admin records', async ({ p
   }
   state.status = 401;
   await page.getByRole('button', { name: 'Refresh payments ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'App', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Admin payment records' })).toHaveCount(0);
 });
 

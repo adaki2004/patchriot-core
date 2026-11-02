@@ -295,7 +295,7 @@ test('a delayed checkout reply cannot open the old order after another account s
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: '00000000-0000-4000-8000-000000000099', display_name: 'New customer' }, csrf_token: 'new-csrf' } }));
     await page.route('**/api/orders', route => route.fulfill({ json: [] }));
     await page.route(`**/api/orders/${orderId}`, route => { oldOrderReads++; return route.fulfill({ status: 404, json: { error: 'not_found' } }); });
-    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
+    await page.getByRole('button', { name: 'App', exact: true }).click();
     await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
@@ -362,7 +362,7 @@ test('processing hides instructions, settlement does not claim completed work, a
   await expect(detail).toContainText('Open the report for its current progress and result');
   state.statusError = 401;
   await detail.getByRole('button', { name: 'Refresh order ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'App', exact: true })).toBeVisible();
   await expect(detail).toHaveCount(0);
   await expect(page.getByText(state.quote.deposit_address, { exact: true })).toHaveCount(0);
 });
