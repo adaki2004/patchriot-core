@@ -6,15 +6,26 @@ import { useLive } from './useLive';
 
 type LoginMode = 'password' | 'activate' | 'legacy';
 
-export function AccessPanel({ initialCode = '', mode, onMode, onLogin }: { initialCode?: string; mode: 'signin' | 'request'; onMode: (mode: 'signin' | 'request') => void; onLogin: () => Promise<void> }) {
+export function AccessPanel({ initialCode = '', mode, onMode, onLogin, onBusyChange }: { initialCode?: string; mode: 'signin' | 'request'; onMode: (mode: 'signin' | 'request') => void; onLogin: () => Promise<void>; onBusyChange?: (busy: boolean) => void }) {
   const [busy, setBusy] = useState(false);
+  function changeBusy(value: boolean) { setBusy(value); onBusyChange?.(value); }
   return <section className="access-panel-inline" id="access" aria-label="Account access">
     <div className="access-tabs" aria-label="Access options">
       <button disabled={busy} aria-pressed={mode === 'signin'} onClick={() => onMode('signin')}>Sign in</button>
       <button disabled={busy} aria-pressed={mode === 'request'} onClick={() => onMode('request')}>Request access</button>
     </div>
-    {mode === 'signin' ? <Login initialCode={initialCode} onLogin={onLogin} onBusy={setBusy} /> : <RequestAccess onBusy={setBusy} onClose={() => onMode('signin')} />}
+    {mode === 'signin' ? <Login initialCode={initialCode} onLogin={onLogin} onBusy={changeBusy} /> : <RequestAccess onBusy={changeBusy} onClose={() => onMode('signin')} />}
   </section>;
+}
+
+/** One account form at a time; the native dialog contains focus and Escape. */
+export function AccessDialog({ onClose, ...props }: Parameters<typeof AccessPanel>[0] & { onClose: () => void }) {
+  const dialog = useDialog('input');
+  const [busy, setBusy] = useState(false);
+  return <dialog ref={dialog} className="access-dialog" aria-label="Sign in or request access" onCancel={event => { if (busy) event.preventDefault(); else onClose(); }}>
+    <div className="access-dialog-brand"><img src="/brand/white-hat.png" width="52" height="52" alt="" /><span>PATCHRIOT / PRIVATE BETA</span><button className="close" aria-label="Close account access" disabled={busy} onClick={onClose}>×</button></div>
+    <AccessPanel {...props} onBusyChange={setBusy} />
+  </dialog>;
 }
 
 function Login({ initialCode = '', onLogin, onBusy }: { initialCode?: string; onLogin: () => Promise<void>; onBusy: (value: boolean) => void }) {

@@ -383,6 +383,67 @@ fn solana_addresses_are_nonzero_32_byte_base58_values() {
 }
 
 #[tokio::test]
+async fn evm_controlled_intents_account_is_normalized_and_saved_as_internal_custody() {
+    let db = TestDb::new().await;
+    let network = Network::start().await;
+    let mut configured = policy();
+    configured.recipient = "0x111111111111111111111111111111111111ABCD".into();
+    configured.destination.blockchain = Blockchain::Base;
+    configured.destination.asset_id = earnings::SETTLEMENT_ASSET.into();
+    let access = network.access(&configured);
+    let ReviewAccess::Paid(service) = &access else {
+        panic!("paid service required")
+    };
+    let normalized = service.policy.clone();
+    assert_eq!(
+        normalized.recipient,
+        configured.recipient.to_ascii_lowercase()
+    );
+    let browser = Browser::new(&db, &network, access).await;
+    let (status, _) = browser
+        .call(
+            "POST",
+            &format!("/api/site-checks/{}/checkout", Uuid::new_v4()),
+            input(&normalized),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let saved: Value =
+        sqlx::query_scalar("SELECT quote_request FROM payment_invoices WHERE account_id=$1")
+            .bind(db.account)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(saved["recipientType"], "INTENTS");
+    assert_eq!(saved["recipient"], normalized.recipient);
+    assert_eq!(saved["destinationAsset"], earnings::SETTLEMENT_ASSET);
+    // A quote records the route without crediting money or starting paid work.
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM payment_ledger")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap(),
+        0
+    );
+    for recipient in [
+        "0x0000000000000000000000000000000000000000",
+        "0xinvalid",
+        "0x111111111111111111111111111111111111111g",
+    ] {
+        configured.recipient = recipient.into();
+        assert!(
+            ReviewAccess::configured(
+                "paid",
+                Some(&serde_json::to_vec(&configured).unwrap()),
+                Some("fixture-key")
+            )
+            .is_err()
+        );
+    }
+    db.finish().await;
+}
+
+#[tokio::test]
 async fn solana_checkout_keeps_the_usdc_price_and_rejects_wrong_network_refunds() {
     let db = TestDb::new().await;
     let network = Network::start().await;

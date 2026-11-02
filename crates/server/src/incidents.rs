@@ -36,6 +36,27 @@ pub struct Content {
     summary: String,
     takeaway: String,
     sources: Vec<Source>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    catalogue: Option<Box<Catalogue>>,
+}
+
+/// Optional structured research. Existing entries keep their original format.
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Catalogue {
+    short_name: String,
+    qualifying: String,
+    category: String,
+    fix: String,
+    report: Source,
+    sections: Vec<Section>,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Section {
+    label: String,
+    body: String,
 }
 
 fn text(value: &str, maximum: usize, multiline: bool) -> bool {
@@ -55,10 +76,33 @@ impl Content {
             && self.occurred_on >= NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()
             && self.occurred_on <= Utc::now().date_naive()
             && (1..=4).contains(&self.sources.len())
-            && self.sources.iter().all(|source| {
-                text(&source.label, 100, false)
-                    && text(&source.url, 1500, false)
-                    && url::Url::parse(&source.url).is_ok_and(|url| {
+            && self.sources.iter().all(Source::valid)
+            && self.catalogue.as_ref().is_none_or(|catalogue| {
+                text(&catalogue.short_name, 100, false)
+                    && text(&catalogue.qualifying, 200, false)
+                    && text(&catalogue.category, 120, false)
+                    && text(&catalogue.fix, 300, false)
+                    && catalogue.report.valid()
+                    && (1..=8).contains(&catalogue.sections.len())
+                    && catalogue.sections.iter().all(|section| {
+                        text(&section.label, 80, false) && text(&section.body, 1600, true)
+                    })
+                    && catalogue
+                        .sections
+                        .iter()
+                        .map(|section| section.body.len())
+                        .sum::<usize>()
+                        <= 6000
+            })
+            && serde_json::to_vec(self).is_ok_and(|json| json.len() <= 12_000)
+    }
+}
+
+impl Source {
+    fn valid(&self) -> bool {
+        text(&self.label, 100, false)
+                    && text(&self.url, 1500, false)
+                    && url::Url::parse(&self.url).is_ok_and(|url| {
                         // Sources are public HTTPS links, never executable URLs,
                         // embedded credentials, local IPs or query-string secrets.
                         // This syntax check does not verify a source's claims.
@@ -72,7 +116,6 @@ impl Content {
                                     && !["localhost", "local", "internal", "test", "invalid"].iter().any(|suffix|
                                         host == *suffix || host.ends_with(&format!(".{suffix}"))))
                     })
-            })
     }
 }
 

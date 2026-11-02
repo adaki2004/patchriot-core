@@ -35,10 +35,17 @@ async fn payment_desk_requires_current_admin_access_and_keeps_disabled_customer_
     assert_eq!(rows[0]["required_amount"], AMOUNT.to_string());
     assert_eq!(rows[0]["ledger_amount"], Value::Null);
     assert_eq!(rows[0]["requires_attention"], false);
+    assert_eq!(rows[0]["payment_confirmed"], false);
+    assert!(
+        rows[0]["deposit_address"]
+            .as_str()
+            .unwrap()
+            .starts_with("private-deposit-")
+    );
+    assert_eq!(rows[0]["recipient"], "treasury.fixture.near");
+    assert_eq!(rows[0]["recipient_type"], "INTENTS");
     for field in [
-        "deposit_address",
         "refund_address",
-        "recipient",
         "quote",
         "quote_request",
         "terms",
@@ -46,9 +53,7 @@ async fn payment_desk_requires_current_admin_access_and_keeps_disabled_customer_
     ] {
         assert!(rows[0].get(field).is_none(), "{field}");
     }
-    for private in ["private-deposit", "private-refund", "treasury.fixture"] {
-        assert!(!rows.to_string().contains(private));
-    }
+    assert!(!rows.to_string().contains("private-refund"));
     assert_eq!(
         test.request(
             "POST",
@@ -116,6 +121,8 @@ async fn payment_desk_distinguishes_recorded_funds_from_delivery_and_cancelled_w
     assert_eq!(rows[0]["ledger_amount"], AMOUNT.to_string());
     assert_eq!(rows[0]["funding_state"], "delivered");
     assert_eq!(rows[0]["order_state"], "activated");
+    assert_eq!(rows[0]["order_id"], json!(order));
+    assert_eq!(rows[0]["payment_confirmed"], true);
     sqlx::query("UPDATE payment_funding_events SET earnings_error='completed_work_requires_review' WHERE invoice_id=$1")
         .bind(invoice).execute(&test.pool).await.unwrap();
     let (_, _, rows) = test
@@ -137,6 +144,7 @@ async fn payment_desk_distinguishes_recorded_funds_from_delivery_and_cancelled_w
     assert_eq!(rows[0]["payment_state"], "settled");
     assert_eq!(rows[0]["ledger_amount"], AMOUNT.to_string());
     assert_eq!(rows[0]["cancel_review_state"], "cancelled");
+    assert_eq!(rows[0]["payment_confirmed"], true);
     assert!(rows[0].get("refunded_amount").is_none());
     let (_, broken, _) = seed(&test, account).await;
     sqlx::query("UPDATE payment_invoices SET state='settled',received_amount=$2 WHERE id=$1")
@@ -151,6 +159,7 @@ async fn payment_desk_distinguishes_recorded_funds_from_delivery_and_cancelled_w
     assert_eq!(rows[0]["invoice_id"], json!(broken));
     assert_eq!(rows[0]["requires_attention"], true);
     assert_eq!(rows[0]["ledger_amount"], Value::Null);
+    assert_eq!(rows[0]["payment_confirmed"], false);
     test.finish().await;
 }
 

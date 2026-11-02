@@ -20,6 +20,7 @@ export type Device = {
   approval: 'pending' | 'approved' | 'revoked';
   private_work_approved?: boolean;
   website_reviews?: boolean;
+  live_tests?: boolean;
   state: string;
   last_seen_at: number | null;
   reports_received?: number | null;
@@ -41,6 +42,7 @@ const messages: Record<string, string> = {
   conflicting_source_request: 'This upload changed. Start a fresh request or open the saved upload.',
   source_already_decided: 'This upload was already decided or has expired. Refresh its status.',
 
+  live_test_pilot_only: 'Live tests are available only in the approved pilot; paid and coupon checkout for live tests is not enabled.',
   pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
   invalid_credentials: 'The username or password is incorrect, or this account is unavailable.',
   invalid_username: 'Use 3–40 letters, numbers, dots, hyphens or underscores. Start with a letter or number.',

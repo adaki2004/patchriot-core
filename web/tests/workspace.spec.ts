@@ -29,9 +29,9 @@ test('personal audits join material to its latest report while staff records sta
     return route.fulfill({ json: url.searchParams.get('scope') === 'all' ? [site, { ...site, id: '00000000-0000-4000-8000-000000000006', scope: { homepage: 'https://staff-only.example/' } }] : [site] });
   });
   await page.goto('/?design=signal#/overview');
-  await expect(page.locator('.dashboard-audits .audit-row')).toHaveCount(2);
+  await expect(page.locator('.recent-work .audit-row')).toHaveCount(2);
   await expect(page.getByLabel('1 of 3 role reports received')).toBeVisible();
-  await expect(page.locator('.dashboard-metrics > div').first()).toHaveText('Recent audits2');
+  await expect(page.locator('.recent-work .card-note')).toContainText('2 recent audits in your account.');
   await expect(page.getByText('https://staff-only.example/', { exact: true })).toHaveCount(0);
   expect(reads.every(path => path.endsWith('?scope=mine'))).toBe(true);
   await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Audits', exact: true }).click();
@@ -44,9 +44,30 @@ test('personal audits join material to its latest report while staff records sta
   await expect(page.getByText('https://staff-only.example/', { exact: true })).toBeVisible();
   expect(reads.some(path => path.endsWith('?scope=all'))).toBe(true);
   await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
-  await expect(page.locator('.dashboard-audits .audit-row')).toHaveCount(2);
+  await expect(page.locator('.recent-work .audit-row')).toHaveCount(2);
   await expect(page.getByText('https://staff-only.example/', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('dashboard puts older decisions ahead of ready reports and newer running work', async ({ page }) => {
+  await setup(page);
+  const rows = [
+    { id: 'running', state: 'running', created_at: timestamp + 30 },
+    { id: 'completed', state: 'completed', created_at: timestamp + 20 },
+    { id: 'needs-review', state: 'needs_review', created_at: timestamp },
+    { id: 'payment', state: 'awaiting_payment', created_at: timestamp - 10 },
+    { id: 'cancelled', state: 'cancelled', created_at: timestamp + 40 },
+    { id: 'failed', state: 'failed', created_at: timestamp - 20 },
+  ].map(item => ({ ...item, mode: 'source_agent', steps: [] }));
+  await page.route('**/api/reviews?scope=mine', route => route.fulfill({ json: rows }));
+  await page.goto('/#/overview');
+  const work = page.locator('.recent-work');
+  await expect(work.getByRole('heading', { name: 'What needs your attention?' })).toBeVisible();
+  await expect(work.locator('.audit-state .status-chip')).toHaveText(['Needs attention', 'Awaiting payment', 'Incomplete', 'Report ready', 'Agents working']);
+  await expect(page.getByLabel('Workspace summary')).toHaveText('3Need attention1Reports ready1In progress');
+  expect((await work.boundingBox())!.y).toBeLessThan((await page.getByLabel('Workspace summary').boundingBox())!.y);
+  await work.locator('.audit-title').first().click();
+  await expect(page).toHaveURL(/#\/reviews\/needs-review$/);
 });
 
 test('unavailable personal data is not reported as zero earnings or an empty audit history', async ({ page }) => {
@@ -58,12 +79,12 @@ test('unavailable personal data is not reported as zero earnings or an empty aud
   await expect(page.getByRole('alert').filter({ hasText: 'Earnings could not refresh' })).toBeVisible();
   await expect(page.getByRole('alert').filter({ hasText: 'Audits could not fully refresh' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Your available earnings' })).toContainText('—');
-  await expect(page.getByText('Nothing to review yet.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('A fresh pair of eyes.', { exact: true })).toHaveCount(0);
   failed = false;
   await page.getByRole('button', { name: 'Retry earnings', exact: true }).click();
   await page.getByRole('button', { name: 'Retry audits', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Your available earnings' })).toContainText('12.5');
-  await expect(page.getByText('Nothing to review yet.', { exact: true })).toBeVisible();
+  await expect(page.getByText('A fresh pair of eyes.', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -76,5 +97,17 @@ test('pairing uses the configured address, warns for loopback and shell-quotes i
   await expect(page.locator('.pair-command pre')).toContainText("--audience 'operator'\\''s pilot'");
   await expect(page.locator('.pair-command pre')).not.toContainText('untrusted.example');
   await expect(page.getByText('This is a local address.', { exact: false })).toContainText('administrator-configured tunnel');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('private pairing explains Tailscale admission separately from device approval', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/pairing-info', route => route.fulfill({ json: { relay_origin: 'https://dispatcher.example-tail.ts.net', audience: 'private-team' } }));
+  await page.goto('/#/guide');
+  await page.getByRole('navigation', { name: 'Pairing steps' }).getByRole('button', { name: '3 Connect', exact: true }).click();
+  await expect(page.locator('.connection-address')).toContainText('Private Tailscale connection');
+  await expect(page.locator('.pair-note').filter({ hasText: 'Join the private network first.' })).toContainText('mesh-check --dispatcher');
+  await expect(page.locator('.pair-note').filter({ hasText: 'Join the private network first.' })).toContainText('tailscale status');
+  await expect(page.locator('.pair-command').filter({ hasText: './patchriot-relay init' })).toContainText("--audience 'private-team'");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

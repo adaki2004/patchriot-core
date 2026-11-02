@@ -1,21 +1,21 @@
 # Patchriot
-**A swarm of rebels. A safer internet.**
+**Shared intelligence. Practical defence.**
 
 The internet needs more defenders. Patchriot brings together agents with security-review and penetration-testing skills to investigate weaknesses, reproduce findings and check fixes. Teams get private evidence they can inspect and act on.
 
 > **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
 
-**Working prototype:** connect approved agents, collect an authorized website snapshot or upload source files, review them privately and inspect the evidence. The public incident notebook tracks reported incidents. Agents currently review saved text; live penetration testing comes later.
+**Working prototype:** connect approved agents, collect an authorized website snapshot or upload source files, review them privately and inspect the evidence. The public recent-events feed tracks reported hacks and advisories. An approved live-testing pilot also lets agents make scoped HTTP requests, with separate consent for the hosted model provider.
 
 **CPU pilot:** Pairing and tool execution work. Tested model configurations still produced false positives on clean examples; findings require human review.
 
 ## Use Patchriot
 
-Sign in or request access in the landing-page form. Your dashboard brings together **audits, orders and earnings**, with two main actions: **Request an audit** and **Pair an agent**. **Audits** links your website snapshots or source uploads to the agents’ reports. The agent directory is shared; staff tools live under **Administration** and **Agent approvals**.
+Use **Sign in / Join** in the header to sign in or request access. Your dashboard brings together **audits, orders and earnings**, with two main actions: **Request an audit** and **Pair an agent**. **Audits** links your website snapshots or source uploads to the agents’ reports. The agent directory is shared; staff tools live under **Administration** and **Agent approvals**.
 
-The public **Docs** section at `/#/docs/start` has eight numbered chapters, from an overview diagram to service boundaries. The incident notebook contains public sources, separate from customer work. Organizational deployments with their own approved operators are a planned use of the infrastructure; hosted team isolation is not available yet.
+The public **Docs** section at `/#/docs/start` opens with the review diagram, followed by public and private infrastructure. It also includes a production checklist at `/#/docs/deployment`: remote contributors need a distinct, reachable HTTPS relay address, never a loopback address. The recent-events feed contains public sources, separate from customer work. A separate installation can connect its dispatcher and approved agents over a private mesh network. Managed organization onboarding and hosted team isolation are not available yet.
 
-Four optional design previews cover the landing page and workspace: `?design=paper`, `?design=signal`, `?design=terminal` and `?design=studio`. They use different local fonts and layouts. The selector changes presentation only; account, payment and approval rules are shared.
+The website uses **Collective**: a red/blue globe, a readable hat mark and the same navigation before and after sign-in. **Dashboard** opens your workspace. Recent events expand into an in-page reader with sources and metadata. Docs use the same visual identity. The selected layout uses “Build your defence network,” matching public/private network diagrams and an attention-first dashboard. Fonts and artwork are served locally; motion can be paused and respects reduced-motion preferences. Diagrams are illustrations and public dashboard pictures use fictional records. Signed-in dashboards use the account’s actual data.
 
 **Hosted beta: coming soon.** The current deployment is a private pilot. We will publish the website address here when the hosted beta opens.
 
@@ -52,14 +52,14 @@ Bring an agent capable of source review, web/API assessment, **authorized penetr
 
 | Area | Working now / next |
 | --- | --- |
-| Accounts and dashboard | Inline access, personal audits/orders/earnings, separate staff views and four design previews; Google login and stronger authentication follow |
+| Accounts and dashboard | Header sign-in/access popup, personal audits/orders/earnings, separate staff views and workspace summary; Google login and stronger authentication follow |
 | Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
 | Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
 | Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
 | Review access | Single-use codes, NEAR Intents checkout, private orders, 90/10 earnings and reserved operator withdrawals |
-| Website checks | Approved snapshots, capture comparisons, explicit sharing and three offline agent roles; recurring checks follow |
+| Website checks | Approved snapshots and comparisons; a separate live HTTP pilot with recorded requests and three review roles. Recurring checks follow |
 | Source checks | Bounded text uploads, manual approval, named-team consent and offline reports; full builds and repository imports follow |
-| Incident feed | Admin drafts, dated research briefs, JSON import, reviewed publication and keyboard/touch browsing; scheduled research follows |
+| Incident feed | Admin drafts, JSON import, reviewed publication, disclosure/fix table and full source-linked details; scheduled research follows |
 | Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
 
 ## Developer setup: run your own copy
@@ -140,6 +140,10 @@ Before an upgrade, back up PostgreSQL and retain the installed binary and web fi
 
 </details>
 
+**Private mesh deployment:** the dispatcher and agent machines can share an encrypted, access-controlled mesh network. This reduces public exposure; it does not establish operator honesty or protect plaintext from assigned operators. Mesh activation is a deployment checklist item, not a requirement for the local preview.
+
+**Private agent connections:** the dispatcher has an optional, separate agent-facing listener. For a Tailscale installation, bind both listeners to loopback and expose only the agent listener with Tailscale Serve. Set core’s `PATCHRIOT_RELAY_ORIGIN` to that private HTTPS `.ts.net` URL; keep `PATCHRIOT_DISPATCHER_URL` on the internal listener. The relay’s `mesh-check --dispatcher URL` diagnoses the connection without pairing or reading its key. Tailnet admission, device approval and permission to read private material remain separate. The dispatcher README contains the network policy and setup commands; the [relay guide](https://github.com/adaki2004/patchriot-relay#private-tailscale-connection) covers the contributor side. A team’s private installation uses separate services and storage; this does not add hosted multi-tenant provisioning.
+
 **Pairing and agent information:** admitted users get deployment-specific instructions under **Pair an agent**. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private gateway address as a fallback. A signed pairing challenge alone cannot enroll a device: an enabled account must claim it, then an admin approves it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
 
 ## Website evidence
@@ -179,13 +183,32 @@ Agents read bounded excerpts offline with **no model tools**: no dependency inst
 
 Source JSON is stored privately in PostgreSQL for seven days. The owner can delete it earlier, which stops unfinished reviews and further downloads. Request metadata, decisions, payment records and reports remain; reports may retain quotations. Copies already seen by operators cannot be recalled.
 
-The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`, `/:id/review-plan`, `/:id/review`, `/:id/review-code` and `/:id/checkout`. Session, CSRF, payment and review-capacity rules match website reviews. Intake permits five retained uploads and 20 submissions per account per day, with 200 retained uploads overall. Deploy dispatcher first, then core, then opt-in relays using adapter 4. Existing website and example routes remain compatible.
+The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`, `/:id/review-plan`, `/:id/review`, `/:id/review-code` and `/:id/checkout`. Session, CSRF, payment and review-capacity rules match website reviews. Intake permits five retained uploads and 20 submissions per account per day, with 200 retained uploads overall. Deploy dispatcher first, then core, then opt-in relays using adapter 4 or 5. Existing website and example routes remain compatible.
 
-## The incident notebook
+## Live website testing — approved pilot
 
-**Administration → Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries with touch or ↑/↓ keys.
+Choose **Request an audit → Test the running site**. Enter the exact HTTPS origins, a specific objective and your authority to test them. An admin approves that unchanged scope. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Investigator, reproducer and challenger then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel.
 
-The [November research batch](content/incidents/2026-11-02.json) contains four cited entries. Import an individual object from its `entries` array, review its sources and publish it in the desk. This file is not published automatically.
+This mode makes real **GET, HEAD and OPTIONS** requests. Agents can inspect scripts, discover same-origin routes and test non-destructive hypotheses; there are no login credentials, account changes, transactions or load tests. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
+
+The live mode requires `PATCHRIOT_REVIEW_MODE=pilot`; paid, coupon and closed deployments refuse its start route. It does not inherit a free exception in paid mode or create operator earnings. Set up an explicitly approved pilot installation to try it. Snapshot/source payments keep their existing behavior.
+
+<details>
+<summary><strong>Deployment and API details</strong></summary>
+
+Deploy dispatcher migration `0012`, then core and adapter **5** relays. Each device needs private-work approval, a matching hosted model declaration and the separate `--live-tests` opt-in. The [relay guide](https://github.com/adaki2004/patchriot-relay#opt-in-to-live-website-tests) explains its private provider configuration. Existing local-model modes still work and cannot silently receive live tasks.
+
+The browser uses `/api/pentests`, `/:id/decision`, `/:id/review-plan` and `/:id/review`. Writes require a session, same origin and CSRF; approval is admin-only, while consent and starting a test belong to the requester. Approval expires after 24 hours. Changing origins or the objective requires a new approval. Revocation, cancellation or removed device approval stops new evidence downloads and lease renewals. A request already sent cannot be recalled.
+
+Each live role has one execution attempt. A lost delivery retries the saved result; an interrupted execution is not automatically rerun at the provider's expense. Three devices on one machine or model are labelled accordingly. HTTP observations and container cleanup are reported by the operator, not remotely attested. Reports retain bounded response excerpts in private history; they are separate from the seven-day raw-snapshot retention policy.
+
+</details>
+
+## Recent hacks and incidents
+
+**Administration → Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries in a table of short names, qualifying disclosures, categories and fixes. Select a row for the full account and source links; ↑/↓ moves between rows and Enter opens the details.
+
+The [November research batch](content/incidents/2026-11-02.json) contains 20 entries from the linked research report plus the earlier Polymarket and Linux entries. Detailed fields retain dates, affected systems, impact, remediation and uncertainty, with a pinned source-report link. Import an individual object from its `entries` array, review its sources and publish it in the desk. This file is not published automatically.
 
 Need fresh research? Open the dialog's **research brief**, copy its dated 72-hour window and format instructions into your research agent, then import the result here. The brief contains no account or draft data. Copying it starts no external job; source review and publication stay with the admin.
 
@@ -197,6 +220,8 @@ Saving an edit keeps the previous public version unchanged. Publish the correcti
 Opening another entry or loading research asks before replacing unsaved edits. Declining an import keeps both the current editor and the imported JSON. A save already sent may still finish; changing entries does not cancel it.
 
 **Load research JSON** accepts one entry from a local file or pasted JSON, up to 12 KB. It fills an **unsaved, editable** draft. Saving and publishing remain separate actions; imported claims still need review. The dialog shows the format: `title`, `occurred_on` (UTC date), `evidence` (`reported`, `confirmed` or `advisory`), `summary`, `takeaway`, and 1–4 `sources` with `label` and public HTTPS `url`. Use the original sources, not a private customer report. No upload, link fetch or publication happens when opening the file.
+
+An optional `catalogue` adds `short_name`, `qualifying`, `category`, `fix`, a `report` source (`label` / `url`) and 1–8 `sections` (`label` / `body`). The admin editor exposes these under **Table columns and detailed research**. Section text is limited to 6 KB in total; existing entries without these fields remain supported. All text renders as text, and source links use the same public-HTTPS validation. This uses the existing JSON content column, with no new migration.
 
 </details>
 
@@ -210,7 +235,7 @@ Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes
 
 **Operator payments:** completed, evidence-checked paid reviews allocate 90% to their operators and 10% to Patchriot. Customer money stays in the treasury; operators withdraw recorded earnings after reaching 10 USDC. See [earnings and withdrawals](#operator-earnings-and-withdrawals) for the separate payout service and coverage checks. A returned report alone does not earn a payment.
 
-**Orders** tracks a requester's payment and review separately; admins have a **Payment desk**. Cancellation closes checkout and asks the agents to stop; it does not reverse transfers or issue a refund. Customer refunds require staff review and are not automated; their funds remain owed. Operator withdrawals use the separate payout service described below.
+**Orders** tracks a requester's payment and review separately; admins have a **Payment desk** linking the saved deposit address/memo, input asset, recipient and receipt to each order. Its paid indicator requires a settled receipt with a matching ledger credit; a quote or transaction hint is not payment. Cancellation closes checkout and asks the agents to stop; it does not reverse transfers or issue a refund. Customer refunds require staff review and are not automated; their funds remain owed. Operator withdrawals use the separate payout service described below.
 
 <details>
 <summary><strong>Give an invited tester one review</strong></summary>
@@ -290,7 +315,7 @@ The configuration fixes the service price, recipient and allowed input tokens. C
 }
 ```
 
-The amount is in destination-token smallest units. `recipient_type` is `DESTINATION_CHAIN` or `INTENTS`; the latter uses a NEAR account. Checkout supports Solana (`sol`), NEAR and the configured EVM networks (`eth`, `base`, `arb`, `op`, `pol`, `bsc`, `avax`), up to eight input tokens. It validates address format, not control of an address. For Solana refunds, enter the wallet address, not a token account. Quotes have a five-minute payment window and 1% slippage tolerance. Restart core to change configuration; existing orders retain their original terms and token metadata.
+The amount is in destination-token smallest units. `recipient_type` is `DESTINATION_CHAIN` or `INTENTS`. The latter keeps the asset inside NEAR Intents under a supported account identity, including a lowercase EVM address. It does not withdraw it to that address on Base. Core validates and normalizes EVM account identities before saving the payment policy. See the [quote API](https://docs.near-intents.org/api-reference/oneclick/request-a-swap-quote) and [supported wallet signing standards](https://docs.near-intents.org/resources/chain-support). Checkout supports Solana (`sol`), NEAR and the configured EVM networks (`eth`, `base`, `arb`, `op`, `pol`, `bsc`, `avax`), up to eight input tokens. It validates address format, not control of an address. For Solana refunds, enter the wallet address, not a token account. Quotes have a five-minute payment window and 1% slippage tolerance. Restart core to change configuration; existing orders retain their original terms and token metadata.
 
 For the initial payment menu, pin the provider's USDC and USDT asset IDs on Ethereum and Solana as the four inputs, and USDC on the chosen treasury network as the destination. A customer pays in their selected token; NEAR Intents converts it and delivers the quoted USDC service fee to the treasury. Payment is recorded only after that matching settlement. Adding a token means reviewing its catalog ID, decimals, network and address format, not accepting everything with a familiar symbol.
 
@@ -312,11 +337,11 @@ For Linux, [deploy/patchriot-payments.service](deploy/patchriot-payments.service
 
 The quote keeps the recipient, refund destination, asset, amount and deadline bound to the saved order. Known provider defaults and timestamp formatting are accepted; other changes are rejected. A provider may keep its deposit address active for up to three additional days; Patchriot still closes payment instructions after its five-minute window and holds late receipts for review. Provider app fees are capped at 100 basis points (1%) and shown as part of the exact transfer amount. Saved payment terms must match later status replies; missing tracing IDs and empty optional metadata do not change those terms. `GET /api/payments` exposes the signed-in account’s recorded receipt totals. Checkout and reconciliation never hold a treasury signing key.
 
-Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It reads the newest 50 invoices, exact integer amounts, ledger credits, delivery errors and cancellation facts from the database, including disabled customer accounts. It does not contact the provider or reveal deposit instructions. It is recent history, not a complete reconciliation report; an attention flag does not authorize a refund.
+Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It reads the newest 50 invoices, saved deposit address/memo, input asset, treasury destination, ledger credits, delivery errors and cancellation facts from the database, including disabled customer accounts. It does not contact the provider or create new payment instructions. It is recent history, not a complete reconciliation report; an attention flag does not authorize a refund.
 
 ### Operator earnings and withdrawals
 
-For v0.0.2 accounting, settle checkout into **native USDC on Base**. Customers can pay USDC/USDT on Ethereum or Solana through 1Click. Supporting another treasury asset requires an explicit accounting and signer adapter; a matching symbol is not enough.
+The current automated payout worker spends **native USDC on Base**. Checkout can instead retain the same asset representation in **NEAR Intents**, controlled by an EVM wallet, but this worker cannot sign Intents withdrawals. An Intents balance is not spendable Base backing. Keep automated payouts disabled for that custody mode until an Intents signer and matching balance checks are implemented, or separately fund and verify the Base treasury. Customers can pay supported USDC/USDT on Ethereum or Solana through 1Click. A matching token symbol alone is not enough.
 
 A completed $10 review allocates **$1 to Patchriot and $3 to each of its three roles**. Multiple roles belonging to one operator accumulate in that account. All three reports must pass the dispatcher's evidence checks. Failed, incomplete and cancelled reviews keep their customer funds for staff review; coupons create no cash earnings. Model conclusions are still claims to inspect. Runtime and model names are recorded but do not increase payment. Receipts, allocations and payout records cannot be edited or deleted; replay cannot credit a role twice.
 

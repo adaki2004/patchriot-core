@@ -298,12 +298,13 @@ pub async fn review(
     Path(id): Path<Uuid>,
 ) -> Result<Json<ReviewView>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    request::<(), _>(
+    request_with_limit::<(), _>(
         &state,
         reqwest::Method::GET,
         &format!("/internal/reviews/{id}"),
         Some(&session),
         None,
+        4 * 1024 * 1024,
     )
     .await
 }

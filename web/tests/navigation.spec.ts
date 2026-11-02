@@ -34,7 +34,7 @@ async function setup(page: Page, signedIn = true, permitted = true) {
     if (permitted && path === `/api/reviews/${reviewId}`) return route.fulfill({ json: review });
     if (permitted && path === `/api/site-checks/${siteId}`) return route.fulfill({ json: site });
     if (permitted && path === `/api/orders/${orderId}`) return route.fulfill({ json: order });
-    if (['/api/sources', '/api/withdrawals', '/api/agents'].includes(path)) return route.fallback();
+    if (['/api/sources', '/api/withdrawals', '/api/agents', '/api/pentests'].includes(path)) return route.fallback();
     return route.fulfill({ status: 404, json: { error: 'not_found' } });
   });
   return { reads, writes };
@@ -47,7 +47,7 @@ test('a review bookmark survives reload and browser history without submitting w
   await expect(report.getByRole('heading', { name: 'Needs review', exact: true })).toBeVisible();
   await page.reload();
   await expect(report.getByRole('heading', { name: 'Needs review', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Notebook', exact: true }).click();
+  await page.getByRole('button', { name: 'Recent events', exact: true }).click();
   await expect(page).toHaveURL(/#\/incidents$/);
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`#/reviews/${reviewId}$`));
@@ -55,7 +55,8 @@ test('a review bookmark survives reload and browser history without submitting w
   await page.goForward();
   await expect(page).toHaveURL(/#\/incidents$/);
   await expect(report).toHaveCount(0);
-  await page.getByRole('button', { name: 'Pair an agent', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Website' }).getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Pair an agent', exact: true }).click();
   const skip = page.getByRole('link', { name: 'Skip to content', exact: true });
   await skip.focus(); await skip.click();
   await expect(page).toHaveURL(/#\/guide$/);
@@ -132,6 +133,6 @@ test('invalid paths cannot become API paths and member links cannot open admin d
     await page.goto(`/#/${view}`);
     await expect(page.getByRole('heading', { name: 'Administrator access required.', exact: true })).toBeVisible();
   }
-  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/withdrawals', '/api/agents'].includes(path))).toBe(true);
+  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/withdrawals', '/api/agents', '/api/pentests'].includes(path))).toBe(true);
   expect(calls.writes).toEqual([]);
 });

@@ -5,7 +5,7 @@ export async function emptyDashboard(page: Page) {
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() === 'GET') {
-      if (['/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/agents'].includes(path)) return route.fulfill({ json: [] });
+      if (['/api/pentests', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/agents'].includes(path)) return route.fulfill({ json: [] });
       if (path === '/api/withdrawals') return route.fulfill({ json: { balance: { earned: '0', available: '0', reserved: '0', paid: '0' }, withdrawals: [] } });
     }
     return route.fallback();

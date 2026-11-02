@@ -8,6 +8,7 @@ mod diagnostics;
 mod gateway;
 mod incidents;
 pub mod payments;
+mod pentests;
 pub mod review_codes;
 mod review_target;
 mod sites;
@@ -258,6 +259,10 @@ pub fn router(state: AppState) -> Router {
                     patchriot_protocol::sources::MAX_SOURCE_BODY_BYTES,
                 )),
         )
+        .route("/api/pentests", get(pentests::list).post(pentests::create))
+        .route("/api/pentests/{id}/decision", post(pentests::decide))
+        .route("/api/pentests/{id}/review-plan", get(pentests::plan))
+        .route("/api/pentests/{id}/review", post(pentests::start))
         .route("/api/sources/{id}", get(sources::detail))
         .route("/api/sources/{id}/decision", post(sources::decide))
         .route("/api/sources/{id}/delete", post(sources::delete))

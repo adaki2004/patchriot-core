@@ -5,6 +5,7 @@
 //! pairing codes can be claimed once; heartbeat sequences cannot move backwards.
 //! A recent signature alone does not make an operation idempotent or authorized.
 
+pub mod pentests;
 pub mod sources;
 pub mod website_reviews;
 pub mod websites;
@@ -233,6 +234,8 @@ pub struct DeviceView {
     pub private_work_approved: bool,
     #[serde(default)]
     pub website_reviews: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub live_tests: bool,
     pub state: String,
     pub last_seen_at: Option<i64>,
     pub sequence: u64,
@@ -295,6 +298,7 @@ pub enum ReviewMode {
     OwnedAgent,
     WebsiteAgent,
     SourceAgent,
+    PentestAgent,
 }
 
 impl ReviewMode {
@@ -308,6 +312,7 @@ impl ReviewMode {
             Self::OwnedAgent => "owned_agent",
             Self::WebsiteAgent => "website_agent",
             Self::SourceAgent => "source_agent",
+            Self::PentestAgent => "pentest_agent",
         }
     }
 }
@@ -318,6 +323,7 @@ pub enum FixtureScenario {
     AccessControlV1,
     WebsiteSnapshotV1,
     SourceBundleV1,
+    LiveHttpV1,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -350,6 +356,8 @@ pub struct WorkPoll {
     /// authorize source delivery, including after an old relay restarts.
     #[serde(default, skip_serializing_if = "is_false")]
     pub source_reviews: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub live_tests: bool,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -369,6 +377,8 @@ pub struct WorkAssignment {
     pub website: Option<website_reviews::WebsiteAssignment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<sources::SourceAssignment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pentest: Option<pentests::PentestAssignment>,
 }
 
 /// A fresh sequence renews only the current, still-live lease. Retrying the same
@@ -482,6 +492,7 @@ pub enum WorkResult {
     Agent(AgentResult),
     Website(website_reviews::WebsiteAgentResult),
     Source(sources::SourceAgentResult),
+    Pentest(pentests::PentestResult),
 }
 
 impl WorkResult {
@@ -491,6 +502,7 @@ impl WorkResult {
             Self::Agent(_) => ReviewMode::OwnedAgent,
             Self::Website(_) => ReviewMode::WebsiteAgent,
             Self::Source(_) => ReviewMode::SourceAgent,
+            Self::Pentest(_) => ReviewMode::PentestAgent,
         }
     }
 
@@ -498,7 +510,7 @@ impl WorkResult {
         match self {
             Self::Fixture(result) => result.matches_fixture(),
             Self::Agent(result) => result.matches_fixture(),
-            Self::Website(_) | Self::Source(_) => false,
+            Self::Website(_) | Self::Source(_) | Self::Pentest(_) => false,
         }
     }
 }
@@ -631,6 +643,8 @@ pub struct ReviewView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<sources::SourceReviewContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pentest: Option<pentests::PentestContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payment: Option<website_reviews::ReviewPayment>,
 }
 
@@ -661,7 +675,7 @@ mod tests {
     }
 
     #[test]
-    fn old_work_polls_keep_signed_bytes_and_source_opt_in_changes_the_signature() {
+    fn old_work_polls_keep_signed_bytes_and_each_private_opt_in_changes_the_signature() {
         for old in [
             serde_json::json!({"sequence":1}),
             serde_json::json!({"sequence":1,"website_reviews":true}),
@@ -672,7 +686,11 @@ mod tests {
                 signing_bytes("pilot", "/poll", 1, &poll).unwrap()
             );
             assert!(!poll.source_reviews);
+            assert!(!poll.live_tests);
             poll.source_reviews = true;
+            assert_ne!(payload_hash(&old).unwrap(), payload_hash(&poll).unwrap());
+            poll.source_reviews = false;
+            poll.live_tests = true;
             assert_ne!(payload_hash(&old).unwrap(), payload_hash(&poll).unwrap());
         }
     }

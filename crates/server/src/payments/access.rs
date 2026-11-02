@@ -35,8 +35,18 @@ impl ReviewAccess {
                 let bytes = policy
                     .filter(|v| v.len() <= 16 * 1024)
                     .ok_or(PaymentError::Configuration)?;
-                let policy: CheckoutPolicy =
+                let mut policy: CheckoutPolicy =
                     serde_json::from_slice(bytes).map_err(|_| PaymentError::Configuration)?;
+                // An EVM-controlled Intents account is its lowercase address.
+                // It is an account inside intents.near, not an EVM withdrawal.
+                if matches!(policy.recipient_type, RecipientType::Intents)
+                    && policy.recipient.starts_with("0x")
+                {
+                    if !Blockchain::Eth.accepts_address(&policy.recipient) {
+                        return Err(PaymentError::Configuration);
+                    }
+                    policy.recipient.make_ascii_lowercase();
+                }
                 policy.validate()?;
                 Ok(Self::Paid(Arc::new(CheckoutService {
                     policy,

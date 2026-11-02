@@ -41,10 +41,11 @@ for (const dialog of [
 test('shows real fleet dimensions, prototype scope and usable mobile layout', async ({ page }) => {
   await setup(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'A little more defence.' })).toBeVisible();
-  await expect(page.getByText('3 relays online')).toBeVisible();
-  await expect(page.getByLabel('Live fleet counts')).toContainText('1 operators');
-  await expect(page.getByText('Available now: saved website snapshots', { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENCE NETWORK.' })).toBeVisible();
+  await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
+  await expect(page.locator('.tm-footnote')).toContainText('Each request has an approved scope.');
+  await expect(page.locator('.tm-footnote')).toContainText('Live HTTP testing is available in a separate pilot.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
@@ -95,7 +96,7 @@ test('an outage keeps the previous count and displays the failure', async ({ pag
     ? { status: 503, json: { error: 'dispatcher_unavailable' } }
     : { json: fleet }));
   await page.goto('/');
-  await expect(page.getByText('3 relays online')).toBeVisible();
+  await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   failing = true;
   await expect(page.getByRole('alert')).toContainText('dispatcher is unavailable', { timeout: 15_000 });
   await expect(page.getByLabel('Live fleet counts')).toContainText('3');
@@ -170,12 +171,12 @@ test('session expiry clears private views and open dialogs while an outage prese
   await page.getByRole('button', { name: 'Pair a relay +', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   failure = 401;
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('My private relay', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'My agents', exact: true })).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Your session has ended');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
 });
 
@@ -184,7 +185,7 @@ test('an expired session can leave the workspace through sign out', async ({ pag
   await page.route('**/api/auth/logout', route => route.fulfill({ status: 401, json: { error: 'sign_in_required' } }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -224,12 +225,12 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
     await expect(page.getByRole('status')).toContainText('Your session has ended');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: 'new-account', display_name: 'Another member' }, csrf_token: 'new-csrf' } }));
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
     await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
-    await expect(page.getByText('Another member', { exact: true })).toHaveText('Another member');
+    await expect(page.getByRole('banner').getByText('Another member', { exact: true })).toHaveText('Another member');
     const staleReply = page.waitForResponse('**/api/pairings/claim');
     releaseClaim();
     await (await staleReply).finished();
@@ -261,7 +262,7 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
     await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
@@ -269,7 +270,7 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
     await expect.poll(() => loginStarted).toBe(true);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('region', { name: 'Account access' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
     await expect(page.getByLabel('Invitation code', { exact: true })).toBeDisabled();
     const startupReply = page.waitForResponse(response => response.url().endsWith('/api/session') && response.headers()['x-fixture-startup'] === 'true');
     if (startupFirst) {
@@ -285,7 +286,7 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByRole('alert')).toHaveCount(0);
-    await expect(page.getByText('Test operator', { exact: true })).toHaveText('Test operator');
+    await expect(page.getByRole('banner').getByText('Test operator', { exact: true })).toHaveText('Test operator');
   } finally { releaseStartup(); releaseLogin(); }
 });
 
@@ -306,7 +307,7 @@ test('an accepted invitation can retry loading the workspace without redeeming t
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
     await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
@@ -322,7 +323,7 @@ test('an accepted invitation can retry loading the workspace without redeeming t
     await expect(dialog).toBeVisible();
     release();
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
-    await expect(page.getByText('Test operator', { exact: true })).toHaveText('Test operator');
+    await expect(page.getByRole('banner').getByText('Test operator', { exact: true })).toHaveText('Test operator');
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole('alert')).toHaveCount(0);
     expect(redemptions).toBe(1);

@@ -25,10 +25,10 @@ test('password login is persistent and clears sensitive fields after success', a
     await page.route('**/api/session', request => request.fulfill({ json: { account: admin, csrf_token: 'test-csrf' } }));
     return route.fulfill({ json: { ok: true } });
   });
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.goto('/?design=collective#/home');
+  await page.locator('header').getByRole('button', { name: 'Sign in or request access' }).click();
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
-  await expect(page.locator('header').getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Sign in or request access' })).toBeVisible();
   await page.getByLabel('Username', { exact: true }).fill('owner_example');
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();

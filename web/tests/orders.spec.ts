@@ -126,7 +126,7 @@ test('an outage preserves the last order while session expiry clears it', async 
   await expect(page.getByRole('heading', { name: 'No paid orders yet.' })).toHaveCount(0);
   failure = 401;
   await detail.getByRole('button', { name: 'Refresh order ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
   await expect(detail).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Orders', exact: true })).toHaveCount(0);
 });

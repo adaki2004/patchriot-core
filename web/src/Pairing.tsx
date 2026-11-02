@@ -26,9 +26,11 @@ export function Guide({ onPair }: { onPair: () => void }) {
   const connect = `./patchriot-relay connect --state-dir ${state}${agent ? ' \\\n  --agents --agent-config .local/agent.json' : ' --fixtures'}`;
   const available = info.data && !info.error;
   const loopback = available && localAddress(info.data!.relay_origin);
+  const mesh = available && (() => { try { const url = new URL(info.data!.relay_origin); return url.protocol === 'https:' && url.hostname.endsWith('.ts.net'); } catch { return false; } })();
   const steps = ['Your machine', 'Install the relay', 'Connect', 'Get approved', 'Keep it online'];
   return <section className="pair-guide" aria-labelledby="setup-title">
     <div className="dashboard-title"><div><p className="eyebrow">CONTRIBUTE AN AGENT</p><h1 id="setup-title">Your machine. Our shared defence.</h1><p className="subtle">The relay connects your agent to Patchriot. It does not include a model.</p></div></div>
+    {loopback && <aside className="pair-production-note"><strong>Local pilot address.</strong> Before public deployment, configure a distinct, reachable HTTPS relay address. Remote contributors must never be given localhost or 127.0.0.1. <a href="#/docs/deployment">Deployment checklist ↗</a></aside>}
     <nav className="pair-steps" aria-label="Pairing steps">{steps.map((name, index) => <button key={name} aria-current={step === index ? 'step' : undefined} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</nav>
     {info.error && <div className="notice error" role="alert">{info.error} <button className="inline" onClick={info.refresh}>Retry</button></div>}
     <div className="pair-step-content">
@@ -49,7 +51,9 @@ export function Guide({ onPair }: { onPair: () => void }) {
       {step === 2 && <>
         <span className="eyebrow">03 / CONNECT</span><h2>Create an identity. Get a code.</h2><p>The connection address below comes from this Patchriot installation. You do not need to invent a server address.</p>
         {!available && !info.error && <p role="status">Loading this deployment’s connection details…</p>}
-        {available && <><div className="connection-address"><span>{loopback ? 'Local pilot connection' : 'Relay connection'}</span><code>{info.data!.relay_origin}</code></div>{loopback && <p className="notice">This is a local address. On a different VPS it only works with an administrator-configured tunnel. Ask the administrator for a reachable relay address before connecting a new remote machine.</p>}
+        {available && <><div className="connection-address"><span>{loopback ? 'Local pilot connection' : mesh ? 'Private Tailscale connection' : 'Relay connection'}</span><code>{info.data!.relay_origin}</code></div>{loopback && <p className="notice">This is a local address. On a different VPS it only works with an administrator-configured tunnel. Ask the administrator for a reachable relay address before connecting a new remote machine.</p>}
+        {mesh && <aside className="pair-note"><h3>Join the private network first.</h3><p>The administrator must admit this machine to the deployment’s Tailscale network. Then check the connection below. This does not approve your agent or grant access to other machines.</p><Command>{`tailscale status
+./patchriot-relay mesh-check --dispatcher ${shell(info.data!.relay_origin)}`}</Command><p className="fine">The check reads gateway health only. If it fails, check Tailscale login, network grants and the gateway address. Never put a Tailscale auth key into the pairing form.</p></aside>}
         <Command>{`./patchriot-relay init --state-dir ${state} \\\n  --dispatcher ${shell(info.data!.relay_origin)} \\\n  --audience ${shell(info.data!.audience)} \\\n  --label ${agent ? 'my-agent' : 'my-fixture'} --compute-group my-machine${agent ? ' \\\n  --runtime hermes --runtime-version YOUR-HERMES-VERSION \\\n  --model YOUR-LOCAL-MODEL' : ''}\n./patchriot-relay pair --state-dir ${state}`}</Command></>}
         <p className="fine">Choose a label and replace the model/version placeholders with your actual setup. Use a separate state directory per device and the same compute group for devices on one machine.</p>
         <button className="primary" disabled={!available} onClick={onPair}>Enter pairing code →</button>

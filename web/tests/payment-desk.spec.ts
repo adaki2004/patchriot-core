@@ -8,6 +8,8 @@ function payment() {
   return {
     invoice_id: '00000000-0000-4000-8000-000000000001', account_id: '00000000-0000-4000-8000-000000000002', account_name: 'Fixture customer', account_disabled: true,
     asset: `nep141:${'a'.repeat(180)}.fixture.near`, required_amount: '9007199254740993', received_amount: '9007199254740993',
+    origin_asset: 'nep141:fixture.input.near', deposit_address: 'fixture-deposit.near', deposit_memo: null,
+    recipient: '0x1111111111111111111111111111111111111111', recipient_type: 'INTENTS', payment_confirmed: true,
     payment_state: 'settled', payment_reason: null, poll_error: null, provider_updated_at: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     ledger_amount: '9007199254740993', ledger_credit: 'customer_funds', order_id: '00000000-0000-4000-8000-000000000003', order_state: 'cancelled', order_error: null,
     review_id: '00000000-0000-4000-8000-000000000004', funding_state: 'delivered', funding_error: null,
@@ -41,6 +43,11 @@ test('admin sees exact funds and stopped work without a refund action', async ({
   await expect(records).toContainText('9007199254740993');
   expect(await records.textContent()).not.toContain('9007199254740992');
   await expect(records).toContainText('settled');
+  await expect(records.locator('.payment-record > summary')).toContainText('Paid · needs attention');
+  await records.getByText('Deposit and treasury destination', { exact: true }).click();
+  await expect(records).toContainText('Inside NEAR Intents');
+  await expect(records).toContainText('fixture-deposit.near');
+  await expect(records).toContainText('00000000-0000-4000-8000-000000000003');
   await expect(records).toContainText('cancelled');
   await expect(records).toContainText('does not authorize a refund');
   await expect(records.getByRole('button', { name: /refund|activate|transfer/i })).toHaveCount(0);
@@ -75,7 +82,7 @@ test('a forbidden or unavailable refresh hides cached admin records', async ({ p
   }
   state.status = 401;
   await page.getByRole('button', { name: 'Refresh payments ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Admin payment records' })).toHaveCount(0);
 });
 
