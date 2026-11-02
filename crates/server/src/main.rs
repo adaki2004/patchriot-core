@@ -127,9 +127,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         && args != ["payments-fund-once"]
         && args != ["payments-cancel-once"]
         && args != ["payments-run"]
+        && args != ["payouts-once"]
     {
         return Err(
-            "expected serve, bootstrap-admin, invite, invite-account, disable-account, review-code, revoke-review-code, payments-run, payments-reconcile-once, payments-fund-once or payments-cancel-once"
+            "expected serve, bootstrap-admin, invite, invite-account, disable-account, review-code, revoke-review-code, payments-run, payments-reconcile-once, payments-fund-once, payments-cancel-once or payouts-once"
                 .into(),
         );
     }
@@ -148,6 +149,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => return Err("invalid PATCHRIOT_RELAY_ORIGIN".into()),
     };
     let mut state = AppState::new(pool, config.with_relay_origin(relay_origin)?)?;
+    if let Some(path) = std::env::var_os("PATCHRIOT_TREASURY_CONFIG") {
+        use std::io::Read;
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|_| "unable to read treasury configuration")?
+            .take(16 * 1024 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| "unable to read treasury configuration")?;
+        let key = std::env::var("PATCHRIOT_1CLICK_API_KEY")
+            .map_err(|_| "PATCHRIOT_1CLICK_API_KEY is required")?;
+        state = state.with_payouts(
+            patchriot_core::payments::payouts::PayoutService::configured(&bytes, &key)?,
+        );
+    }
+    if args == ["payouts-once"] {
+        let path = std::env::var_os("PATCHRIOT_TREASURY_KEY_FILE")
+            .map(PathBuf::from)
+            .ok_or("PATCHRIOT_TREASURY_KEY_FILE is required only for the payout process")?;
+        let result = patchriot_core::payments::payouts::chain::run_once(&state, &path).await?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
     if args == ["payments-run"] {
         let key = std::env::var("PATCHRIOT_1CLICK_API_KEY")
             .map_err(|_| "PATCHRIOT_1CLICK_API_KEY is required")?;

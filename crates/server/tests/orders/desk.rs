@@ -116,6 +116,19 @@ async fn payment_desk_distinguishes_recorded_funds_from_delivery_and_cancelled_w
     assert_eq!(rows[0]["ledger_amount"], AMOUNT.to_string());
     assert_eq!(rows[0]["funding_state"], "delivered");
     assert_eq!(rows[0]["order_state"], "activated");
+    sqlx::query("UPDATE payment_funding_events SET earnings_error='completed_work_requires_review' WHERE invoice_id=$1")
+        .bind(invoice).execute(&test.pool).await.unwrap();
+    let (_, _, rows) = test
+        .request("GET", PATH, Value::Null, &[("cookie", &cookie)])
+        .await;
+    assert_eq!(rows[0]["requires_attention"], true);
+    assert_eq!(rows[0]["earnings_error"], "completed_work_requires_review");
+    assert_eq!(rows[0]["ledger_amount"], AMOUNT.to_string());
+    sqlx::query("UPDATE payment_funding_events SET earnings_error=NULL WHERE invoice_id=$1")
+        .bind(invoice)
+        .execute(&test.pool)
+        .await
+        .unwrap();
     sqlx::query("UPDATE checkout_orders SET state='cancelled',cancel_requested_at=now(),cancel_confirmed_at=now(),cancel_review_state='cancelled' WHERE id=$1").bind(order).execute(&test.pool).await.unwrap();
     let (_, _, rows) = test
         .request("GET", PATH, Value::Null, &[("cookie", &cookie)])

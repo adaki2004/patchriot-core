@@ -1,0 +1,11 @@
+[Unit]
+Description=Check reserved Patchriot withdrawals
+
+[Timer]
+OnBootSec=20
+OnUnitInactiveSec=15
+AccuracySec=1
+Unit=patchriot-payouts.service
+
+[Install]
+WantedBy=timers.target

@@ -2,6 +2,11 @@ use super::*;
 use crate::payments::tests::TestDb;
 use serde_json::json;
 
+pub(in crate::payments) async fn fund_and_earn(db: &TestDb, amount: i64) {
+    let (candidate, view) = completed(db, amount).await;
+    allocate(&db.pool, &candidate, &view).await.unwrap();
+}
+
 async fn completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
     let (mut payment, mut quote) = db.quote();
     payment.required_amount = amount;

@@ -23,6 +23,7 @@ pub(crate) mod desk;
 pub mod earnings;
 pub mod funding;
 pub(crate) mod orders;
+pub mod payouts;
 pub mod worker;
 
 const API_ORIGIN: &str = "https://1click.chaindefuser.com";

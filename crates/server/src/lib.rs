@@ -37,6 +37,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub client: reqwest::Client,
     pub(crate) review_access: payments::access::ReviewAccess,
+    pub(crate) payouts: Option<Arc<payments::payouts::PayoutService>>,
 }
 
 pub struct Config {
@@ -126,11 +127,16 @@ impl AppState {
             config: Arc::new(config),
             client,
             review_access: payments::access::ReviewAccess::default(),
+            payouts: None,
         })
     }
 
     pub fn with_review_access(mut self, access: payments::access::ReviewAccess) -> Self {
         self.review_access = access;
+        self
+    }
+    pub fn with_payouts(mut self, service: Arc<payments::payouts::PayoutService>) -> Self {
+        self.payouts = Some(service);
         self
     }
 }
@@ -179,6 +185,19 @@ pub fn router(state: AppState) -> Router {
         .route("/api/session", get(auth::session))
         .route("/api/payments", get(payments::summary))
         .route("/api/earnings", get(payments::earnings::list))
+        .route(
+            "/api/withdrawals",
+            get(payments::payouts::list).post(payments::payouts::create),
+        )
+        .route(
+            "/api/withdrawals/{id}/confirm",
+            post(payments::payouts::confirm),
+        )
+        .route(
+            "/api/withdrawals/{id}/cancel",
+            post(payments::payouts::cancel),
+        )
+        .route("/api/admin/treasury", get(payments::payouts::desk))
         .route("/api/admin/payments", get(payments::desk::list))
         .route("/api/checkout", get(payments::access::settings))
         .route("/api/review-codes", get(review_codes::list))
