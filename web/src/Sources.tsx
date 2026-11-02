@@ -105,8 +105,9 @@ function SourceDetail({ id, csrf, admin, onClose, onChange, onReview, onCheckout
   </section>;
 }
 
-export function Sources({ csrf, admin, selected, onSelect, onReview, onCheckout }: { csrf: string; admin: boolean; selected: string | null; onSelect: (id: string | null) => void; onReview: (id: string) => void; onCheckout: (quote: Deposit) => void }) {
-  const sources = useLive<Source[]>('/sources'); const [creating, setCreating] = useState(false);
+export function Sources({ startNew = false, onStarted, csrf, admin, selected, onSelect, onReview, onCheckout }: { startNew?: boolean; onStarted?: () => void; csrf: string; admin: boolean; selected: string | null; onSelect: (id: string | null) => void; onReview: (id: string) => void; onCheckout: (quote: Deposit) => void }) {
+  const sources = useLive<Source[]>('/sources?scope=mine'); const [creating, setCreating] = useState(false);
+  useEffect(() => { if (startNew) { setCreating(true); onStarted?.(); } }, [startNew, onStarted]);
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Source reviews</h1><p className="subtle">Share a small module. Ask a precise question. Inspect the evidence.</p></div><button className="primary" onClick={() => setCreating(true)}>Upload source files +</button></section>
     {sources.error && <div className="notice error" role="alert">{sources.error}<button className="inline" onClick={sources.refresh}>Retry</button></div>}

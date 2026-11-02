@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const content = {
   title: 'A source-backed advisory', occurred_on: '2025-01-01', evidence: 'advisory',
@@ -21,7 +24,7 @@ async function setup(page: Page, role?: 'member' | 'admin') {
 test('public log supports keyboard and touch selection without executing source text', async ({ page }) => {
   await setup(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Watch log', exact: true }).click();
+  await page.getByRole('button', { name: 'Notebook', exact: true }).click();
   const tabs = page.getByRole('tab');
   await expect(tabs).toHaveCount(2);
   await tabs.first().focus();
@@ -77,6 +80,7 @@ test('admin saves separately from publication and cannot publish unsaved changes
     await route.fulfill({ json: saved });
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'New entry +' }).click();
   await page.getByLabel('Title', { exact: true }).fill(content.title);
@@ -116,6 +120,7 @@ test('replacing an incident draft asks before discarding unsaved edits', async (
     if (discard) await dialog.accept(); else await dialog.dismiss();
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   const list = page.getByRole('complementary', { name: 'Saved incident drafts' });
   await list.getByRole('button').filter({ hasText: 'first draft' }).click();
@@ -148,6 +153,7 @@ test('declining an imported replacement preserves both the current edits and res
     if (discard) await dialog.accept(); else await dialog.dismiss();
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'New entry +' }).click();
   await page.getByLabel('Title', { exact: true }).fill('Current unsaved review');
@@ -193,7 +199,8 @@ for (const reopened of ['first', 'second']) test(`a delayed incident save preser
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+    await page.getByText('Administration', { exact: true }).click();
+  await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
     const list = page.getByRole('complementary', { name: 'Saved incident drafts' });
     await list.getByRole('button').filter({ hasText: 'first draft' }).click();
     await page.getByLabel('Title', { exact: true }).fill('First draft saved slowly');
@@ -233,6 +240,7 @@ test('research import stays local and unsaved until the admin saves the editable
     await route.fulfill({ json: { id: route.request().url().split('/').at(-1), revision: 1, content: body.content, published_revision: null, published_at: null, updated_at: '2025-01-04T00:00:00Z' } });
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'Load research JSON' }).click();
   const imported = { ...content, title: '<img src=x onerror=alert(1)>', summary: 'Untrusted research claim. Check its sources.' };
@@ -260,6 +268,7 @@ test('research brief copies a dated public-only request without starting work or
   const writes: string[] = [];
   page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await expect(page.getByText('Private draft canary', { exact: true })).toBeVisible();
   const before = Date.now();
@@ -298,6 +307,7 @@ test('research import rejects oversized files, extra fields and incomplete repor
   const writes: string[] = [];
   page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'Load research JSON' }).click();
   await page.getByLabel('JSON file').setInputFiles({ name: 'too-large.json', mimeType: 'application/json', buffer: Buffer.alloc(12_001, 65) });

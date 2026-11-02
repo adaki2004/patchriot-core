@@ -6,8 +6,18 @@ import { useLive } from './useLive';
 
 type LoginMode = 'password' | 'activate' | 'legacy';
 
-export function Login({ initialCode = '', onLogin, onClose }: { initialCode?: string; onLogin: () => Promise<void>; onClose: () => void }) {
-  const dialog = useDialog('input');
+export function AccessPanel({ initialCode = '', mode, onMode, onLogin }: { initialCode?: string; mode: 'signin' | 'request'; onMode: (mode: 'signin' | 'request') => void; onLogin: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return <section className="access-panel-inline" id="access" aria-label="Account access">
+    <div className="access-tabs" aria-label="Access options">
+      <button disabled={busy} aria-pressed={mode === 'signin'} onClick={() => onMode('signin')}>Sign in</button>
+      <button disabled={busy} aria-pressed={mode === 'request'} onClick={() => onMode('request')}>Request access</button>
+    </div>
+    {mode === 'signin' ? <Login initialCode={initialCode} onLogin={onLogin} onBusy={setBusy} /> : <RequestAccess onBusy={setBusy} onClose={() => onMode('signin')} />}
+  </section>;
+}
+
+function Login({ initialCode = '', onLogin, onBusy }: { initialCode?: string; onLogin: () => Promise<void>; onBusy: (value: boolean) => void }) {
   const [mode, setMode] = useState<LoginMode>(initialCode ? 'activate' : 'password');
   const [code, setCode] = useState(initialCode);
   const [username, setUsername] = useState('');
@@ -17,7 +27,7 @@ export function Login({ initialCode = '', onLogin, onClose }: { initialCode?: st
   const [busy, setBusy] = useState(false);
   function changeMode(next: LoginMode) { setMode(next); setError(''); setPassword(''); }
   async function submit(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError(''); sessionChanged();
+    event.preventDefault(); setBusy(true); onBusy(true); setError(''); sessionChanged();
     try {
       if (!accepted) {
         const path = mode === 'legacy' ? '/auth/redeem' : mode === 'activate' ? '/auth/activate' : '/auth/login';
@@ -26,13 +36,12 @@ export function Login({ initialCode = '', onLogin, onClose }: { initialCode?: st
         setAccepted(true); setCode(''); setPassword('');
       }
       // A failed session read must not spend a one-use invitation again.
-      await onLogin(); onClose();
-    } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
+      await onLogin();
+    } catch (error) { setError((error as Error).message); } finally { setBusy(false); onBusy(false); }
   }
-  return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="login-title">
-    <button className="close" onClick={onClose} disabled={busy} aria-label="Close sign in">×</button>
-    <h2 id="login-title">{mode === 'activate' ? 'Set up your account' : 'Sign in'}</h2>
-    <p>{accepted ? 'You’re signed in. Retry opening your workspace.' : mode === 'activate' ? 'Use the invitation shared with you, then choose a username and password.' : mode === 'legacy' ? 'For existing pilot accounts with a one-use login code.' : 'Use your Patchriot username and password.'}</p>
+  return <div className="access-form" aria-labelledby="login-title">
+    <h2 id="login-title">{mode === 'activate' ? 'Set up your account' : 'Welcome back.'}</h2>
+    <p>{accepted ? 'You’re signed in. Retry opening your workspace.' : mode === 'activate' ? 'Use your invitation and choose a password.' : mode === 'legacy' ? 'For pilot accounts with a one-use login code.' : 'Your work stays in your workspace.'}</p>
     <form onSubmit={submit}>
       {!accepted && <>
         {mode !== 'password' && <label>Invitation code<input type="password" autoComplete="one-time-code" value={code} onChange={e => setCode(e.target.value)} disabled={busy} required minLength={64} maxLength={64} spellCheck={false} /></label>}
@@ -45,33 +54,31 @@ export function Login({ initialCode = '', onLogin, onClose }: { initialCode?: st
       {error && <p className="notice error" role="alert">{error}</p>}
       <button className="primary full" disabled={busy}>{busy ? 'Opening workspace…' : accepted ? 'Retry opening workspace' : mode === 'activate' ? 'Create password and sign in' : 'Open workspace →'}</button>
     </form>
-    {!accepted && <div className="access-options">
+    {!accepted && <details className="access-alternatives" open={mode !== 'password'}><summary>Invitation or pilot code?</summary><div className="access-options">
       {mode !== 'password' && <button className="text-button" disabled={busy} onClick={() => changeMode('password')}>Use a password</button>}
       {mode !== 'activate' && <button className="text-button" disabled={busy} onClick={() => changeMode('activate')}>I have a setup invitation</button>}
       {mode !== 'legacy' && <button className="text-button" disabled={busy} onClick={() => changeMode('legacy')}>Use a pilot login code</button>}
-    </div>}
-    <p className="fine">Forgot your password? Contact the person who invited you for a new setup link.</p>
-  </dialog>;
+    </div></details>}
+    <p className="fine">Need a password reset? Ask the person who invited you.</p>
+  </div>;
 }
 
-export function RequestAccess({ onClose }: { onClose: () => void }) {
-  const dialog = useDialog('input');
+function RequestAccess({ onClose, onBusy }: { onClose: () => void; onBusy: (value: boolean) => void }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); setBusy(true); onBusy(true); setError('');
     const data = new FormData(event.currentTarget);
     try {
       await api('/access-requests', { method: 'POST', body: JSON.stringify({ display_name: data.get('name'), email: data.get('email'), note: data.get('note') }) });
       setDone(true);
-    } catch (error) { setError((error as Error).message); } finally { setBusy(false); }
+    } catch (error) { setError((error as Error).message); } finally { setBusy(false); onBusy(false); }
   }
-  return <dialog ref={dialog} onCancel={event => { if (busy) event.preventDefault(); else onClose(); }} aria-labelledby="access-title">
-    <button className="close" onClick={onClose} disabled={busy} aria-label="Close access request">×</button>
-    <h2 id="access-title">Request access</h2>
+  return <div className="access-form" aria-labelledby="access-title">
+    <h2 id="access-title">Join the private beta.</h2>
     {done ? <div role="status"><p>Request received. We review requests by hand and will contact you if we can offer access. If you already have an account, use your existing login.</p><button className="primary" onClick={onClose}>Done</button></div> : <>
-      <p>Tell us what you’d like to check, or the agent you’d like to contribute. Please keep private code and credentials out of this form.</p>
+      <p>Review your work or contribute an agent. We approve new accounts by hand.</p>
       <form onSubmit={submit}>
         <label>Your name<input name="name" autoComplete="name" maxLength={80} required disabled={busy} /></label>
         <label>Email<input name="email" type="email" autoComplete="email" maxLength={254} required disabled={busy} /></label>
@@ -79,8 +86,9 @@ export function RequestAccess({ onClose }: { onClose: () => void }) {
         {error && <p className="notice error" role="alert">{error}</p>}
         <button className="primary full" disabled={busy}>{busy ? 'Sending…' : 'Send request'}</button>
       </form>
+      <p className="fine">Keep private code and credentials out of this form.</p>
     </>}
-  </dialog>;
+  </div>;
 }
 
 type Coupon = { id: string; code: string; expires_at: string };
@@ -151,7 +159,7 @@ export function AccessDesk({ csrf }: { csrf: string }) {
         <button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Create invitation'}</button>
       </form></section>
     </div>
-    <section className="panel access-panel access-users"><h2>Users</h2><div className="table-scroll"><table><thead><tr><th>Person</th><th>Login</th><th>Access</th><th>Actions</th></tr></thead><tbody>{desk.data?.accounts.map(user => <tr key={user.id}><td><strong>{user.display_name}</strong><small>{user.contact_email ?? 'No contact email saved'}</small></td><td>{user.username ?? 'Password not set'}</td><td>{user.disabled ? 'Disabled' : user.role === 'admin' ? 'Administrator' : 'Member'}<small>{user.unused_coupons} unused coupon{user.unused_coupons === 1 ? '' : 's'}</small></td><td className="row-actions">{user.role === 'member' && !user.disabled && <><button className="quiet" disabled={busy} onClick={() => void act(`/admin/accounts/${user.id}/invite`, {}, 'grant')}>Renew setup link</button><button className="quiet" disabled={busy} onClick={() => void act(`/admin/accounts/${user.id}/coupon`, {}, 'coupon')}>Issue coupon</button><button className="quiet" disabled={busy} onClick={() => setDisable(user)}>Disable login</button></>}</td></tr>)}</tbody></table></div><p className="fine">Latest 100 accounts. Renewing a link replaces earlier unused invitations. Completing setup ends that user’s old sessions. Disabling login does not revoke their relays; manage those in Fleet & approvals.</p></section>
+    <section className="panel access-panel access-users"><h2>Users</h2><div className="table-scroll"><table><thead><tr><th>Person</th><th>Login</th><th>Access</th><th>Actions</th></tr></thead><tbody>{desk.data?.accounts.map(user => <tr key={user.id}><td><strong>{user.display_name}</strong><small>{user.contact_email ?? 'No contact email saved'}</small></td><td>{user.username ?? 'Password not set'}</td><td>{user.disabled ? 'Disabled' : user.role === 'admin' ? 'Administrator' : 'Member'}<small>{user.unused_coupons} unused coupon{user.unused_coupons === 1 ? '' : 's'}</small></td><td className="row-actions">{user.role === 'member' && !user.disabled && <><button className="quiet" disabled={busy} onClick={() => void act(`/admin/accounts/${user.id}/invite`, {}, 'grant')}>Renew setup link</button><button className="quiet" disabled={busy} onClick={() => void act(`/admin/accounts/${user.id}/coupon`, {}, 'coupon')}>Issue coupon</button><button className="quiet" disabled={busy} onClick={() => setDisable(user)}>Disable login</button></>}</td></tr>)}</tbody></table></div><p className="fine">Latest 100 accounts. Renewing a link replaces earlier unused invitations. Completing setup ends that user’s old sessions. Disabling login does not revoke their relays; manage those in Agent approvals.</p></section>
     {disable && <DisableAccount user={disable} busy={busy} onClose={() => setDisable(null)} onConfirm={() => void act(`/admin/accounts/${disable.id}/disable`, {})} />}
     {secret && <ShareAccess secret={secret} onClose={() => setSecret(null)} />}
   </section>;

@@ -5,7 +5,7 @@ import { ReviewDetail } from './Reviews';
 import { DepositInstructions, checkedDeposit, useNow } from './Checkout';
 import type { CheckoutSettings, Deposit } from './Checkout';
 
-type Order = {
+export type Order = {
   id: string; review_id: string | null; state: string;
   price: { asset: string; amount: string }; created_at: string; expires_at: string;
   payment: { state: string; received_amount: string | null; deadline: string } | null;
@@ -13,7 +13,7 @@ type Order = {
   requires_attention: boolean; can_cancel: boolean;
 };
 
-function orderLabel(order: Order) {
+export function orderLabel(order: Order) {
   if (order.cancellation) {
     if (!order.cancellation.confirmed_at) return 'Cancellation requested';
     return ({ cancelled: 'Work stopped', failed: 'Work ended incomplete', completed: 'Work already finished', needs_review: 'Review ended; inspect report' } as Record<string, string>)[order.cancellation.review_state ?? ''] ?? 'Needs attention';
@@ -23,7 +23,7 @@ function orderLabel(order: Order) {
   return ({ preparing: 'Preparing order', awaiting_payment: 'Waiting for payment', activated: 'Work activated', cancelled: 'Order closed', expired: 'Payment window ended', needs_review: 'Needs attention' } as Record<string, string>)[order.state] ?? 'Needs attention';
 }
 
-function paymentLabel(order: Order) {
+export function paymentLabel(order: Order) {
   if (!order.payment) return 'No invoice yet';
   return ({ pending: 'No payment confirmed', processing: 'Transfer being processed', incomplete: 'Transfer incomplete', expired: 'Payment window ended', failed: 'Transfer failed', refunded: 'Provider reports refund', settled: 'Funds recorded', held: 'Funds held for review', needs_review: 'Payment needs review' } as Record<string, string>)[order.payment.state] ?? 'Payment needs review';
 }
@@ -107,7 +107,7 @@ export function Orders({ csrf, selected, onSelect, report, onReport, initialQuot
     <section className="panel" aria-label="Order history">
       {orders.data === null && <div className="empty"><p>{orders.error ? 'Order history could not be loaded.' : 'Loading orders…'}</p></div>}
       {orders.data?.length === 0 && <div className="empty"><h2>No paid orders yet.</h2><p>{checkout.data?.mode === 'pilot' ? 'The current pilot reviews are free. Paid checkout is not enabled.' : checkout.data?.mode === 'coupons' ? 'Reviews covered by a code appear under Reviews. They do not create a paid order.' : 'Website review orders will appear here after checkout is prepared.'}</p></div>}
-      {orders.data?.map(order => <button key={order.id} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => onSelect(order.id)}><span><strong>Website review · {order.id.slice(0, 8)}</strong><small>{new Date(order.created_at).toLocaleString()} · {paymentLabel(order)}</small></span><span className={`badge ${order.requires_attention ? 'revoked' : 'pending'}`}>{orderLabel(order)}</span></button>)}
+      {orders.data?.map(order => <button key={order.id} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => onSelect(order.id)}><span><strong>Audit · {order.id.slice(0, 8)}</strong><small>{new Date(order.created_at).toLocaleString()} · {paymentLabel(order)}</small></span><span className={`badge ${order.requires_attention ? 'revoked' : 'pending'}`}>{orderLabel(order)}</span></button>)}
     </section>
     {orders.data?.length === 50 && <p className="fine">Showing your 50 most recent orders.</p>}
   </>;

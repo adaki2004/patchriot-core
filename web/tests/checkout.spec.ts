@@ -1,6 +1,9 @@
+import { emptyDashboard, openAuditTool } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import type { CheckoutSettings, Deposit } from '../src/Checkout';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const account = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Checkout fixture', role: 'member', auth_method: 'invite' };
 const siteId = '00000000-0000-4000-8000-000000000002';
@@ -30,7 +33,7 @@ async function setup(page: Page) {
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.route('**/api/review-codes', route => route.fulfill({ json: state.codeReservations }));
-  await page.route('**/api/site-checks', route => route.fulfill({ json: [site] }));
+  await page.route('**/api/site-checks{,?scope=mine}', route => route.fulfill({ json: [site] }));
   await page.route(`**/api/site-checks/${siteId}`, route => route.fulfill({ json: site }));
   await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices, recommended_device_ids: devices.map(device => device.device_id), review_timeout_seconds: 5700 } }));
   await page.route('**/api/checkout', route => route.fulfill(state.settingsError ? { status: 503, json: { error: 'checkout_unavailable' } } : { json: state.settings }));
@@ -42,7 +45,7 @@ async function setup(page: Page) {
     return route.fulfill(state.quoteError ? { status: 503, json: { error: 'checkout_unavailable' } } : { json: state.quote });
   });
   const review = { id: reviewId, mode: 'website_agent', state: 'queued', created_at: Math.floor(Date.now() / 1000), deadline_at: Math.floor(Date.now() / 1000) + 2100, steps: [], evidence_source: 'Browser fixture', website: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), reviewers: devices } };
-  await page.route('**/api/reviews', route => route.fulfill({ json: state.codeSubmissions.length ? [review] : [] }));
+  await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: state.codeSubmissions.length ? [review] : [] }));
   await page.route(`**/api/reviews/${reviewId}`, route => route.fulfill({ json: review }));
   await page.route(`**/api/site-checks/${siteId}/review-code`, route => {
     const body: CodeSubmission = route.request().postDataJSON();
@@ -107,7 +110,7 @@ test('a lost code reply survives refresh and resumes only the saved request', as
   await expect(page.getByRole('alert')).toContainText('you will not need the code again');
   const original = state.codeSubmissions[0];
   await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await openAuditTool(page, 'Reports & examples');
   await page.reload();
   const history = page.getByRole('region', { name: 'Sponsored reviews', exact: true });
   await expect(history).toContainText('Start not confirmed');
@@ -146,7 +149,7 @@ test('switching to codes-only access exposes the code field even from the paymen
 
 async function choose(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Website checks', exact: true }).click();
+  await openAuditTool(page, 'Website snapshots');
   await page.getByRole('button', { name: 'https://checkout.example/', exact: false }).click();
   await page.getByRole('button', { name: 'Prepare agent review →' }).click();
   await page.getByLabel('I allow these three devices and their named operators').check();
@@ -292,7 +295,8 @@ test('a delayed checkout reply cannot open the old order after another account s
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: '00000000-0000-4000-8000-000000000099', display_name: 'New customer' }, csrf_token: 'new-csrf' } }));
     await page.route('**/api/orders', route => route.fulfill({ json: [] }));
     await page.route(`**/api/orders/${orderId}`, route => { oldOrderReads++; return route.fulfill({ status: 404, json: { error: 'not_found' } }); });
-    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
@@ -358,7 +362,7 @@ test('processing hides instructions, settlement does not claim completed work, a
   await expect(detail).toContainText('Open the report for its current progress and result');
   state.statusError = 401;
   await detail.getByRole('button', { name: 'Refresh order ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(detail).toHaveCount(0);
   await expect(page.getByText(state.quote.deposit_address, { exact: true })).toHaveCount(0);
 });
@@ -379,7 +383,7 @@ test('an outage retains order history while hiding payment instructions', async 
 test('a pending order resumes explicitly and a sent hint cannot mark it as funded', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Orders', exact: true }).click();
+  await page.evaluate(() => { location.hash = '/orders'; });
   await page.getByRole('region', { name: 'Order history' }).getByRole('button').click();
   await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Show current payment instructions →', exact: true }).click();

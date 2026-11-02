@@ -1,6 +1,9 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { docPages } from '../src/docs-pages';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 async function setup(page: Page, member = false) {
   const calls: string[] = [];
@@ -10,8 +13,8 @@ async function setup(page: Page, member = false) {
     if (path === '/api/session') return route.fulfill({ json: { account: member ? { id: '00000000-0000-4000-8000-000000000001', display_name: 'Product test', role: 'member' } : null, csrf_token: member ? 'fixture-csrf' : null } });
     if (path === '/api/fleet') return route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } });
     if (path === '/api/pairing-info' && member) return route.fulfill({ json: { relay_origin: 'https://relay.example', audience: 'local-test' } });
-    if (['/api/incidents', '/api/devices', '/api/site-checks'].includes(path)) return route.fulfill({ json: [] });
-    return route.fulfill({ status: 404, json: { error: 'not_found' } });
+    if (['/api/incidents', '/api/devices', '/api/site-checks', '/api/reviews', '/api/sources', '/api/orders', '/api/agents'].includes(path)) return route.fulfill({ json: [] });
+    return route.fallback();
   });
   return calls;
 }
@@ -21,8 +24,8 @@ test('public documentation is bookmarkable and never requests private records', 
   await page.goto('/#/docs/privacy');
   await expect(page.getByRole('heading', { name: 'Who can see your data', exact: true })).toBeVisible();
   const docs = page.getByRole('navigation', { name: 'Documentation' });
-  for (const section of docPages) {
-    await docs.getByRole('button', { name: section.title, exact: true }).click();
+  for (const [index, section] of docPages.entries()) {
+    await docs.getByRole('button', { name: `${index + 1}. ${section.title}`, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/docs/${section.id}$`));
     await expect(page.getByRole('heading', { name: section.title, exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -35,38 +38,55 @@ test('public documentation is bookmarkable and never requests private records', 
   await expect(page.getByRole('heading', { name: 'Don’t trust. Verify.', exact: true })).toBeVisible();
   expect(calls.every(path => ['/api/session', '/api/fleet', '/api/incidents'].includes(path))).toBe(true);
   await page.goto('/#/docs/../../admin');
-  await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'A little more defence.' })).toBeVisible();
 });
 
 test('workspace separates requests and pairing from the public introduction', async ({ page }) => {
   await setup(page, true);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'What are we checking?' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Start a request →' }).click();
-  await expect(page.getByRole('heading', { name: 'Start with a clear scope.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Set the website scope', exact: false }).click();
+  await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'A little more defence.' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
+  await expect(page.getByRole('heading', { name: 'What needs checking?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Set the scope →', exact: false }).click();
   await expect(page).toHaveURL(/#\/sites$/);
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Pair an agent', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Connect a machine you control.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your machine. Our shared defence.' })).toBeVisible();
   await page.getByRole('button', { name: 'Patchriot home' }).click();
   await expect(page).toHaveURL(/#\/home$/);
-  await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'A little more defence.' })).toBeVisible();
   await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'What are we checking?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('public page uses the supplied logo and access requests remain a deliberate action', async ({ page }) => {
   const calls = await setup(page);
   await page.goto('/');
-  const logo = page.getByRole('img', { name: 'Patchriot’s white hat and circuit mark' });
+  const logo = page.locator('img.brand-mark');
   await expect.poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   await expect(page.getByRole('heading', { name: 'The incident notebook.' })).toBeVisible();
-  await page.getByRole('button', { name: 'Request early access →' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('button', { name: 'Request access' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Account access' }).getByLabel('Your name')).toBeVisible();
   expect(calls).not.toContain('/api/access-requests');
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Request early access →' })).toBeFocused();
+  await expect(page.locator('header').getByRole('button', { name: 'Request access' })).toHaveCount(0);
+  await expect(logo).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('the contribution link reopens inline access after switching back to sign-in', async ({ page }) => {
+  await setup(page);
+  await page.goto('/');
+  const access = page.getByRole('region', { name: 'Account access' });
+  const contribute = page.getByRole('button', { name: 'How to pair an agent →', exact: true });
+  await contribute.click();
+  await expect(access.getByLabel('Your name')).toBeVisible();
+  await access.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
+  await contribute.click();
+  await expect(access.getByLabel('Your name')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });

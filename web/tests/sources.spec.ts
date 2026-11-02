@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const id = '00000000-0000-4000-8000-000000000150';
 const reviewId = '00000000-0000-4000-8000-000000000250';
@@ -33,7 +36,7 @@ const file = { name: 'access.py', mimeType: 'text/plain', buffer: Buffer.from('d
 test('uploads source as text with explicit storage consent and no automatic agent work', async ({ page }) => {
   await setup(page);
   let submitted: any;
-  await page.route('**/api/sources', async route => {
+  await page.route('**/api/sources{,?scope=mine}', async route => {
     if (route.request().method() === 'POST') {
       submitted = route.request().postDataJSON();
       expect(route.request().headers()['x-csrf-token']).toBe('fixture-csrf');
@@ -70,7 +73,7 @@ test('archives, invalid UTF-8 and oversized files never reach the server', async
 
 test('unchanged failed uploads retain their request identity', async ({ page }) => {
   await setup(page); const ids: string[] = [];
-  await page.route('**/api/sources', route => {
+  await page.route('**/api/sources{,?scope=mine}', route => {
     if (route.request().method() === 'POST') { ids.push(route.request().postDataJSON().request_id); return route.fulfill({ status: 503, json: { error: 'dispatcher_unavailable' } }); }
     return route.fulfill({ json: [] });
   });

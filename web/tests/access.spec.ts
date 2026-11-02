@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const admin = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Owner', role: 'admin', auth_method: 'password' };
 const member = { ...admin, id: '00000000-0000-4000-8000-000000000002', display_name: 'Judge', role: 'member' };
@@ -23,14 +26,16 @@ test('password login is persistent and clears sensitive fields after success', a
     return route.fulfill({ json: { ok: true } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
-  await expect(page.getByLabel('Username', { exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
+  await expect(page.locator('header').getByRole('button', { name: 'Sign in' })).toHaveCount(0);
   await page.getByLabel('Username', { exact: true }).fill('owner_example');
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(sent).toEqual({ username: 'owner_example', password: 'browser-test-password' });
   await page.reload();
+  await page.getByText('Administration', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Access & users', exact: true })).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
 });
@@ -55,7 +60,7 @@ test('an activation fragment is removed and a failed session read does not redee
   await page.getByLabel('Username', { exact: true }).fill('new_judge');
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: 'Create password and sign in' }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Account storage');
+  await expect(page.getByRole('region', { name: 'Account access' }).getByRole('alert')).toContainText('Account storage');
   await expect(page.getByLabel('Password', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Retry opening workspace' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -75,7 +80,7 @@ test('requesting access submits a short note without claiming automatic approval
   await expect(page.getByRole('status')).toContainText('review requests by hand');
   expect(sent).toEqual({ display_name: 'New person', email: 'person@example.com', note: 'Check my own website.' });
   await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
 });
 
 test('admin can approve access and share an account-specific setup link and coupon', async ({ page }) => {

@@ -125,7 +125,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
 }
 
 export function Reviews({ csrf, selected, onSelect, onOpenOrders }: { csrf: string; selected: string | null; onSelect: (id: string | null) => void; onOpenOrders?: () => void }) {
-  const reviews = useLive<Review[]>('/reviews');
+  const reviews = useLive<Review[]>('/reviews?scope=mine');
   const [creating, setCreating] = useState(false);
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Inspect agent reports and example checks. Start new work under Request an audit.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>

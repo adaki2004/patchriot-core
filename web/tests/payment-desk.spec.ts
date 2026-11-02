@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 function payment() {
   return {
@@ -29,6 +32,7 @@ async function setup(page: Page, role: 'admin' | 'member' | null = 'admin') {
 test('admin sees exact funds and stopped work without a refund action', async ({ page }, info) => {
   await setup(page);
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Payment desk', exact: true }).click();
   const records = page.getByRole('region', { name: 'Admin payment records' });
   await expect(records).toContainText('Newest 50');
@@ -56,6 +60,7 @@ test('members and visitors have no payment desk navigation or admin reads', asyn
 test('a forbidden or unavailable refresh hides cached admin records', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Payment desk', exact: true }).click();
   await expect(page.getByText('Fixture customer', { exact: false })).toBeVisible();
   for (const status of [503, 403]) {
@@ -70,13 +75,14 @@ test('a forbidden or unavailable refresh hides cached admin records', async ({ p
   }
   state.status = 401;
   await page.getByRole('button', { name: 'Refresh payments ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Admin payment records' })).toHaveCount(0);
 });
 
 test('an empty history explains that a quote is not a credit', async ({ page }) => {
   const state = await setup(page); state.rows = [];
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Payment desk', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No payment records yet.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Admin payment records' })).toContainText('quote alone does not create a ledger credit');

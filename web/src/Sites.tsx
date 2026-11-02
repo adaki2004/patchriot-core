@@ -118,9 +118,10 @@ function ScreeningNotice({ state, result }: { state?: string; result?: Screening
   return <div className="notice"><strong>{result.assessment === 'routine' ? 'No concern flagged in the request.' : 'This request needs a closer look.'}</strong><p>JEV checks wording and scope. It cannot verify ownership or approve work, and this is not a verdict on the website.</p><details><summary>Screening details</summary><p className="fine">{result.model} · {result.policy_version} · {date(result.evaluated_at)}</p><dl className="site-scope"><dt>Fits current scope</dt><dd>{Math.round(result.within_scope * 100)}%</dd><dt>Possible rule bypass</dt><dd>{Math.round(result.bypass_attempt * 100)}%</dd><dt>Possible harmful intent</dt><dd>{Math.round(result.harmful_intent * 100)}%</dd></dl><p className="fine">Model estimates, not measured odds of an attack.</p></details></div>;
 }
 
-export function Sites({ csrf, admin, accountId, selected, onSelect, onReview, onCheckout }: { csrf: string; admin: boolean; accountId: string; selected: string | null; onSelect: (id: string | null) => void; onReview: (id: string) => void; onCheckout: (quote: Deposit) => void }) {
-  const sites = useLive<Site[]>('/site-checks');
+export function Sites({ startNew = false, onStarted, csrf, admin, accountId, selected, onSelect, onReview, onCheckout }: { startNew?: boolean; onStarted?: () => void; csrf: string; admin: boolean; accountId: string; selected: string | null; onSelect: (id: string | null) => void; onReview: (id: string) => void; onCheckout: (quote: Deposit) => void }) {
+  const sites = useLive<Site[]>('/site-checks?scope=mine');
   const [creating, setCreating] = useState(false);
+  useEffect(() => { if (startNew) { setCreating(true); onStarted?.(); } }, [startNew, onStarted]);
   return <>
     <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Website checks</h1><p className="subtle">Capture an approved site’s homepage and scripts. Inspect what was actually collected.</p></div><button className="primary" onClick={() => setCreating(true)}>New website snapshot +</button></section>
     {sites.error && <div className="notice error" role="alert">{sites.error} <button className="inline" onClick={sites.refresh}>Retry</button></div>}

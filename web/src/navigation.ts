@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isDocPage } from './docs-pages';
 
-const views = ['home', 'overview', 'request', 'docs', 'devices', 'agents', 'reviews', 'orders', 'earnings', 'sites', 'sources', 'guide', 'incidents', 'incident-desk', 'payment-desk', 'access-desk'] as const;
+const views = ['home', 'overview', 'audits', 'audit-desk', 'request', 'docs', 'devices', 'agents', 'reviews', 'orders', 'earnings', 'sites', 'sources', 'guide', 'incidents', 'incident-desk', 'payment-desk', 'access-desk'] as const;
 export type View = typeof views[number];
 type Route = { view: View; id: string | null; report: boolean };
 const home: Route = { view: 'overview', id: null, report: false };

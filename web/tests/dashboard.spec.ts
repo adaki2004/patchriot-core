@@ -1,5 +1,8 @@
+import { emptyDashboard, openAuditTool } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const account = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Test operator', role: 'member', auth_method: 'invite' };
 const fleet = { online_devices: 3, online_operators: 1, online_compute_groups: 1 };
@@ -14,12 +17,12 @@ async function setup(page: Page, signedIn = false) {
 }
 
 for (const dialog of [
-  { name: 'sign-in', signedIn: false, trigger: 'Sign in ↗', field: 'Username', close: 'Close sign in' },
   { name: 'pairing', signedIn: true, trigger: 'I already have a pairing code →', field: 'Pairing code', close: 'Close pairing' },
 ]) {
   test(`${dialog.name} focuses its code field and returns keyboard focus on close`, async ({ page }) => {
     await setup(page, dialog.signedIn);
     await page.goto('/');
+    await page.evaluate(() => { location.hash = '/guide'; });
     const trigger = page.getByRole('button', { name: dialog.trigger, exact: true });
     await trigger.focus();
     await page.keyboard.press('Enter');
@@ -38,46 +41,51 @@ for (const dialog of [
 test('shows real fleet dimensions, prototype scope and usable mobile layout', async ({ page }) => {
   await setup(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.' })).toBeVisible();
-  await expect(page.getByText('3 approved relays online')).toBeVisible();
-  await expect(page.getByLabel('Live fleet counts')).toContainText('Distinct operators');
-  await expect(page.getByText('Today, website agents inspect saved text offline.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'A little more defence.' })).toBeVisible();
+  await expect(page.getByText('3 relays online')).toBeVisible();
+  await expect(page.getByLabel('Live fleet counts')).toContainText('1 operators');
+  await expect(page.getByText('Available now: saved website snapshots', { exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
-  await expect(page.getByRole('heading', { name: 'This page is private.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to continue.' })).toBeVisible();
   await expect(page.locator('.guide pre')).toHaveCount(0);
 });
 
-test('relay setup distinguishes fixture identities from agents and makes private work a separate opt-in', async ({ page }) => {
+test('relay setup explains installation, remote addresses and private-work consent', async ({ page }) => {
   await setup(page, true);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Pair an agent', exact: true }).click();
-  const guide = page.getByRole('region', { name: 'Connect a machine you control.' });
+  await page.goto('/#/guide');
+  const guide = page.getByRole('region', { name: 'Your machine. Our shared defence.' });
+  const steps = page.getByRole('navigation', { name: 'Pairing steps' });
   const commands = guide.locator('pre');
-  await expect(guide.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
-  await expect(commands.filter({ hasText: ' init ' })).toContainText('--state-dir ~/.patchriot-fixture');
-  await expect(commands.filter({ hasText: ' init ' })).toContainText("--dispatcher 'https://relay.example'");
-  await expect(commands.filter({ hasText: ' init ' })).toContainText("--audience 'test-deployment'");
-  await expect(commands.filter({ hasText: ' init ' })).not.toContainText('--runtime hermes');
-  await expect(commands.filter({ hasText: ' connect ' })).toContainText('--fixtures');
-  await expect(commands.filter({ hasText: ' connect ' })).not.toContainText('--agents');
-  await expect(guide.getByText('Opt in to private website reviews', { exact: true })).toHaveCount(0);
-
+  await expect(guide.getByRole('radio', { name: 'Try the connection first', exact: false })).toBeChecked();
+  await steps.getByRole('button', { name: '3 Connect', exact: true }).click();
+  await expect(commands).toContainText('--state-dir ~/.patchriot-fixture');
+  await expect(commands).toContainText("--dispatcher 'https://relay.example'");
+  await expect(commands).toContainText("--audience 'test-deployment'");
+  await expect(commands).not.toContainText('--runtime hermes');
+  await steps.getByRole('button', { name: '4 Get approved', exact: true }).click();
+  await expect(commands).toContainText('--fixtures');
+  await expect(commands).not.toContainText('--agents');
+  await steps.getByRole('button', { name: '1 Your machine', exact: true }).click();
   await guide.getByRole('radio', { name: 'Local agent with Hermes', exact: false }).check();
-  await expect(commands.filter({ hasText: ' init ' })).toContainText('--state-dir ~/.patchriot-agent');
-  await expect(commands.filter({ hasText: ' init ' })).toContainText('--runtime hermes --runtime-version YOUR-HERMES-VERSION');
-  await expect(commands.filter({ hasText: ' init ' })).toContainText('--model YOUR-LOCAL-MODEL');
-  await expect(guide.locator('ol')).toContainText('--agents --agent-config .local/agent.json');
-  await expect(guide.locator('ol')).not.toContainText('--website-reviews');
-  await expect(guide.locator('ol')).not.toContainText('--fixtures');
-  await guide.getByText('Opt in to private website reviews', { exact: true }).click();
-  await expect(guide.locator('details[open]')).toContainText('a requester must confirm the proposed team');
-  await expect(guide.locator('details[open] pre')).toContainText('--website-reviews');
-  // The unpacked release is executable without an unstated PATH installation.
-  const text = await commands.allTextContents();
-  expect(text.every(value => value.startsWith('./patchriot-relay '))).toBe(true);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await steps.getByRole('button', { name: '2 Install the relay', exact: true }).click();
+  await expect(commands.first()).toContainText('SHA256SUMS &&');
+  await expect(commands.first()).toContainText('cd patchriot-relay &&');
+  await expect(commands.first()).toContainText('./patchriot-relay --help');
+  await expect(commands.last()).toContainText('./patchriot-relay agent-check');
+  await steps.getByRole('button', { name: '3 Connect', exact: true }).click();
+  await expect(commands).toContainText('--state-dir ~/.patchriot-agent');
+  await expect(commands).toContainText('--runtime hermes --runtime-version YOUR-HERMES-VERSION');
+  await expect(commands).toContainText('--model YOUR-LOCAL-MODEL');
+  await steps.getByRole('button', { name: '4 Get approved', exact: true }).click();
+  await expect(commands).toContainText('--agents --agent-config .local/agent.json');
+  await expect(commands).not.toContainText('--website-reviews');
+  await expect(commands).not.toContainText('--fixtures');
+  await guide.getByText('Receiving private reviews', { exact: true }).click();
+  await expect(guide.locator('details[open]')).toContainText('requester’s consent');
+  await expect(guide.locator('details[open]')).toContainText('--website-reviews');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('an outage keeps the previous count and displays the failure', async ({ page }) => {
@@ -87,11 +95,11 @@ test('an outage keeps the previous count and displays the failure', async ({ pag
     ? { status: 503, json: { error: 'dispatcher_unavailable' } }
     : { json: fleet }));
   await page.goto('/');
-  await expect(page.getByText('3 approved relays online')).toBeVisible();
+  await expect(page.getByText('3 relays online')).toBeVisible();
   failing = true;
   await expect(page.getByRole('alert')).toContainText('dispatcher is unavailable', { timeout: 15_000 });
   await expect(page.getByLabel('Live fleet counts')).toContainText('3');
-  await expect(page.getByText('Connection interrupted')).toBeVisible();
+  await expect(page.getByRole('alert')).toBeVisible();
   failing = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -104,7 +112,7 @@ test('setup does not invent a deployment endpoint and the agent directory shows 
   await page.goto('/#/guide');
   await expect(page.getByRole('alert')).toContainText('not configured');
   await expect(page.locator('pre').filter({ hasText: ' init ' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Agents', exact: true }).click();
+  await page.evaluate(() => { location.hash = '/agents'; });
   await expect(page.getByText('Not reported', { exact: true })).toBeVisible();
   await expect(page.getByText('local-model', { exact: true })).toBeVisible();
   await expect(page.getByText('offline', { exact: true })).toBeVisible();
@@ -133,7 +141,7 @@ for (const phase of ['headers', 'body']) test(`a read timeout during ${phase} pr
     };
   }, phase);
   await page.goto('/');
-  await page.getByRole('button', { name: 'My relays', exact: true }).click();
+  await page.getByRole('button', { name: 'My agents', exact: true }).click();
   await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
   await page.evaluate(() => sessionStorage.setItem('interrupt-read', 'yes'));
   await page.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
@@ -152,7 +160,7 @@ test('session expiry clears private views and open dialogs while an outage prese
     ? { status: failure, json: { error: failure === 401 ? 'sign_in_required' : 'dispatcher_unavailable' } }
     : { json: [{ id: 'private-device', operator_id: account.id, operator_name: account.display_name, label: 'My private relay', runtime: 'owned_fixture', runtime_version: '0.0.1', compute_group: 'my-machine', approval: 'approved', state: 'online', last_seen_at: null }] }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'My relays', exact: true }).click();
+  await page.getByRole('button', { name: 'My agents', exact: true }).click();
   await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
   failure = 503;
   await page.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
@@ -162,12 +170,12 @@ test('session expiry clears private views and open dialogs while an outage prese
   await page.getByRole('button', { name: 'Pair a relay +', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   failure = 401;
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('My private relay', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'My relays', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'My agents', exact: true })).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Your session has ended');
-  await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
 });
 
@@ -176,7 +184,7 @@ test('an expired session can leave the workspace through sign out', async ({ pag
   await page.route('**/api/auth/logout', route => route.fulfill({ status: 401, json: { error: 'sign_in_required' } }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -204,7 +212,7 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
   await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'My relays', exact: true }).click();
+    await page.getByRole('button', { name: 'My agents', exact: true }).click();
     await page.getByRole('button', { name: 'Pair a relay +', exact: true }).click();
     await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
     await page.getByLabel('I will use assigned data', { exact: false }).check();
@@ -216,7 +224,8 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
     await expect(page.getByRole('status')).toContainText('Your session has ended');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: 'new-account', display_name: 'Another member' }, csrf_token: 'new-csrf' } }));
-    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
@@ -224,7 +233,7 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
     const staleReply = page.waitForResponse('**/api/pairings/claim');
     releaseClaim();
     await (await staleReply).finished();
-    await page.getByRole('button', { name: 'My relays', exact: true }).click();
+    await page.getByRole('button', { name: 'My agents', exact: true }).click();
     await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     await expect(page.getByRole('status').filter({ hasText: 'Your session has ended' })).toHaveCount(0);
@@ -252,14 +261,15 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect.poll(() => loginStarted).toBe(true);
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Close sign in', exact: true })).toBeDisabled();
+    await expect(page.getByRole('region', { name: 'Account access' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
     await expect(page.getByLabel('Invitation code', { exact: true })).toBeDisabled();
     const startupReply = page.waitForResponse(response => response.url().endsWith('/api/session') && response.headers()['x-fixture-startup'] === 'true');
     if (startupFirst) {
@@ -296,17 +306,18 @@ test('an accepted invitation can retry loading the workspace without redeeming t
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByText('Invitation or pilot code?', { exact: true }).click();
     await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('region', { name: 'Account access' });
     await expect(dialog.getByRole('alert')).toContainText('Account storage is unavailable');
     await expect(dialog.getByRole('button', { name: 'Retry opening workspace', exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Retry opening workspace', exact: true }).click();
     await expect.poll(() => retryStarted).toBe(true);
     await expect(dialog.getByLabel('Invitation code', { exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Close sign in', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     release();
@@ -342,6 +353,7 @@ for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay li
   });
   try {
     await page.goto('/');
+    await page.evaluate(() => { location.hash = '/guide'; });
     await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
     await page.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
     await page.getByLabel('I will use assigned data', { exact: false }).check();
@@ -355,7 +367,7 @@ for (const role of ['member', 'admin']) test(`pairing opens the ${role} relay li
     release();
     await expect(page.getByRole('status')).toContainText('Check its approval and connection status below');
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: role === 'admin' ? 'Fleet & approvals' : 'Your relays', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: role === 'admin' ? 'Agent approvals' : 'Your agents', exact: true })).toBeVisible();
     const row = page.getByRole('row').filter({ hasText: 'Newly paired relay' });
     await expect(row).toContainText('Awaiting approval');
     await expect(row).toContainText('No heartbeat yet');
@@ -385,7 +397,8 @@ for (const [code, status, guidance] of [
     return route.fulfill({ json: { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' } });
   });
   await page.goto('/');
-  await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
+  await page.evaluate(() => { location.hash = '/guide'; });
+    await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
   await dialog.getByLabel('Operator name', { exact: true }).fill('My operator profile');
@@ -454,7 +467,7 @@ test('renders operator-controlled names as text and exposes no admin actions to 
     approval: 'pending', state: 'pending', last_seen_at: null,
   }] }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'My relays', exact: true }).click();
+  await page.getByRole('button', { name: 'My agents', exact: true }).click();
   await expect(page.getByRole('cell', { name: '<script>alert(1)</script>', exact: false })).toBeVisible();
   await expect(page.locator('td img, td script')).toHaveCount(0);
   await expect(page.getByText('Reports received: —', { exact: true })).toBeVisible();
@@ -471,7 +484,7 @@ test('shows the declared Hermes model without treating presence as model verific
     reports_received: 7,
   }] }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'My relays', exact: true }).click();
+  await page.getByRole('button', { name: 'My agents', exact: true }).click();
   const row = page.getByRole('row').filter({ hasText: 'Hermes contributor' });
   await expect(row).toContainText('Version 0.22.2');
   await expect(row).toContainText('Reports received: 7');
@@ -489,10 +502,10 @@ test('keeps conflicting evidence visible without presenting it as a successful r
     steps: [{ role: 'reproducer', state: 'completed', attempts: 1, device_id: 'device-a', operator_id: 'operator-a', compute_group: 'shared-machine', fixture_matches: false,
       result: { runs: [{ version: 'original', completed: true, elapsed_ms: 10, checks: [{ name: 'another_user_can_read', expected: false, actual: false }] }] } }],
   };
-  await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
+  await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await openAuditTool(page, 'Reports & examples');
   await page.getByRole('button', { name: 'Access-control example', exact: false }).click();
   const report = page.getByRole('region', { name: 'Review report' });
   await expect(report).toBeFocused();
@@ -509,7 +522,7 @@ test('agent checks are an explicit choice and a retry keeps the same request ide
   const submitted: Record<string, unknown>[] = [];
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/api/reviews', async route => {
+  await page.route('**/api/reviews{,?scope=mine}', async route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: [] });
     expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
     submitted.push(route.request().postDataJSON());
@@ -518,7 +531,7 @@ test('agent checks are an explicit choice and a retry keeps the same request ide
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+    await openAuditTool(page, 'Reports & examples');
     await page.getByRole('button', { name: 'New example review +' }).click();
     await expect(page.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
     await page.getByRole('radio', { name: 'Local agent check', exact: false }).check();
@@ -549,10 +562,10 @@ test('agent reports preserve missing evidence and render model prose as inert te
     steps: ['operator-a', 'operator-b'].map((operator, i) => ({ role: i ? 'reproducer' : 'investigator', state: 'completed', attempts: 1, device_id: `device-${i}`, operator_id: operator, compute_group: 'same-name', fixture_matches: false,
       result: { kind: 'owned_agent_v1', outcome: 'failed', model: 'local-profile', declared_model: 'local-base-model', model_digest: 'a'.repeat(64), image_digest: `sha256:${'b'.repeat(64)}`, duration_ms: 500_000, inference_calls: 1, terminal_calls: 0, cleanup_confirmed: true, observation: null, summary: '<img src=x onerror=alert(1)> I think it is fixed.' } })),
   };
-  await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
+  await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await openAuditTool(page, 'Reports & examples');
   await page.getByRole('button', { name: 'Access-control example', exact: false }).click();
   const report = page.getByRole('region', { name: 'Review report' });
   await expect(report.getByRole('heading', { name: 'Needs review' })).toBeVisible();

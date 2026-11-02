@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 async function setup(page: Page, available = '18000000') {
   const destinations = [
