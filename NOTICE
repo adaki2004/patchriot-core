@@ -8,3 +8,9 @@ IdentityMD worker — https://github.com/Identity-md/worker
 The public worker's contributor lifecycle informed pairing, capability checks and result delivery. This foundation contains original documentation only; no upstream implementation is included or represented as licensed for redistribution here.
 
 Preserve the applicable copyright and complete license notices when third-party code is actually imported. External runtimes and model weights require their own license review.
+
+Bundled web fonts: Newsreader, Source Sans 3, Barlow Condensed, Barlow,
+IBM Plex Mono, Bricolage Grotesque and Lora are provided under the
+SIL Open Font License 1.1. Their copyright and full license notices are
+in web/public/fonts/LICENSES.txt. The browser loads these local files;
+no third-party font service is contacted.

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { isDocPage } from './docs-pages';
 
-const views = ['overview', 'devices', 'reviews', 'orders', 'sites', 'guide', 'incidents', 'incident-desk', 'payment-desk'] as const;
+const views = ['home', 'overview', 'audits', 'audit-desk', 'request', 'docs', 'devices', 'agents', 'reviews', 'orders', 'earnings', 'sites', 'pentests', 'sources', 'guide', 'incidents', 'incident-desk', 'payment-desk', 'access-desk'] as const;
 export type View = typeof views[number];
 type Route = { view: View; id: string | null; report: boolean };
 const home: Route = { view: 'overview', id: null, report: false };
@@ -9,7 +10,8 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function readRoute(): Route {
   const [view, id, report, ...extra] = window.location.hash.replace(/^#\//, '').split('/');
   if (!views.includes(view as View) || extra.length) return home;
-  if (id !== undefined && (!['reviews', 'sites', 'orders'].includes(view) || !uuid.test(id))) return home;
+  if (view === 'docs') return !report && (id === undefined || isDocPage(id)) ? { view: 'docs', id: id ?? 'start', report: false } : home;
+  if (id !== undefined && (!['reviews', 'sites', 'pentests', 'sources', 'orders'].includes(view) || !uuid.test(id))) return home;
   if (report !== undefined && (view !== 'orders' || report !== 'report')) return home;
   return { view: view as View, id: id ?? null, report: report === 'report' };
 }

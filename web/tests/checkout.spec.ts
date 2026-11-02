@@ -1,6 +1,9 @@
+import { emptyDashboard, openAuditTool } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import type { CheckoutSettings, Deposit } from '../src/Checkout';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const account = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Checkout fixture', role: 'member', auth_method: 'invite' };
 const siteId = '00000000-0000-4000-8000-000000000002';
@@ -30,9 +33,9 @@ async function setup(page: Page) {
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.route('**/api/review-codes', route => route.fulfill({ json: state.codeReservations }));
-  await page.route('**/api/site-checks', route => route.fulfill({ json: [site] }));
+  await page.route('**/api/site-checks{,?scope=mine}', route => route.fulfill({ json: [site] }));
   await page.route(`**/api/site-checks/${siteId}`, route => route.fulfill({ json: site }));
-  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices, review_timeout_seconds: 5700 } }));
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices, recommended_device_ids: devices.map(device => device.device_id), review_timeout_seconds: 5700 } }));
   await page.route('**/api/checkout', route => route.fulfill(state.settingsError ? { status: 503, json: { error: 'checkout_unavailable' } } : { json: state.settings }));
   await page.route(`**/api/site-checks/${siteId}/review`, route => { state.freeSubmissions++; return route.fulfill({ status: 402, json: { error: 'payment_required' } }); });
   await page.route(`**/api/site-checks/${siteId}/checkout`, route => {
@@ -42,7 +45,7 @@ async function setup(page: Page) {
     return route.fulfill(state.quoteError ? { status: 503, json: { error: 'checkout_unavailable' } } : { json: state.quote });
   });
   const review = { id: reviewId, mode: 'website_agent', state: 'queued', created_at: Math.floor(Date.now() / 1000), deadline_at: Math.floor(Date.now() / 1000) + 2100, steps: [], evidence_source: 'Browser fixture', website: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), reviewers: devices } };
-  await page.route('**/api/reviews', route => route.fulfill({ json: state.codeSubmissions.length ? [review] : [] }));
+  await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: state.codeSubmissions.length ? [review] : [] }));
   await page.route(`**/api/reviews/${reviewId}`, route => route.fulfill({ json: review }));
   await page.route(`**/api/site-checks/${siteId}/review-code`, route => {
     const body: CodeSubmission = route.request().postDataJSON();
@@ -106,8 +109,8 @@ test('a lost code reply survives refresh and resumes only the saved request', as
   await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('you will not need the code again');
   const original = state.codeSubmissions[0];
-  await page.getByRole('button', { name: 'Close agent selection', exact: true }).click();
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
+  await openAuditTool(page, 'Reports & examples');
   await page.reload();
   const history = page.getByRole('region', { name: 'Sponsored reviews', exact: true });
   await expect(history).toContainText('Start not confirmed');
@@ -137,7 +140,7 @@ test('switching to codes-only access exposes the code field even from the paymen
   await choose(page);
   await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
   state.settings = { mode: 'coupons', offer: null };
-  await page.getByRole('button', { name: 'Refresh eligible devices ↻', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh review team ↻', exact: true }).click();
   await expect(page.getByLabel('Review code', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Pay with', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Use code & start review →', exact: true })).toBeDisabled();
@@ -146,10 +149,9 @@ test('switching to codes-only access exposes the code field even from the paymen
 
 async function choose(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Website checks', exact: true }).click();
+  await openAuditTool(page, 'Website snapshots');
   await page.getByRole('button', { name: 'https://checkout.example/', exact: false }).click();
-  await page.getByRole('button', { name: 'Choose review agents →' }).click();
-  for (const [i, role] of ['Investigator', 'Reproducer', 'Challenger'].entries()) await page.getByLabel(`${role} device`).selectOption(devices[i].device_id);
+  await page.getByRole('button', { name: 'Prepare agent review →' }).click();
   await page.getByLabel('I allow these three devices and their named operators').check();
 }
 
@@ -161,8 +163,50 @@ async function prepare(page: Page) {
   await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
 }
 
+test('background proposals cannot replace the agents whose access was accepted', async ({ page }) => {
+  const state = await setup(page);
+  const replacement = { ...devices[2], device_id: '00000000-0000-4000-8000-000000000099', device_name: 'Replacement agent', operator_name: 'Another operator' };
+  let changed = false;
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: [...devices, replacement], recommended_device_ids: (changed ? [devices[0], devices[1], replacement] : devices).map(d => d.device_id) } }));
+  await page.clock.install();
+  await choose(page);
+  await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
+  changed = true;
+  await page.clock.fastForward(11_000);
+  await page.getByText('Selected agents and sharing permission', { exact: true }).click();
+  const permission = page.locator('details[open]');
+  await expect(permission).toContainText('CPU agent 3');
+  await expect(permission).not.toContainText('Replacement agent');
+  await page.getByRole('button', { name: 'Refresh review team ↻', exact: true }).click();
+  await expect(page.getByLabel('Proposed review team')).toContainText('Replacement agent');
+  await expect(page.getByLabel('I allow these three devices and their named operators')).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Continue to payment →', exact: true })).toBeDisabled();
+  expect(state.submissions).toHaveLength(0);
+});
+
+test('missing automatic assignment or a disappearing agent blocks payment without a client-side replacement', async ({ page }) => {
+  const state = await setup(page);
+  let available = true;
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: available ? devices : devices.slice(0,2), recommended_device_ids: available ? devices.map(d => d.device_id) : [] } }));
+  await page.clock.install();
+  await choose(page);
+  available = false;
+  await page.clock.fastForward(11_000);
+  await expect(page.getByRole('dialog')).toContainText('team is no longer available');
+  await expect(page.getByRole('button', { name: 'Continue to payment →', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
+  // An older dispatcher may return candidates but no automatic proposal. The
+  // browser must not silently make its own choice from those candidates.
+  await page.route(`**/api/site-checks/${siteId}/review-plan`, route => route.fulfill({ json: { site_check_id: siteId, snapshot_sha256: '3'.repeat(64), candidates: devices } }));
+  await page.getByRole('button', { name: 'Prepare agent review →' }).click();
+  await expect(page.getByRole('dialog')).toContainText('complete review team is not available');
+  await expect(page.getByLabel('Proposed review team')).toBeEmpty();
+  expect(state.submissions).toHaveLength(0);
+});
+
 test('paid review shows the price before an exact network-specific deposit and never uses the free route', async ({ page }, info) => {
   const state = await setup(page);
+  state.quote.provider_app_fee_bps = 1;
   await choose(page);
   const modal = page.getByRole('dialog');
   await expect(modal).toContainText('1 USDC');
@@ -177,6 +221,7 @@ test('paid review shows the price before an exact network-specific deposit and n
   await submit.click();
   await expect(modal).toHaveCount(0);
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
+  await expect(instructions).toContainText('0.01% provider app fee is included in the displayed amount');
   await expect(instructions.getByRole('heading', { name: 'Send 1.000000000000000000000001 NEAR', exact: true })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { (window as Window & { copiedAmount?: string }).copiedAmount = value; } } }));
   await instructions.getByRole('button', { name: 'Copy exact amount', exact: true }).click();
@@ -193,6 +238,28 @@ test('paid review shows the price before an exact network-specific deposit and n
   expect(state.resumed).toBe(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('region', { name: 'Order details' }).screenshot({ path: info.outputPath('checkout-deposit.png') });
+});
+
+for (const blockchain of ['eth', 'sol']) for (const symbol of ['USDC', 'USDT']) test(`${symbol} on ${blockchain} pays a fixed USDC review fee`, async ({ page }) => {
+  const state = await setup(page);
+  const selected = { asset_id: `nep141:${blockchain}-fixture.${symbol.toLowerCase()}.near`, symbol, decimals: 6, blockchain };
+  state.settings = { mode: 'paid', offer: { ...offer, inputs: [selected] } };
+  const address = blockchain === 'sol' ? 'So11111111111111111111111111111111111111112' : '0x1111111111111111111111111111111111111111';
+  state.quote = { ...state.quote, input: { token: selected, amount: '1000123' }, deposit_address: address, refund_address: address, deposit_memo: null };
+  await choose(page);
+  await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
+  const network = blockchain === 'sol' ? 'Solana' : 'Ethereum';
+  await page.getByLabel('Pay with', { exact: true }).selectOption({ label: `${symbol} · ${network}` });
+  if (blockchain === 'sol') await expect(page.getByRole('dialog')).toContainText('Use your Solana wallet address, not its token account.');
+  await page.getByLabel(`Refund address on ${network}`, { exact: false }).fill(address);
+  await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
+  const instructions = page.getByRole('region', { name: 'Payment instructions' });
+  await expect(instructions.getByRole('heading', { name: `Send 1.000123 ${symbol}`, exact: true })).toBeVisible();
+  await expect(instructions).toContainText(network);
+  await expect(instructions).toContainText('1 USDC');
+  expect(state.submissions[0].origin_asset).toBe(selected.asset_id);
+  expect(state.submissions[0].refund_address).toBe(address);
+  expect(state.freeSubmissions).toBe(0);
 });
 
 test('a lost preparation reply keeps the same request and warns before creating another payment', async ({ page }) => {
@@ -228,10 +295,12 @@ test('a delayed checkout reply cannot open the old order after another account s
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: '00000000-0000-4000-8000-000000000099', display_name: 'New customer' }, csrf_token: 'new-csrf' } }));
     await page.route('**/api/orders', route => route.fulfill({ json: [] }));
     await page.route(`**/api/orders/${orderId}`, route => { oldOrderReads++; return route.fulfill({ status: 404, json: { error: 'not_found' } }); });
-    await page.getByRole('button', { name: 'Sign in ↗', exact: true }).click();
+    await page.getByRole('button', { name: 'Sign in or request access', exact: true }).click();
+    await page.getByText('Invitation or pilot code?', { exact: true }).click();
+    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
     await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
-    await expect(page.getByText('New customer', { exact: true })).toHaveText('New customer');
+    await expect(page.getByRole('banner').getByText('New customer', { exact: true })).toHaveText('New customer');
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();
     const staleReply = page.waitForResponse(`**/api/site-checks/${siteId}/checkout`);
     releaseQuote(); await (await staleReply).finished();
@@ -259,7 +328,7 @@ test('an unavailable or closed checkout cannot fall back to a free review', asyn
   await expect(page.getByRole('alert')).toContainText('Checkout is unavailable');
   await expect(page.getByRole('button', { name: 'Share snapshot & start review →', exact: true })).toBeDisabled();
   state.settingsError = false; state.settings = { mode: 'closed', offer: null };
-  await page.getByRole('button', { name: 'Refresh eligible devices ↻', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh review team ↻', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('New website reviews are paused');
   await expect(page.getByRole('button', { name: 'Share snapshot & start review →', exact: true })).toBeDisabled();
   expect(state.submissions).toHaveLength(0); expect(state.freeSubmissions).toBe(0);
@@ -293,7 +362,7 @@ test('processing hides instructions, settlement does not claim completed work, a
   await expect(detail).toContainText('Open the report for its current progress and result');
   state.statusError = 401;
   await detail.getByRole('button', { name: 'Refresh order ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
   await expect(detail).toHaveCount(0);
   await expect(page.getByText(state.quote.deposit_address, { exact: true })).toHaveCount(0);
 });
@@ -314,7 +383,7 @@ test('an outage retains order history while hiding payment instructions', async 
 test('a pending order resumes explicitly and a sent hint cannot mark it as funded', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Orders', exact: true }).click();
+  await page.evaluate(() => { location.hash = '/orders'; });
   await page.getByRole('region', { name: 'Order history' }).getByRole('button').click();
   await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Show current payment instructions →', exact: true }).click();

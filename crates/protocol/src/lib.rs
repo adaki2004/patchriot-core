@@ -5,6 +5,8 @@
 //! pairing codes can be claimed once; heartbeat sequences cannot move backwards.
 //! A recent signature alone does not make an operation idempotent or authorized.
 
+pub mod pentests;
+pub mod sources;
 pub mod website_reviews;
 pub mod websites;
 
@@ -133,6 +135,10 @@ pub struct DeviceIntroduction {
     pub runtime: RuntimeKind,
     pub runtime_version: String,
     pub declared_model: Option<String>,
+    /// Reported by the relay at initialization, not a machine attestation.
+    /// Omission preserves signatures and saved identities from older relays.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reported_os: Option<String>,
     /// Operator-declared grouping for shared compute. It is not hardware attestation.
     pub compute_group: String,
     pub slots: u16,
@@ -154,6 +160,15 @@ impl DeviceIntroduction {
         }
         if self.slots != 1 {
             return Err("pilot_supports_one_slot_per_device");
+        }
+        if self.reported_os.as_ref().is_some_and(|value| {
+            value.is_empty()
+                || value.len() > 32
+                || !value
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b == b'_' || b == b'-')
+        }) {
+            return Err("invalid_os_declaration");
         }
         Ok(())
     }
@@ -211,12 +226,16 @@ pub struct DeviceView {
     pub runtime: RuntimeKind,
     pub runtime_version: String,
     pub declared_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reported_os: Option<String>,
     pub compute_group: String,
     pub approval: String,
     #[serde(default)]
     pub private_work_approved: bool,
     #[serde(default)]
     pub website_reviews: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub live_tests: bool,
     pub state: String,
     pub last_seen_at: Option<i64>,
     pub sequence: u64,
@@ -224,6 +243,24 @@ pub struct DeviceView {
     /// findings or earnings. Older dispatchers/decision replies may omit this.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reports_received: Option<u64>,
+}
+
+/// Only these fields are shared with other admitted accounts. Keep operator
+/// profiles, machine labels, keys and customer assignments out of this type.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct AgentSummary {
+    pub id: Uuid,
+    pub reported_os: Option<String>,
+    pub runtime: RuntimeKind,
+    pub runtime_version: String,
+    pub declared_model: Option<String>,
+    pub state: String,
+    pub last_seen_at: Option<i64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct PairingDeployment {
+    pub audience: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -260,6 +297,8 @@ pub enum ReviewMode {
     OwnedFixture,
     OwnedAgent,
     WebsiteAgent,
+    SourceAgent,
+    PentestAgent,
 }
 
 impl ReviewMode {
@@ -272,6 +311,8 @@ impl ReviewMode {
             Self::OwnedFixture => "owned_fixture",
             Self::OwnedAgent => "owned_agent",
             Self::WebsiteAgent => "website_agent",
+            Self::SourceAgent => "source_agent",
+            Self::PentestAgent => "pentest_agent",
         }
     }
 }
@@ -281,6 +322,8 @@ impl ReviewMode {
 pub enum FixtureScenario {
     AccessControlV1,
     WebsiteSnapshotV1,
+    SourceBundleV1,
+    LiveHttpV1,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -309,6 +352,12 @@ pub struct WorkPoll {
     /// unchanged and cannot grant access to customer evidence.
     #[serde(default, skip_serializing_if = "is_false")]
     pub website_reviews: bool,
+    /// Source uploads require a distinct signed opt-in. Website consent cannot
+    /// authorize source delivery, including after an old relay restarts.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub source_reviews: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub live_tests: bool,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -326,6 +375,10 @@ pub struct WorkAssignment {
     pub mode: ReviewMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub website: Option<website_reviews::WebsiteAssignment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<sources::SourceAssignment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pentest: Option<pentests::PentestAssignment>,
 }
 
 /// A fresh sequence renews only the current, still-live lease. Retrying the same
@@ -438,6 +491,8 @@ pub enum WorkResult {
     Fixture(FixtureResult),
     Agent(AgentResult),
     Website(website_reviews::WebsiteAgentResult),
+    Source(sources::SourceAgentResult),
+    Pentest(pentests::PentestResult),
 }
 
 impl WorkResult {
@@ -446,6 +501,8 @@ impl WorkResult {
             Self::Fixture(_) => ReviewMode::OwnedFixture,
             Self::Agent(_) => ReviewMode::OwnedAgent,
             Self::Website(_) => ReviewMode::WebsiteAgent,
+            Self::Source(_) => ReviewMode::SourceAgent,
+            Self::Pentest(_) => ReviewMode::PentestAgent,
         }
     }
 
@@ -453,7 +510,7 @@ impl WorkResult {
         match self {
             Self::Fixture(result) => result.matches_fixture(),
             Self::Agent(result) => result.matches_fixture(),
-            Self::Website(_) => false,
+            Self::Website(_) | Self::Source(_) | Self::Pentest(_) => false,
         }
     }
 }
@@ -584,6 +641,10 @@ pub struct ReviewView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub website: Option<website_reviews::WebsiteReviewContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<sources::SourceReviewContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pentest: Option<pentests::PentestContext>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payment: Option<website_reviews::ReviewPayment>,
 }
 
@@ -594,6 +655,45 @@ pub struct CancelReview {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn old_device_introductions_keep_their_signed_bytes_and_new_os_is_bounded() {
+        let old = serde_json::json!({"label":"legacy","runtime":"hermes","runtime_version":"1","declared_model":"local","compute_group":"machine","slots":1});
+        let mut intro: DeviceIntroduction = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&intro).unwrap(), old);
+        assert_eq!(
+            signing_bytes("pilot", PAIRING_START_PATH, 1, &old).unwrap(),
+            signing_bytes("pilot", PAIRING_START_PATH, 1, &intro).unwrap()
+        );
+        intro.reported_os = Some("linux".into());
+        assert!(intro.validate().is_ok());
+        assert_ne!(payload_hash(&intro).unwrap(), payload_hash(&old).unwrap());
+        for invalid in ["", "linux\n", "https://my-host.example", "LINUX"] {
+            intro.reported_os = Some(invalid.into());
+            assert!(intro.validate().is_err());
+        }
+    }
+
+    #[test]
+    fn old_work_polls_keep_signed_bytes_and_each_private_opt_in_changes_the_signature() {
+        for old in [
+            serde_json::json!({"sequence":1}),
+            serde_json::json!({"sequence":1,"website_reviews":true}),
+        ] {
+            let mut poll: WorkPoll = serde_json::from_value(old.clone()).unwrap();
+            assert_eq!(
+                signing_bytes("pilot", "/poll", 1, &old).unwrap(),
+                signing_bytes("pilot", "/poll", 1, &poll).unwrap()
+            );
+            assert!(!poll.source_reviews);
+            assert!(!poll.live_tests);
+            poll.source_reviews = true;
+            assert_ne!(payload_hash(&old).unwrap(), payload_hash(&poll).unwrap());
+            poll.source_reviews = false;
+            poll.live_tests = true;
+            assert_ne!(payload_hash(&old).unwrap(), payload_hash(&poll).unwrap());
+        }
+    }
 
     #[test]
     fn signatures_bind_every_request_boundary_and_reject_old_proofs() {

@@ -1,0 +1,33 @@
+[Unit]
+Description=Patchriot reserved operator withdrawal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Separate OS account: core, dispatcher and relay must not read this key.
+User=patchriot-payouts
+Group=patchriot-payouts
+WorkingDirectory=/opt/patchriot
+EnvironmentFile=/etc/patchriot/payouts.env
+ExecStart=/opt/patchriot/bin/patchriot-core payouts-once
+TimeoutStartSec=120
+UMask=0077
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryMax=256M
+TasksMax=64

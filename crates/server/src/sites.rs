@@ -1,7 +1,7 @@
 use crate::{ApiError, AppState, auth, gateway};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -18,9 +18,10 @@ use uuid::Uuid;
 
 pub async fn list(
     State(state): State<AppState>,
+    Query(filter): Query<gateway::ListFilter>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<SiteCheckView>>, ApiError> {
-    let session = auth::require_session(&headers, &state).await?;
+    let session = filter.restrict(auth::require_session(&headers, &state).await?);
     gateway::request::<(), _>(
         &state,
         Method::GET,

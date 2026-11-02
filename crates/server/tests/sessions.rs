@@ -14,14 +14,187 @@ use uuid::Uuid;
 
 const ORIGIN: &str = "https://patchriot.example";
 
+#[tokio::test]
+async fn live_pilot_requires_session_csrf_and_cannot_bypass_coupon_or_closed_access() {
+    use patchriot_core::payments::access::ReviewAccess;
+    for mode in [ReviewAccess::Coupons, ReviewAccess::Closed] {
+        // No downstream listener: all rejected writes must stop at core.
+        let test = TestApp::with_access("http://127.0.0.1:1", mode).await;
+        let (cookie, session) = test.login("member").await;
+        let path = format!("/api/pentests/{}/review", Uuid::new_v4());
+        let input = json!({"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":[Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4()],"accepts_operator_access":true,"accepts_provider_access":true});
+        assert_eq!(
+            test.request("POST", &path, input.clone(), &[("origin", ORIGIN)])
+                .await
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            test.request("POST", &path, input.clone(), &[("cookie", &cookie)])
+                .await
+                .0,
+            StatusCode::FORBIDDEN
+        );
+        let headers = [
+            ("cookie", cookie.as_str()),
+            ("origin", ORIGIN),
+            ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+        ];
+        let denied = test.request("POST", &path, input, &headers).await;
+        assert_eq!(denied.0, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(denied.2["error"], "live_test_pilot_only");
+        let decision=test.request("POST",&format!("/api/pentests/{}/decision",Uuid::new_v4()),json!({"approved":true,"scope_sha256":"a".repeat(64),"note":"member cannot approve"}),&headers).await;
+        assert_eq!(decision.0, StatusCode::FORBIDDEN);
+        test.finish().await;
+    }
+}
+
 #[path = "sites/mod.rs"]
 mod sites;
+#[path = "sources/mod.rs"]
+mod sources;
 
 #[path = "orders/mod.rs"]
 mod orders;
 
 #[path = "review_codes/mod.rs"]
 mod review_codes;
+
+#[path = "access/mod.rs"]
+mod access;
+
+#[tokio::test]
+async fn personal_audit_lists_narrow_admin_reads_without_elevating_members() {
+    let seen = Arc::new(Mutex::new(Vec::<(String, String, String)>::new()));
+    let captured = seen.clone();
+    let downstream = Router::new().fallback(move |headers: HeaderMap, uri: axum::http::Uri| {
+        let captured = captured.clone();
+        async move {
+            captured.lock().unwrap().push((
+                uri.path().to_owned(),
+                headers["x-patchriot-account"].to_str().unwrap().to_owned(),
+                headers["x-patchriot-role"].to_str().unwrap().to_owned(),
+            ));
+            Json(json!([]))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    for role in ["admin", "member"] {
+        let (cookie, session) = test.login(role).await;
+        for path in [
+            "/api/reviews",
+            "/api/site-checks",
+            "/api/sources",
+            "/api/pentests",
+        ] {
+            for scope in ["mine", "all"] {
+                let response = test
+                    .request(
+                        "GET",
+                        &format!("{path}?scope={scope}"),
+                        Value::Null,
+                        &[("cookie", cookie.as_str()), ("x-patchriot-role", "admin")],
+                    )
+                    .await;
+                assert_eq!(response.0, StatusCode::OK);
+                let last = seen.lock().unwrap().last().unwrap().clone();
+                assert_eq!(last.1, session["account"]["id"].as_str().unwrap());
+                assert_eq!(last.2, if scope == "mine" { "member" } else { role });
+            }
+            let response = test
+                .request(
+                    "GET",
+                    &format!("{path}?scope=other-account"),
+                    Value::Null,
+                    &[("cookie", cookie.as_str())],
+                )
+                .await;
+            assert_eq!(response.0, StatusCode::BAD_REQUEST);
+        }
+    }
+    for path in [
+        "/api/reviews?scope=mine",
+        "/api/site-checks?scope=mine",
+        "/api/sources?scope=mine",
+    ] {
+        assert_eq!(
+            test.request("GET", path, Value::Null, &[]).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    server.abort();
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn pairing_setup_and_agent_metadata_require_an_enabled_account() {
+    let downstream = Router::new().fallback(|headers: HeaderMap, uri: axum::http::Uri| async move {
+        assert!(headers.contains_key("authorization"));
+        assert!(headers.contains_key("x-patchriot-account"));
+        if uri.path() == "/internal/pairing-info" {
+            Json(json!({"audience":"fixture-deployment", "private_key":"must not be forwarded"}))
+        } else {
+            Json(json!([{"id":Uuid::nil(),"reported_os":"linux","runtime":"hermes","runtime_version":"example","declared_model":"local","state":"online","last_seen_at":1,"operator_name":"private name","compute_group":"private hostname","task":"private customer data"}]))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let mut test = TestApp::new(&url).await;
+    for path in ["/api/agents", "/api/pairing-info"] {
+        assert_eq!(
+            test.request("GET", path, Value::Null, &[]).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    let (cookie, session) = test.login("member").await;
+    let headers = [("cookie", cookie.as_str())];
+    assert_eq!(
+        test.request("GET", "/api/pairing-info", Value::Null, &headers)
+            .await
+            .2["error"],
+        "pairing_setup_unavailable"
+    );
+    let config = Config::new(
+        ORIGIN.into(),
+        url,
+        format!("test-service-{}", Uuid::new_v4()),
+        None,
+    )
+    .unwrap()
+    .with_relay_origin(Some("https://relay.example".into()))
+    .unwrap();
+    test.app = router(AppState::new(test.pool.clone(), config).unwrap());
+    let (status, _, setup) = test
+        .request("GET", "/api/pairing-info", Value::Null, &headers)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        setup,
+        json!({"audience":"fixture-deployment", "relay_origin":"https://relay.example"})
+    );
+    let (status, _, agents) = test
+        .request("GET", "/api/agents", Value::Null, &headers)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(agents[0].as_object().unwrap().len(), 7);
+    for private in ["operator_name", "compute_group", "task"] {
+        assert!(agents[0].get(private).is_none());
+    }
+    let account: Uuid = serde_json::from_value(session["account"]["id"].clone()).unwrap();
+    disable_account(&test.pool, account).await.unwrap();
+    for path in ["/api/agents", "/api/pairing-info"] {
+        assert_eq!(
+            test.request("GET", path, Value::Null, &headers).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
+    server.abort();
+    test.finish().await;
+}
 
 struct TestApp {
     app: Router,
@@ -173,6 +346,72 @@ fn incident_content(title: &str) -> Value {
         "summary":"A public source reports a dependency incident. This is an explicit test fixture.",
         "takeaway":"Check the affected version before drawing a conclusion.",
         "sources":[{"label":"Public advisory","url":"https://github.com/advisories/GHSA-example"}]})
+}
+
+#[tokio::test]
+async fn incident_catalogue_preserves_full_research_and_validates_nested_fields() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (cookie, session) = test.login("admin").await;
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    let mut content = incident_content("Detailed public research");
+    content["catalogue"] = json!({
+        "short_name": "Example dependency", "qualifying": "January 1, 2025 disclosure",
+        "category": "Published advisory", "fix": "Apply the vendor update.",
+        "report": {"label": "Research source", "url": "https://example.com/research"},
+        "sections": [{"label": "Impact and limits", "body": "Potential exposure is not a confirmed infection count."}]
+    });
+    let path = format!("/api/admin/incidents/{}", Uuid::new_v4());
+    let (status, _, _) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"save", "revision":0, "content":content}),
+            &headers,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = test
+        .request(
+            "POST",
+            &path,
+            json!({"action":"publish", "revision":1, "sources_reviewed":true}),
+            &headers,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, _, published) = test
+        .request("GET", "/api/incidents", Value::Null, &[])
+        .await;
+    assert_eq!(published[0]["content"], content);
+
+    let mut bad_url = content.clone();
+    bad_url["catalogue"]["report"]["url"] = json!("javascript:alert(1)");
+    let mut long_body = content.clone();
+    long_body["catalogue"]["sections"][0]["body"] = json!("x".repeat(1601));
+    let mut too_many = content.clone();
+    too_many["catalogue"]["sections"] = json!(vec![content["catalogue"]["sections"][0].clone(); 9]);
+    let mut empty = content.clone();
+    empty["catalogue"]["short_name"] = json!(" ");
+    for invalid in [bad_url, long_body, too_many, empty] {
+        let (status, _, _) = test
+            .request(
+                "POST",
+                &format!("/api/admin/incidents/{}", Uuid::new_v4()),
+                json!({"action":"save", "revision":0, "content":invalid}),
+                &headers,
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+    let (_, _, after) = test
+        .request("GET", "/api/incidents", Value::Null, &[])
+        .await;
+    assert_eq!(after, published);
+    test.finish().await;
 }
 
 #[tokio::test]
@@ -807,6 +1046,17 @@ fn service_configuration_rejects_insecure_or_credentialed_destinations() {
             .is_err()
         );
         assert!(Config::new(ORIGIN.into(), bad.into(), key.clone(), None).is_err());
+        assert!(
+            Config::new(
+                ORIGIN.into(),
+                "http://127.0.0.1:7411".into(),
+                key.clone(),
+                None
+            )
+            .unwrap()
+            .with_relay_origin(Some(bad.into()))
+            .is_err()
+        );
     }
     assert!(
         Config::new(
@@ -917,6 +1167,7 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
         runtime: RuntimeKind::Hermes,
         runtime_version: "\"".repeat(80),
         declared_model: Some("\"".repeat(160)),
+        reported_os: None,
         compute_group: "\"".repeat(80),
         slots: 1,
     };
@@ -931,10 +1182,12 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
             runtime: intro.runtime,
             runtime_version: intro.runtime_version.clone(),
             declared_model: intro.declared_model.clone(),
+            reported_os: None,
             compute_group: intro.compute_group.clone(),
             approval: "approved".into(),
             private_work_approved: true,
             website_reviews: true,
+            live_tests: false,
             state: "online".into(),
             last_seen_at: Some(1_793_513_000),
             sequence: 1,
@@ -998,7 +1251,7 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
             .await;
         observations.push((path, expected, denied, accepted, oversized));
     }
-    *payload.lock().unwrap() = json!("x".repeat(256 * 1024));
+    *payload.lock().unwrap() = json!("x".repeat(4 * 1024 * 1024));
     let detail = test
         .request(
             "GET",

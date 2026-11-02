@@ -7,7 +7,14 @@ license = "AGPL-3.0-only"
 publish = false
 
 [dependencies]
+# Transaction encoding only; signing and recovery use libsecp256k1 below.
+alloy-consensus = { version = "=1.8.3", default-features = false }
+alloy-eips = { version = "=1.8.3", default-features = false }
+alloy-primitives = { version = "1.7.3", default-features = false, features = ["secp256k1"] }
+secp256k1 = { version = "0.31.1", features = ["recovery"] }
+argon2 = { version = "0.6", features = ["getrandom"] }
 axum = "0.8.9"
+bs58 = "0.5.1"
 chrono = { version = "0.4", features = ["serde"] }
 getrandom = "0.4"
 hex = "0.4.3"
@@ -22,6 +29,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net
 tower-http = { version = "0.6", features = ["set-header", "fs"] }
 url = "2.5"
 uuid = { version = "1.22", features = ["v4", "serde"] }
+zeroize = "1"
 
 [dev-dependencies]
 http-body-util = "0.1"

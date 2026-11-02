@@ -3,16 +3,19 @@
 //! route; callers must choose price/treasury terms from trusted configuration.
 
 use super::*;
-use crate::gateway;
+use crate::{gateway, review_target::ReviewTarget};
 use patchriot_protocol::{
-    FixtureScenario, ReviewView,
+    ReviewView,
     website_reviews::{AdmitWebsiteReview, CreateWebsiteReview, ReviewPrice},
 };
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CheckoutTerms {
+    #[serde(default, skip_serializing_if = "Uuid::is_nil")]
     pub site_check_id: Uuid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_id: Option<Uuid>,
     pub consent: CreateWebsiteReview,
     pub payment: InvoiceTerms,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,7 +90,7 @@ struct Order {
 
 pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, CheckoutError> {
     let deadline = validate_quote_request(&terms.payment, Utc::now())?;
-    if terms.site_check_id.is_nil()
+    if ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id).is_none()
         || terms.payment.account_id.is_nil()
         || terms.consent.request_id.is_nil()
         || terms.consent.request_id != terms.payment.request_id
@@ -197,20 +200,8 @@ fn matches_admission(view: &ReviewView, terms: &CheckoutTerms, input: &AdmitWebs
 /// Funding verifies the same immutable request even after the reservation's
 /// deadline, because an earlier activation reply may have been lost.
 pub(super) fn matches_review(view: &ReviewView, terms: &CheckoutTerms, expires: i64) -> bool {
-    !view.id.is_nil()
-        && view.request_id == terms.payment.request_id
-        && view.scenario == FixtureScenario::WebsiteSnapshotV1
-        && view.mode == "website_agent"
-        && view.website.as_ref().is_some_and(|context| {
-            context.site_check_id == terms.site_check_id
-                && context.snapshot_sha256 == terms.consent.snapshot_sha256
-                && context
-                    .reviewers
-                    .iter()
-                    .map(|r| r.device_id)
-                    .collect::<Vec<_>>()
-                    == terms.consent.device_ids
-        })
+    ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id)
+        .is_some_and(|target| target.matches(view, &terms.consent))
         && view.payment.as_ref().is_some_and(|payment| {
             payment.price.asset == terms.payment.destination_asset
                 && payment.price.amount == terms.payment.required_amount.to_string()
@@ -275,7 +266,12 @@ async fn prepare_claimed(
     let Json(review): Json<ReviewView> = gateway::request_for_account(
         state,
         reqwest::Method::POST,
-        &format!("/internal/site-checks/{}/admit-review", terms.site_check_id),
+        &format!(
+            "{}/admit-review",
+            ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id)
+                .ok_or(CheckoutError::InvalidTerms)?
+                .path()
+        ),
         order.account_id,
         Some(input),
     )

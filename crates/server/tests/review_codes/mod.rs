@@ -26,6 +26,9 @@ impl Drop for Network {
 
 impl Network {
     async fn new() -> Self {
+        Self::for_source(false).await
+    }
+    async fn for_source(source: bool) -> Self {
         let calls = Arc::new(Mutex::new(Vec::new()));
         let reviews = Arc::new(Mutex::new(HashMap::new()));
         let lose_reply = Arc::new(AtomicBool::new(false));
@@ -36,7 +39,7 @@ impl Network {
             lose_reply.clone(),
             wrong_binding.clone(),
         );
-        let app = Router::new().route("/internal/site-checks/{id}/review", post(move |Path(site):Path<Uuid>, headers:HeaderMap, Json(body):Json<Value>| {
+        let app = Router::new().route(if source { "/internal/sources/{id}/review" } else { "/internal/site-checks/{id}/review" }, post(move |Path(site):Path<Uuid>, headers:HeaderMap, Json(body):Json<Value>| {
             let (seen,saved,lost,wrong)=(seen.clone(),saved.clone(),lost.clone(),wrong.clone());
             async move {
                 assert_eq!(headers["x-patchriot-role"],"member");
@@ -51,8 +54,13 @@ impl Network {
                     "created_at":chrono::Utc::now().timestamp(),"deadline_at":chrono::Utc::now().timestamp()+2100,"evidence_source":"test fixture, not a model run","steps":[],
                     "website":{"site_check_id":site,"snapshot_sha256":body["snapshot_sha256"],"reviewers":body["device_ids"].as_array().unwrap().iter().map(|device|json!({"device_id":device,"operator_id":Uuid::new_v4(),"operator_name":"Example operator","device_name":"Example device","declared_model":"fixture","compute_group":"fixture"})).collect::<Vec<_>>()}
                 })).clone();
+                if source {
+                    reply["scenario"]=json!("source_bundle_v1"); reply["mode"]=json!("source_agent");
+                    let mut context=reply.as_object_mut().unwrap().remove("website").unwrap();
+                    context.as_object_mut().unwrap().remove("site_check_id");context["source_id"]=json!(site);reply["source"]=context;
+                }
                 if lost.swap(false,Ordering::SeqCst) { return (StatusCode::SERVICE_UNAVAILABLE,Json(json!({"error":"reply_lost_after_creation"}))); }
-                if wrong.load(Ordering::SeqCst) { reply["website"]["snapshot_sha256"]=json!("b".repeat(64)); }
+                if wrong.load(Ordering::SeqCst) { reply[if source {"source"} else {"website"}]["snapshot_sha256"]=json!("b".repeat(64)); }
                 (StatusCode::OK,Json(reply))
             }
         }));
@@ -465,5 +473,70 @@ async fn paid_order_request_key_cannot_be_spent_again_with_a_code() {
             .unwrap();
     assert!(!bound);
     assert!(network.calls.lock().unwrap().is_empty());
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn source_coupon_retries_keep_kind_owner_and_material_without_reusing_a_website_reservation()
+{
+    let network = Network::for_source(true).await;
+    let test = TestApp::with_access(&network.origin, ReviewAccess::Coupons).await;
+    let issued = issue(&test.pool, "Source tester").await.unwrap();
+    let (cookie, session) = test.login("member").await;
+    let h = headers(&cookie, &session);
+    let source = Uuid::new_v4();
+    let body = json!({"code":issued.code,"consent":consent()});
+    network.lose_reply.store(true, Ordering::SeqCst);
+    assert_eq!(
+        test.request(
+            "POST",
+            &format!("/api/sources/{source}/review-code"),
+            body.clone(),
+            &h
+        )
+        .await
+        .0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    let history = test
+        .request("GET", "/api/review-codes", Value::Null, &h)
+        .await
+        .2;
+    assert_eq!(history[0]["source_id"], source.to_string());
+    assert!(history[0]["site_check_id"].is_null());
+    let resumed = test
+        .request(
+            "POST",
+            &format!(
+                "/api/review-codes/{}/resume",
+                history[0]["id"].as_str().unwrap()
+            ),
+            json!({}),
+            &h,
+        )
+        .await;
+    assert_eq!(resumed.0, StatusCode::OK, "{}", resumed.2);
+    assert_eq!(
+        test.request(
+            "POST",
+            &format!("/api/site-checks/{source}/review-code"),
+            body.clone(),
+            &h
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            &format!("/api/sources/{source}/review-code"),
+            body,
+            &h
+        )
+        .await
+        .2,
+        resumed.2
+    );
     test.finish().await;
 }

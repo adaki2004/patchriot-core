@@ -13,6 +13,38 @@ use tower::ServiceExt;
 const ORIGIN: &str = "https://checkout.fixture.example";
 const SERVICE_KEY: &str = "checkout-fixture-internal-service-key";
 
+#[tokio::test]
+async fn source_checkout_uses_the_same_price_but_cannot_be_rebound_to_a_website() {
+    let db = TestDb::new().await;
+    let network = Network::start().await;
+    let policy = policy();
+    let browser = Browser::new(&db, &network, network.access(&policy)).await;
+    let id = Uuid::new_v4();
+    let body = input(&policy);
+    let (status, quote) = browser
+        .call("POST", &format!("/api/sources/{id}/checkout"), body.clone())
+        .await;
+    assert_eq!(status, StatusCode::OK, "{quote}");
+    assert_eq!(quote["output"]["amount"], policy.amount);
+    assert_eq!(network.count("quote"), 1);
+    let saved: Value = sqlx::query_scalar("SELECT terms FROM checkout_orders WHERE account_id=$1")
+        .bind(db.account)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(saved["source_id"], id.to_string());
+    assert!(saved.get("site_check_id").is_none());
+    assert_eq!(
+        browser
+            .call("POST", &format!("/api/site-checks/{id}/checkout"), body)
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(network.count("quote"), 1);
+    db.finish().await;
+}
+
 fn policy() -> CheckoutPolicy {
     CheckoutPolicy {
         destination: PaymentToken {
@@ -69,7 +101,7 @@ impl Network {
             bad_address.clone(),
         );
         let app = Router::new()
-            .route("/internal/site-checks/{site}/admit-review", post(move |Path(site):Path<Uuid>, headers:HeaderMap, Json(body):Json<Value>| {
+            .route("/internal/{kind}/{site}/admit-review", post(move |Path((kind,site)):Path<(String,Uuid)>, headers:HeaderMap, Json(body):Json<Value>| {
                 let (calls,denied)=(admissions.clone(),denied.clone());
                 async move {
                     assert_eq!(headers["authorization"], format!("Bearer {SERVICE_KEY}"));
@@ -80,12 +112,18 @@ impl Network {
                     // The real dispatcher assigns a review ID distinct from the
                     // caller's retry key. Keep it stable across fixture retries.
                     let review_id=Uuid::from_u128(Uuid::parse_str(consent["request_id"].as_str().unwrap()).unwrap().as_u128() ^ 1);
-                    (StatusCode::OK,Json(json!({
+                    let mut reply=json!({
                         "id":review_id,"request_id":consent["request_id"],"scenario":"website_snapshot_v1","mode":"website_agent","state":"awaiting_payment",
                         "created_at":Utc::now().timestamp(),"deadline_at":body["payment_expires_at"],"steps":[],"evidence_source":"synthetic fixture",
                         "website":{"site_check_id":site,"snapshot_sha256":consent["snapshot_sha256"],"reviewers":consent["device_ids"].as_array().unwrap().iter().map(|id|json!({"device_id":id,"operator_id":Uuid::new_v4(),"operator_name":"Fixture operator","device_name":"Fixture device","declared_model":"fixture-model","compute_group":"fixture-host"})).collect::<Vec<_>>()},
                         "payment":{"price":body["price"],"expires_at":body["payment_expires_at"],"invoice_id":null,"funded_at":null}
-                    })))
+                    });
+                    if kind == "sources" {
+                        reply["scenario"]=json!("source_bundle_v1");reply["mode"]=json!("source_agent");
+                        let mut context=reply.as_object_mut().unwrap().remove("website").unwrap();
+                        context.as_object_mut().unwrap().remove("site_check_id");context["source_id"]=json!(site);reply["source"]=context;
+                    } else { assert_eq!(kind,"site-checks"); }
+                    (StatusCode::OK,Json(reply))
                 }
             }))
             .route("/v0/quote", post(move |headers:HeaderMap,Json(body):Json<Value>| {
@@ -97,7 +135,7 @@ impl Network {
                     calls.push(("quote".into(),body.clone(),String::new()));
                     Json(json!({"correlationId":Uuid::new_v4(),"quoteRequest":body,"quote":{
                         "amountOut":body["amount"],"amountIn":"1000000000000000000000000",
-                        "depositAddress":if bad.load(Ordering::SeqCst) {"invalid/address".into()} else {format!("deposit-{}.near",Uuid::new_v4())},
+                        "depositAddress":if bad.load(Ordering::SeqCst) {"invalid/address".into()} else if body["originAsset"].as_str().unwrap().starts_with("nep141:sol-") {"So11111111111111111111111111111111111111112".into()} else {format!("deposit-{}.near",Uuid::new_v4())},
                         "deadline":body["deadline"],"unexpectedProviderField":"must not reach the browser"
                     }}))
                 }
@@ -326,6 +364,120 @@ fn paid_policy_is_explicit_and_rejects_ambiguous_metadata_or_addresses() {
     assert!(Blockchain::Base.accepts_address("0x1111111111111111111111111111111111111111"));
     assert!(!Blockchain::Near.accepts_address("Account.NEAR"));
     assert!(!Blockchain::Near.accepts_address("a..near"));
+}
+
+#[test]
+fn solana_addresses_are_nonzero_32_byte_base58_values() {
+    assert!(Blockchain::Sol.accepts_address("So11111111111111111111111111111111111111112"));
+    for address in [
+        "0x1111111111111111111111111111111111111111",
+        "11111111111111111111111111111111",
+        "111111111111111111111111111111111",
+        "11111111111111111111111111111111111",
+        "So1111111111111111111111111111111111111111O",
+        "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        " So11111111111111111111111111111111111111112",
+    ] {
+        assert!(!Blockchain::Sol.accepts_address(address), "{address}");
+    }
+}
+
+#[tokio::test]
+async fn evm_controlled_intents_account_is_normalized_and_saved_as_internal_custody() {
+    let db = TestDb::new().await;
+    let network = Network::start().await;
+    let mut configured = policy();
+    configured.recipient = "0x111111111111111111111111111111111111ABCD".into();
+    configured.destination.blockchain = Blockchain::Base;
+    configured.destination.asset_id = earnings::SETTLEMENT_ASSET.into();
+    let access = network.access(&configured);
+    let ReviewAccess::Paid(service) = &access else {
+        panic!("paid service required")
+    };
+    let normalized = service.policy.clone();
+    assert_eq!(
+        normalized.recipient,
+        configured.recipient.to_ascii_lowercase()
+    );
+    let browser = Browser::new(&db, &network, access).await;
+    let (status, _) = browser
+        .call(
+            "POST",
+            &format!("/api/site-checks/{}/checkout", Uuid::new_v4()),
+            input(&normalized),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let saved: Value =
+        sqlx::query_scalar("SELECT quote_request FROM payment_invoices WHERE account_id=$1")
+            .bind(db.account)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(saved["recipientType"], "INTENTS");
+    assert_eq!(saved["recipient"], normalized.recipient);
+    assert_eq!(saved["destinationAsset"], earnings::SETTLEMENT_ASSET);
+    // A quote records the route without crediting money or starting paid work.
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM payment_ledger")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap(),
+        0
+    );
+    for recipient in [
+        "0x0000000000000000000000000000000000000000",
+        "0xinvalid",
+        "0x111111111111111111111111111111111111111g",
+    ] {
+        configured.recipient = recipient.into();
+        assert!(
+            ReviewAccess::configured(
+                "paid",
+                Some(&serde_json::to_vec(&configured).unwrap()),
+                Some("fixture-key")
+            )
+            .is_err()
+        );
+    }
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn solana_checkout_keeps_the_usdc_price_and_rejects_wrong_network_refunds() {
+    let db = TestDb::new().await;
+    let network = Network::start().await;
+    let mut policy = policy();
+    policy.inputs = vec![PaymentToken {
+        asset_id: "nep141:sol-fixture.usdt.near".into(),
+        symbol: "USDT".into(),
+        decimals: 6,
+        blockchain: Blockchain::Sol,
+    }];
+    let browser = Browser::new(&db, &network, network.access(&policy)).await;
+    let path = format!("/api/site-checks/{}/checkout", Uuid::new_v4());
+    let mut body = input(&policy);
+    body["refund_address"] = json!("0x1111111111111111111111111111111111111111");
+    assert_eq!(
+        browser.call("POST", &path, body.clone()).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(network.count("admission"), 0);
+    assert_eq!(network.count("quote"), 0);
+    body["refund_address"] = json!("So11111111111111111111111111111111111111112");
+    let (status, quote) = browser.call("POST", &path, body.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{quote}");
+    assert_eq!(quote["input"]["token"]["blockchain"], "sol");
+    assert_eq!(quote["input"]["token"]["symbol"], "USDT");
+    assert_eq!(quote["output"]["token"]["symbol"], "USDC");
+    assert_eq!(quote["output"]["amount"], policy.amount);
+    assert_eq!(quote["refund_address"], body["refund_address"]);
+    assert_eq!(network.count("quote"), 1);
+    // A retry returns the original deposit details, without a second quote.
+    age(&db).await;
+    assert_eq!(browser.call("POST", &path, body).await.1, quote);
+    assert_eq!(network.count("quote"), 1);
+    db.finish().await;
 }
 
 #[tokio::test]

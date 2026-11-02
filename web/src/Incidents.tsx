@@ -5,9 +5,11 @@ import { useLive } from './useLive';
 import { useDialog } from './useDialog';
 
 type Source = { label: string; url: string };
+type Catalogue = { short_name: string; qualifying: string; category: string; fix: string; report: Source; sections: { label: string; body: string }[] };
 type Content = {
   title: string; occurred_on: string; evidence: 'reported' | 'confirmed' | 'advisory';
   summary: string; takeaway: string; sources: Source[];
+  catalogue?: Catalogue;
 };
 type Published = { id: string; revision: number; content: Content; published_at: string };
 type Draft = { id: string; revision: number; content: Content; published_revision: number | null; published_at: string | null; updated_at: string };
@@ -36,7 +38,7 @@ Return one JSON object, without markdown fences or extra fields:
 ${JSON.stringify({ ...researchFormat, occurred_on: 'YYYY-MM-DD' }, null, 2)}
 
 Replace every example value. Use reported for developing claims, confirmed only when an original source confirms the incident described, and advisory for a published security advisory. Confirmation by a source is not independent verification by Patchriot.
-Keep title within 140 UTF-8 bytes, summary within 2400, takeaway within 1200, and the whole entry within 12 KB. Include 1–4 original public HTTPS sources: label at most 100 bytes, URL at most 1500, without credentials or query parameters. Give a practical takeaway supported by those sources. Include no private customer information, credentials or unpublished exploit details.
+Keep title within 140 UTF-8 bytes, summary within 2400, takeaway within 1200, and the whole entry within 12 KB. Include 1–4 original public HTTPS sources: label at most 100 bytes, URL at most 1500, without credentials or query parameters. Write like a person keeping useful notes: concrete facts, short sentences, no dramatic claims or filler. Give a practical takeaway supported by those sources. Include no private customer information, credentials or unpublished exploit details.
 
 This is a research draft for human source review, not permission to test a website or publish the entry.`;
 }
@@ -52,13 +54,25 @@ function researchContent(raw: string): Content {
   function text(value: unknown, limit: number): value is string {
     return typeof value === 'string' && value.trim().length > 0 && new TextEncoder().encode(value).length <= limit;
   }
-  if (!record(value, ['title', 'occurred_on', 'evidence', 'summary', 'takeaway', 'sources'])
+  const hasCatalogue = value !== null && typeof value === 'object' && Object.hasOwn(value, 'catalogue');
+  if (!record(value, ['title', 'occurred_on', 'evidence', 'summary', 'takeaway', 'sources', ...(hasCatalogue ? ['catalogue'] : [])])
       || !text(value.title, 140) || !text(value.summary, 2400) || !text(value.takeaway, 1200)
       || typeof value.occurred_on !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.occurred_on)
       || typeof value.evidence !== 'string' || !['reported', 'confirmed', 'advisory'].includes(value.evidence)
       || !Array.isArray(value.sources) || value.sources.length < 1 || value.sources.length > 4
       || !value.sources.every(source => record(source, ['label', 'url']) && text(source.label, 100) && text(source.url, 1500))) {
     throw new Error('Use the shown format for one entry, with 1–4 original public sources. Extra fields and full review reports are not accepted.');
+  }
+  if (hasCatalogue) {
+    const catalogue = value.catalogue;
+    if (!record(catalogue, ['short_name', 'qualifying', 'category', 'fix', 'report', 'sections'])
+        || !text(catalogue.short_name, 100) || !text(catalogue.qualifying, 200) || !text(catalogue.category, 120) || !text(catalogue.fix, 300)
+        || !record(catalogue.report, ['label', 'url']) || !text(catalogue.report.label, 100) || !text(catalogue.report.url, 1500)
+        || !Array.isArray(catalogue.sections) || catalogue.sections.length < 1 || catalogue.sections.length > 8
+        || !catalogue.sections.every(section => record(section, ['label', 'body']) && text(section.label, 80) && text(section.body, 1600))
+        || catalogue.sections.reduce((sum, section) => sum + new TextEncoder().encode(section.body).length, 0) > 6000) {
+      throw new Error('Catalogue details need a short name, disclosure date, category, short fix, report source and 1–8 labelled sections. Keep section text within 6 KB.');
+    }
   }
   // Never turn imported URLs or HTML into links/markup. They remain form text
   // until the existing authenticated save endpoint validates them.
@@ -109,24 +123,25 @@ function ContentView({ content }: { content: Content }) {
   return <>
     <p className="incident-kind">{evidenceLabels[content.evidence]} <span> / {date(content.occurred_on)}</span></p>
     <h3>{content.title}</h3>
-    <p className="incident-prose">{content.summary}</p>
-    <h4>What to take from it</h4>
+    <p className="incident-prose incident-lede">{content.summary}</p>
+    {content.catalogue?.sections.map((section, index) => <section className="incident-report-section" key={index}><h4>{section.label}</h4><div className="incident-prose">{section.body.split(/\n\s*\n/).map((paragraph, i) => <p key={i}>{paragraph}</p>)}</div></section>)}
+    <h4>{content.catalogue ? 'Fix / current status' : 'Worth checking'}</h4>
     <p className="incident-prose">{content.takeaway}</p>
-    <h4>Read the sources</h4>
+    <h4>Sources</h4>
     <ul className="incident-sources">{content.sources.map((source, index) => <li key={index}><a href={source.url} target="_blank" rel="noopener noreferrer nofollow">{source.label} ↗</a></li>)}</ul>
+    {content.catalogue && <p className="incident-report-origin">Research source: <a href={content.catalogue.report.url} target="_blank" rel="noopener noreferrer nofollow">{content.catalogue.report.label} ↗</a>. Claims and uncertainty are attributed to that report and its cited sources.</p>}
   </>;
 }
 
-/** Native buttons support touch; roving focus supports ↑/↓/Home/End. */
+/** A public table; opening a record never fetches private reports or source URLs. */
 export function IncidentLog() {
   const feed = useLive<Published[]>('/incidents', true, 60_000);
   const [selectedId, select] = useState('');
-  const tabs = useRef<Array<HTMLButtonElement | null>>([]);
+  const buttons = useRef<Array<HTMLButtonElement | null>>([]);
   const entries = feed.data ?? [];
-  const selected = entries.find(entry => entry.id === selectedId) ?? entries[0];
-  const visibleId = selected?.id ?? '';
-  // Remember the initial/fallback article too, so new entries do not replace it.
-  useEffect(() => { select(visibleId); }, [visibleId]);
+  const selectedIndex = entries.findIndex(entry => entry.id === selectedId);
+  const selected = entries[selectedIndex];
+  function closeDetails() { select(''); buttons.current[selectedIndex]?.focus(); }
   function navigate(event: KeyboardEvent, index: number) {
     let next: number;
     switch (event.key) {
@@ -136,21 +151,50 @@ export function IncidentLog() {
       case 'End': next = entries.length - 1; break;
       default: return;
     }
-    event.preventDefault(); select(entries[next].id); tabs.current[next]?.focus();
+    event.preventDefault(); buttons.current[next]?.focus();
   }
   return <section className="incident-section" aria-labelledby="incident-title">
-    <div className="section-heading"><div><p className="eyebrow">LEARN FROM WHAT BROKE</p><h2 id="incident-title">The watch log.</h2></div><p className="subtle">Public research. Private reviews stay private.</p></div>
-    <p className="incident-intro">Public incidents, practical takeaways and links to the evidence. Updated after review.</p>
+    <div className="section-heading"><div><p className="eyebrow">SECURITY WATCH</p><h2 id="incident-title">Recent hacks &amp; incidents.</h2></div><p className="subtle">Public reports. Sources attached.</p></div>
+    <p className="incident-intro">The incident, the disclosure and the fix. Open a row for the full account, sources and what remains unknown.</p>
     {feed.error && <div className="notice error" role="alert">The watch log could not refresh. Any entries below are from the last successful response. <button className="inline" onClick={feed.refresh}>Retry watch log</button></div>}
-    <div className="incident-terminal">
-      <div className="incident-bar"><span><span aria-hidden="true">›_ </span> PATCHRIOT / WATCH LOG</span><span>{feed.data ? `${entries.length} published` : 'Connecting…'} <span className="key-hint">· ↑ ↓ to browse</span></span></div>
-      {!selected && <div className="incident-empty"><h3>{feed.data ? 'Nothing published yet.' : 'Loading the watch log…'}</h3><p>Entries appear here after their sources have been reviewed.</p></div>}
-      {selected && <div className="incident-grid">
-        <div className="incident-tabs" role="tablist" aria-label="Published incidents" aria-orientation="vertical">{entries.map((entry, index) => <button key={entry.id} ref={node => { tabs.current[index] = node; }} id={`incident-tab-${entry.id}`} role="tab" aria-selected={entry.id === selected.id} aria-controls="incident-detail" tabIndex={entry.id === selected.id ? 0 : -1} onKeyDown={event => navigate(event, index)} onClick={() => select(entry.id)}><small>{date(entry.content.occurred_on)} / {entry.content.evidence}</small><strong>{entry.content.title}</strong><span aria-hidden="true">↳</span></button>)}</div>
-        <article id="incident-detail" className="incident-detail" role="tabpanel" aria-labelledby={`incident-tab-${selected.id}`} tabIndex={0}><ContentView content={selected.content} /><p className="incident-updated">Published {date(selected.published_at)} · revision {selected.revision}. The label reflects the cited source, not independent verification by Patchriot.</p></article>
-      </div>}
+    <div className="incident-terminal incident-catalogue">
+      <div className="incident-bar"><span>RECENT EVENTS</span><span>{feed.data ? `${entries.length} published` : 'Connecting…'} <span className="key-hint">· ↑ ↓ to browse · Enter for details</span></span></div>
+      {!entries.length && <div className="incident-empty"><h3>{feed.data ? 'Nothing published yet.' : 'Loading the watch log…'}</h3><p>Entries appear here after their sources have been reviewed.</p></div>}
+      {entries.length > 0 && <div className="event-table-scroll"><table className="event-table" aria-label="Published incidents">
+        <thead><tr><th scope="col">Short name</th><th scope="col">Qualifying disclosure / investigation</th><th scope="col">Category</th><th scope="col">Fix / status</th></tr></thead>
+        <tbody>{entries.map((entry, index) => <tr key={entry.id} data-open={entry.id === selectedId} onClick={() => { buttons.current[index]?.focus(); select(entry.id); }}>
+          <td className="event-name"><button ref={node => { buttons.current[index] = node; }} aria-expanded={entry.id === selectedId} aria-controls="incident-detail-panel" onKeyDown={event => navigate(event, index)} onClick={event => { event.stopPropagation(); select(entry.id); }}><span className="event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><strong>{entry.content.catalogue?.short_name ?? entry.content.title}</strong><span className="event-open" aria-hidden="true">↗</span></button></td>
+          <td data-label="Disclosure / investigation"><span>{entry.content.catalogue?.qualifying ?? date(entry.content.occurred_on)}</span></td>
+          <td data-label="Category"><span className={`event-category evidence-${entry.content.evidence}`}>{entry.content.catalogue?.category ?? evidenceLabels[entry.content.evidence]}</span></td>
+          <td data-label="Fix / status"><span>{entry.content.catalogue?.fix ?? entry.content.takeaway}</span></td>
+        </tr>)}</tbody>
+      </table></div>}
     </div>
+    <p className="event-evidence-note">Disclosure dates can differ from the date of an intrusion. Source-reported claims are not independent verification by Patchriot.</p>
+    {selected && <IncidentDetails entry={selected} index={selectedIndex} total={entries.length} onClose={closeDetails} onPrevious={() => select(entries[selectedIndex - 1].id)} onNext={() => select(entries[selectedIndex + 1].id)} />}
   </section>;
+}
+
+function IncidentDetails({ entry, index, total, onClose, onPrevious, onNext }: { entry: Published; index: number; total: number; onClose: () => void; onPrevious: () => void; onNext: () => void }) {
+  const article = useRef<HTMLElement>(null);
+  useEffect(() => {
+    article.current?.focus({ preventScroll: true });
+    article.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  }, [entry.id]);
+  const catalogue = entry.content.catalogue;
+  return <article ref={article} id="incident-detail-panel" tabIndex={-1} className="incident-reading" aria-label={entry.content.title}>
+    <div className="incident-reading-top"><span>CASE FILE / {String(index + 1).padStart(2, '0')} OF {total}</span><button onClick={onClose}>↑ Back to catalogue</button></div>
+    <div className="incident-reading-layout">
+      <aside className="incident-metadata" aria-label="Incident metadata"><p className="eyebrow">AT A GLANCE</p><dl>
+        <div><dt>Incident / advisory</dt><dd>{date(entry.content.occurred_on)}</dd></div>
+        <div><dt>Evidence</dt><dd>{evidenceLabels[entry.content.evidence]}</dd></div>
+        {catalogue && <><div><dt>Disclosure / investigation</dt><dd>{catalogue.qualifying}</dd></div><div><dt>Category</dt><dd>{catalogue.category}</dd></div><div><dt>Fix / status</dt><dd>{catalogue.fix}</dd></div></>}
+        <div><dt>Published</dt><dd>{date(entry.published_at)}</dd></div><div><dt>Revision</dt><dd>{entry.revision}</dd></div>
+      </dl><p>Public research. Details can change as the investigation develops.</p></aside>
+      <div className="incident-detail"><ContentView content={entry.content} /></div>
+    </div>
+    <nav className="incident-reading-nav" aria-label="Incident reading"><button disabled={index === 0} onClick={onPrevious}>← Previous incident</button><span>{index + 1} / {total}</span><button disabled={index === total - 1} onClick={onNext}>Next incident →</button></nav>
+  </article>;
 }
 
 function Editor({ draft, csrf, onEdited, onSaved }: { draft: Draft; csrf: string; onEdited: () => void; onSaved: (value: Draft) => void }) {
@@ -164,7 +208,8 @@ function Editor({ draft, csrf, onEdited, onSaved }: { draft: Draft; csrf: string
   async function mutate(action: 'save' | 'publish' | 'withdraw') {
     setBusy(true); setError(''); setNotice('');
     try {
-      const cleaned = { ...content, title: content.title.trim(), summary: content.summary.trim(), takeaway: content.takeaway.trim(), sources: content.sources.map(s => ({ label: s.label.trim(), url: s.url.trim() })) };
+      const catalogue = content.catalogue ? { ...content.catalogue, short_name: content.catalogue.short_name.trim(), qualifying: content.catalogue.qualifying.trim(), category: content.catalogue.category.trim(), fix: content.catalogue.fix.trim(), report: { label: content.catalogue.report.label.trim(), url: content.catalogue.report.url.trim() }, sections: content.catalogue.sections.map(section => ({ label: section.label.trim(), body: section.body.trim() })) } : undefined;
+      const cleaned = { ...content, title: content.title.trim(), summary: content.summary.trim(), takeaway: content.takeaway.trim(), sources: content.sources.map(s => ({ label: s.label.trim(), url: s.url.trim() })), ...(catalogue ? { catalogue } : {}) };
       const value = await write<Draft>(`/admin/incidents/${draft.id}`, csrf, { action, revision: draft.revision, ...(action === 'save' ? { content: cleaned } : action === 'publish' ? { sources_reviewed: reviewed } : {}) });
       setContent(value.content); setDirty(false); setReviewed(false); onSaved(value);
       setNotice(action === 'save' ? 'Draft saved. The public entry has not changed.' : action === 'publish' ? 'Published to the watch log.' : 'Removed from the public watch log. The draft and edit history are retained.');
@@ -182,6 +227,16 @@ function Editor({ draft, csrf, onEdited, onSaved }: { draft: Draft; csrf: string
         <div className="incident-fields"><label>Incident or advisory date (UTC)<input type="date" value={content.occurred_on} max={new Date().toISOString().slice(0, 10)} onChange={e => change('occurred_on', e.target.value)} required /></label><label>Evidence status<select value={content.evidence} onChange={e => change('evidence', e.target.value as Content['evidence'])}><option value="reported">Reported · details developing</option><option value="confirmed">Confirmed by the cited source</option><option value="advisory">Security advisory</option></select></label></div>
         <label htmlFor="incident-summary">What happened?</label><textarea id="incident-summary" value={content.summary} onChange={e => change('summary', e.target.value)} maxLength={2400} rows={5} required />
         <label htmlFor="incident-takeaway">Practical takeaway</label><textarea id="incident-takeaway" value={content.takeaway} onChange={e => change('takeaway', e.target.value)} maxLength={1200} rows={3} required />
+        <details className="catalogue-editor"><summary>Table columns and detailed research</summary>
+          {!content.catalogue ? <button type="button" className="quiet" onClick={() => change('catalogue', { short_name: content.title, qualifying: content.occurred_on, category: '', fix: content.takeaway.slice(0, 200), report: { label: '', url: '' }, sections: [{ label: '', body: '' }] })}>Add catalogue details</button> : <>
+            <p className="fine">Short fields appear in the table. Full sections open when someone selects the entry.</p>
+            <div className="incident-fields">{(['short_name', 'qualifying', 'category', 'fix'] as const).map(key => <label key={key}>{({ short_name: 'Short name', qualifying: 'Qualifying disclosure / investigation', category: 'Category', fix: 'Short fix / status' })[key]}<input required maxLength={({ short_name: 100, qualifying: 200, category: 120, fix: 300 })[key]} value={content.catalogue![key]} onChange={event => change('catalogue', { ...content.catalogue!, [key]: event.target.value })} /></label>)}</div>
+            <div className="source-fields"><label>Research report name<input required maxLength={100} value={content.catalogue.report.label} onChange={event => change('catalogue', { ...content.catalogue!, report: { ...content.catalogue!.report, label: event.target.value } })} /></label><label>Research report URL<input required type="url" maxLength={1500} value={content.catalogue.report.url} onChange={event => change('catalogue', { ...content.catalogue!, report: { ...content.catalogue!.report, url: event.target.value } })} /></label></div>
+            {content.catalogue.sections.map((section, index) => <div className="catalogue-section-editor" key={index}><label>Section {index + 1} heading<input required maxLength={80} value={section.label} onChange={event => change('catalogue', { ...content.catalogue!, sections: content.catalogue!.sections.map((item, i) => i === index ? { ...item, label: event.target.value } : item) })} /></label><label>Section {index + 1} detail<textarea required rows={3} maxLength={1600} value={section.body} onChange={event => change('catalogue', { ...content.catalogue!, sections: content.catalogue!.sections.map((item, i) => i === index ? { ...item, body: event.target.value } : item) })} /></label>{content.catalogue!.sections.length > 1 && <button type="button" className="quiet" onClick={() => change('catalogue', { ...content.catalogue!, sections: content.catalogue!.sections.filter((_, i) => i !== index) })}>Remove section {index + 1}</button>}</div>)}
+            {content.catalogue.sections.length < 8 && <button type="button" className="quiet" onClick={() => change('catalogue', { ...content.catalogue!, sections: [...content.catalogue!.sections, { label: '', body: '' }] })}>Add detail section</button>}
+            <button type="button" className="quiet" onClick={() => change('catalogue', undefined)}>Remove catalogue details</button>
+          </>}
+        </details>
         <div className="source-heading"><h3>Public sources</h3><span className="fine">HTTPS links, without credentials or query parameters.</span></div>
         {content.sources.map((source, index) => <div className="source-fields" key={index}><label>Source {index + 1} name<input value={source.label} onChange={e => change('sources', content.sources.map((s, i) => i === index ? { ...s, label: e.target.value } : s))} maxLength={100} required /></label><label>Source {index + 1} URL<input type="url" placeholder="https://…" value={source.url} onChange={e => change('sources', content.sources.map((s, i) => i === index ? { ...s, url: e.target.value } : s))} maxLength={1500} required /></label>{content.sources.length > 1 && <button type="button" className="quiet" aria-label={`Remove source ${index + 1}`} onClick={() => change('sources', content.sources.filter((_, i) => i !== index))}>Remove</button>}</div>)}
         {content.sources.length < 4 && <button type="button" className="text-button" onClick={() => change('sources', [...content.sources, { label: '', url: '' }])}>Add source +</button>}

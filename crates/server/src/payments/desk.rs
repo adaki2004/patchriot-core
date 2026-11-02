@@ -11,6 +11,12 @@ pub(crate) struct PaymentRecord {
     account_name: String,
     account_disabled: bool,
     asset: String,
+    origin_asset: Option<String>,
+    deposit_address: String,
+    deposit_memo: Option<String>,
+    recipient: String,
+    recipient_type: Option<String>,
+    payment_confirmed: bool,
     required_amount: String,
     received_amount: Option<String>,
     payment_state: String,
@@ -27,6 +33,7 @@ pub(crate) struct PaymentRecord {
     review_id: Option<Uuid>,
     funding_state: Option<String>,
     funding_error: Option<String>,
+    earnings_error: Option<String>,
     cancel_requested_at: Option<DateTime<Utc>>,
     cancel_confirmed_at: Option<DateTime<Utc>>,
     cancel_review_state: Option<String>,
@@ -43,19 +50,27 @@ pub(crate) async fn list(
     }
     // Bounded local history remains inspectable when the provider/dispatcher is
     // unavailable. Disabled customer accounts may still have funds to reconcile.
-    // Do not return saved quotes, deposit instructions or refund destinations.
+    // Show the saved deposit → order mapping to authorized staff. These are
+    // historical facts, not fresh transfer instructions. Never return the raw
+    // provider response, customer refund address or secrets.
     let rows = sqlx::query_as(
         "SELECT i.id AS invoice_id, i.account_id, a.display_name AS account_name,
             a.disabled AS account_disabled, i.asset, i.required_amount::text,
+            i.quote_request->>'originAsset' AS origin_asset,
+            i.deposit_address, NULLIF(i.deposit_memo, '') AS deposit_memo,
+            i.recipient, i.quote_request->>'recipientType' AS recipient_type,
+            COALESCE(i.state = 'settled' AND l.account_id = i.account_id
+                AND l.asset = i.asset AND l.amount = i.received_amount, false) AS payment_confirmed,
             i.received_amount::text, i.state AS payment_state, i.reason AS payment_reason,
             i.poll_error, i.provider_updated_at, i.created_at, i.updated_at,
             l.amount::text AS ledger_amount, l.credit AS ledger_credit,
             o.id AS order_id, o.state AS order_state, o.last_error AS order_error,
-            o.review_id, f.delivery_state AS funding_state, f.delivery_error AS funding_error,
+            o.review_id, f.delivery_state AS funding_state, f.delivery_error AS funding_error, f.earnings_error,
             o.cancel_requested_at, o.cancel_confirmed_at, o.cancel_review_state,
             (i.state IN ('held','needs_review') OR i.poll_error IS NOT NULL
                 OR COALESCE(o.state = 'needs_review', false)
                 OR COALESCE(f.delivery_state = 'needs_review', false)
+                OR f.earnings_error IS NOT NULL
                 OR COALESCE(o.cancel_requested_at IS NOT NULL AND (
                     l.id IS NOT NULL OR (o.cancel_confirmed_at IS NULL AND o.cancel_next_attempt_at IS NULL)
                 ), false)

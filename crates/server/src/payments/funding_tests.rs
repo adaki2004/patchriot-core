@@ -274,6 +274,70 @@ async fn settlement_activates_its_saved_review_once_without_a_second_credit() {
 }
 
 #[tokio::test]
+async fn continuous_worker_accepts_provider_defaults_and_restarts_without_double_credit() {
+    let db = TestDb::new().await;
+    let (terms, mut quote) = terms(&db);
+    quote.quote_request["confidentiality"] = json!("public");
+    quote.quote_request["quoteWaitingTimeMs"] = json!(0);
+    quote.quote_request["insured"] = json!(false);
+    quote.quote_request["appFees"] = json!([{"recipient":"fixture-provider.near","fee":1}]);
+    quote.quote_request["deadline"] = json!(
+        date(&terms.payment.quote_request["deadline"])
+            .unwrap()
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+    );
+    let admission = AdmissionServer::new(&db, &terms).await;
+    let provider = MockProvider::new(json!(quote)).await;
+    let checkout = prepare(&admission.state, &provider.client, &terms)
+        .await
+        .unwrap();
+    let initial = admission.reply.lock().unwrap().1.clone();
+    let server = FundingServer::new(&db, initial).await;
+    provider.set(status(&quote, "PENDING_DEPOSIT"));
+    let pending = crate::payments::worker::tick(&server.state, &provider.client).await;
+    assert_eq!(
+        serde_json::to_value(pending).unwrap()["funding"]["delivered"],
+        0
+    );
+    assert_eq!(db.counts().await, (0, 0));
+    db.due(checkout.invoice_id).await;
+    provider.set(status(&quote, "SUCCESS"));
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let run = crate::payments::worker::run(&server.state, &provider.client, async {
+        let _ = stopped.await;
+    });
+    let observe = async {
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                let ready: bool = sqlx::query_scalar(
+                    "SELECT state = 'activated' FROM checkout_orders WHERE id = $1",
+                )
+                .bind(checkout.order_id)
+                .fetch_one(&db.pool)
+                .await
+                .unwrap();
+                if ready {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
+        stop.send(()).unwrap();
+    };
+    tokio::join!(run, observe);
+    let again = crate::payments::worker::tick(&server.state, &provider.client).await;
+    assert_eq!(
+        serde_json::to_value(again).unwrap()["funding"]["delivered"],
+        0
+    );
+    assert_eq!(db.counts().await, (1, 1));
+    assert_eq!(server.activations.load(Ordering::SeqCst), 1);
+    db.finish().await;
+}
+
+#[tokio::test]
 async fn an_event_without_a_recorded_settlement_cannot_start_work() {
     let f = Fixture::new(false).await;
     sqlx::query("INSERT INTO payment_funding_events (invoice_id, account_id, request_id, asset, amount) SELECT id, account_id, request_id, asset, required_amount FROM payment_invoices WHERE id=$1")

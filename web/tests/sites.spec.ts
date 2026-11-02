@@ -1,5 +1,8 @@
+import { emptyDashboard, openAuditTool } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const id = '00000000-0000-4000-8000-000000000100';
 const account = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Site owner', role: 'member', auth_method: 'invite' };
@@ -14,16 +17,16 @@ async function setup(page: Page, admin = false) {
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.route('**/api/review-codes', route => route.fulfill({ json: [] }));
-  await page.route('**/api/site-checks', route => route.fulfill({ json: [pending] }));
+  await page.route('**/api/site-checks{,?scope=mine}', route => route.fulfill({ json: [pending] }));
   await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: pending }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Website checks', exact: true }).click();
+  await openAuditTool(page, 'Website snapshots');
 }
 
 test('submission fixes scope and permission without pretending to start a scan', async ({ page }) => {
   await setup(page);
   let submitted: Record<string, unknown> | undefined;
-  await page.route('**/api/site-checks', async route => {
+  await page.route('**/api/site-checks{,?scope=mine}', async route => {
     if (route.request().method() === 'POST') {
       submitted = route.request().postDataJSON();
       expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
@@ -39,15 +42,47 @@ test('submission fixes scope and permission without pretending to start a scan',
   await page.getByRole('button', { name: 'Request approval →' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Website evidence' })).toContainText('No website requests have been made.');
-  expect(submitted).toMatchObject({ scope: { homepage: 'https://example.com', script_origins: ['https://cdn.example.com'] }, authorized: true, authority_note: 'I operate this owned website.' });
+  expect(submitted).toMatchObject({ scope: { homepage: 'https://example.com', script_origins: ['https://cdn.example.com'] }, authorized: true, authority_note: 'I operate this owned website.', accepts_screening: false });
   await expect(page.getByRole('button', { name: 'Record decision' })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('external screening needs consent and pending advice cannot be mistaken for approval', async ({ page }) => {
+  await setup(page, true);
+  let state = 'queued';
+  let accepted = false;
+  await page.route('**/api/site-checks{,?scope=mine}', async route => {
+    if (route.request().method() === 'POST') {
+      accepted = route.request().postDataJSON().accepts_screening;
+      return route.fulfill({ json: { ...pending, screening_state: state } });
+    }
+    return route.fulfill({ json: [pending] });
+  });
+  await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: { ...pending, screening_state: state, screening: state === 'complete' ? { assessment: 'routine', model: 'typesafe/jev-1.13', policy_version: 'test', within_scope: 0.99, bypass_attempt: 0.01, harmful_intent: 0.01, evaluated_at: 1793448000 } : null } }));
+  await page.getByRole('button', { name: 'New website snapshot +' }).click();
+  await page.getByLabel('Website origin', { exact: true }).fill('https://example.com');
+  await page.getByLabel('Your permission to review this site').fill('I operate this owned website.');
+  await page.getByLabel('I own this site or have permission').check();
+  const consent = page.getByLabel('Allow JEV, through OpenRouter');
+  await expect(consent).not.toBeChecked();
+  await consent.check();
+  await page.getByRole('button', { name: 'Request approval →' }).click();
+  await expect(page.getByText('Approval waits for this check.', { exact: false })).toBeVisible();
+  expect(accepted).toBe(true);
+  await expect(page.getByRole('option', { name: 'Approve this exact scope' })).toHaveJSProperty('disabled', true);
+  await expect(page.getByRole('button', { name: 'Record decision' })).toBeDisabled();
+  state = 'complete';
+  await page.getByRole('button', { name: 'Refresh snapshot ↻' }).click();
+  await expect(page.getByText('No concern flagged in the request.', { exact: true })).toBeVisible();
+  await expect(page.getByText('cannot verify ownership or approve work', { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Awaiting approval', exact: true })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Approve this exact scope' })).toHaveJSProperty('disabled', false);
 });
 
 test('invalid origins stay in the form and retries keep the same request identity', async ({ page }) => {
   await setup(page);
   const submissions: { request_id: string }[] = [];
-  await page.route('**/api/site-checks', async route => {
+  await page.route('**/api/site-checks{,?scope=mine}', async route => {
     if (route.request().method() === 'POST') {
       submissions.push(route.request().postDataJSON());
       await route.fulfill({ status: 503, json: { error: 'dispatcher_unavailable' } });
@@ -71,7 +106,7 @@ test('invalid origins stay in the form and retries keep the same request identit
 test('admin decision binds the displayed scope and hostile notes stay text', async ({ page }) => {
   await setup(page, true);
   let current = { ...pending, authority_note: '<img src=x onerror=alert(1)> Owned website.' };
-  await page.route('**/api/site-checks', route => route.fulfill({ json: [current] }));
+  await page.route('**/api/site-checks{,?scope=mine}', route => route.fulfill({ json: [current] }));
   await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: current }));
   await page.route(`**/api/site-checks/${id}/decision`, async route => {
     const body = route.request().postDataJSON();
@@ -84,6 +119,7 @@ test('admin decision binds the displayed scope and hostile notes stay text', asy
   const detail = page.getByRole('region', { name: 'Website evidence' });
   await expect(detail).toContainText('<img src=x onerror=alert(1)>');
   await expect(detail.locator('img, script')).toHaveCount(0);
+  await page.getByRole('combobox', { name: 'Decision', exact: true }).selectOption('approve');
   await page.getByLabel('Decision note').fill('Verified ownership of this exact fixture.');
   await page.getByLabel('I reviewed the listed origins').check();
   await page.getByRole('button', { name: 'Record decision' }).click();
@@ -107,11 +143,11 @@ test('snapshot coverage is explicit and expired evidence is not offered for down
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('website review requires three explicit devices and snapshot-specific sharing consent', async ({ page }) => {
+test('website review uses the server proposal and requires snapshot-specific sharing consent', async ({ page }) => {
   await setup(page);
   const devices = [1, 2, 3].map(i => ({ device_id: `00000000-0000-4000-8000-00000000000${i + 4}`, operator_id: account.id, operator_name: 'One operator', device_name: `CPU agent ${i}`, declared_model: 'test-model', compute_group: 'same-machine' }));
   await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: { ...pending, state: 'collected', evidence_available: true, summary: { homepage_sha256: '2'.repeat(64), external_scripts: 1, inline_scripts: 1, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 5000, requests_made: 2, finished_at: 1793448000 } } }));
-  await page.route(`**/api/site-checks/${id}/review-plan`, route => route.fulfill({ json: { site_check_id: id, snapshot_sha256: '3'.repeat(64), candidates: devices, review_timeout_seconds: 5700 } }));
+  await page.route(`**/api/site-checks/${id}/review-plan`, route => route.fulfill({ json: { site_check_id: id, snapshot_sha256: '3'.repeat(64), candidates: devices, recommended_device_ids: devices.map(device => device.device_id), review_timeout_seconds: 5700 } }));
   let submitted: Record<string, unknown> | undefined;
   const review = { id: '00000000-0000-4000-8000-000000000200', mode: 'website_agent', state: 'queued', steps: [], created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict', website: { site_check_id: id, snapshot_sha256: '3'.repeat(64), reviewers: devices } };
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
@@ -121,14 +157,13 @@ test('website review requires three explicit devices and snapshot-specific shari
     return route.fulfill({ json: review });
   });
   await page.getByRole('button', { name: 'https://example.com/', exact: false }).click();
-  await page.getByRole('button', { name: 'Choose review agents →' }).click();
+  await page.getByRole('button', { name: 'Prepare agent review →' }).click();
   const start = page.getByRole('button', { name: 'Share snapshot & start review →' });
   await expect(start).toBeDisabled();
-  for (const [i, role] of ['Investigator', 'Reproducer', 'Challenger'].entries()) await page.getByLabel(`${role} device`).selectOption(devices[i].device_id);
   await expect(page.getByRole('dialog')).toContainText('3 devices · 1 operator · 1 declared compute group');
   await expect(page.getByRole('dialog')).toContainText('up to 95 minutes including waiting');
-  await expect(page.getByLabel('Reproducer device').locator(`option[value="${devices[0].device_id}"]`)).toHaveJSProperty('disabled', true);
-  await start.click();
+  await expect(start).toBeDisabled();
+  await expect(page.getByRole('dialog').getByRole('combobox')).toHaveCount(0);
   expect(submitted).toBeUndefined();
   await page.getByLabel('I allow these three devices and their named operators').check();
   expect(await page.getByRole('dialog').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -142,9 +177,9 @@ test('website reports keep model claims as text and do not label completion a sa
   await setup(page);
   const result = { kind: 'website_agent_v1', snapshot_sha256: '1'.repeat(64), inspected_snapshot_sha256: '1'.repeat(64), raw_summary: '', execution: { state: 'completed', model: 'local-test-model', declared_model: 'local-test-model', model_digest: '2'.repeat(64), image_digest: `sha256:${'3'.repeat(64)}`, duration_ms: 2000, inference_calls: 2, terminal_calls: 1, cleanup_confirmed: true }, assessment: { summary: '<img src=x onerror=alert(1)> Saved text was inspected.', findings: [], limitations: ['No live tests.'] } };
   const review = { id, mode: 'website_agent', state: 'completed', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result, fixture_matches: null, evidence_complete: true })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
-  await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
+  await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({ json: review }));
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await openAuditTool(page, 'Reports & examples');
   await page.getByRole('button', { name: 'Website snapshot review', exact: false }).click();
   const detail = page.getByRole('region', { name: 'Review report' });
   await expect(detail.getByRole('heading', { name: 'Reports received' })).toBeVisible();
@@ -166,9 +201,9 @@ test('recorded website timeouts show what stopped instead of implying a complete
   await setup(page);
   const result = { kind: 'website_agent_v1', snapshot_sha256: '1'.repeat(64), inspected_snapshot_sha256: null, raw_summary: '', assessment: null, execution: { state: 'timed_out', model: 'local-test-model', declared_model: 'local-test-model', model_digest: '2'.repeat(64), image_digest: `sha256:${'3'.repeat(64)}`, duration_ms: 51000, inference_calls: 1, terminal_calls: 0, cleanup_confirmed: true } };
   const review = { id, mode: 'website_agent', state: 'needs_review', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result: { ...result, inspected_snapshot_sha256: i === 0 ? result.snapshot_sha256 : i === 1 ? null : '4'.repeat(64), execution: { ...result.execution, duration_ms: i === 0 ? 51000 : 0, inference_calls: i === 0 ? 1 : 0, terminal_calls: i === 0 ? 1 : 0 } }, fixture_matches: null, evidence_complete: false })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
-  await page.route('**/api/reviews', route => route.fulfill({ json: [review] }));
+  await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({ json: review }));
-  await page.getByRole('button', { name: 'Reviews', exact: true }).click();
+  await openAuditTool(page, 'Reports & examples');
   await page.getByRole('button', { name: 'Website snapshot review', exact: false }).click();
   const detail = page.getByRole('region', { name: 'Review report' });
   await expect(detail.getByRole('heading', { name: 'Needs review' })).toBeVisible();
@@ -192,7 +227,7 @@ test('snapshot comparison is an explicit private read and displays gaps without 
   const summary = { homepage_sha256: '2'.repeat(64), external_scripts: 1, inline_scripts: 0, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 5000, requests_made: 2, finished_at: 1793448000 };
   const current = { ...pending, state: 'collected', evidence_available: true, summary };
   let retained = true;
-  await page.route('**/api/site-checks', route => route.fulfill({ json: [current, { ...current, id: baseline, evidence_available: retained, summary: { ...summary, finished_at: summary.finished_at - 100 } }, { ...current, id: 'not-my-capture', requester_id: 'another-owner' }, { ...current, id: 'another-scope', scope_sha256: 'f'.repeat(64) }] }));
+  await page.route('**/api/site-checks{,?scope=mine}', route => route.fulfill({ json: [current, { ...current, id: baseline, evidence_available: retained, summary: { ...summary, finished_at: summary.finished_at - 100 } }, { ...current, id: 'not-my-capture', requester_id: 'another-owner' }, { ...current, id: 'another-scope', scope_sha256: 'f'.repeat(64) }] }));
   await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: current }));
   const fingerprint = { sha256: '1'.repeat(64), bytes: 20, content_type: 'text/html', headers: { 'content-security-policy': "default-src 'self'" } };
   let reads = 0;
@@ -225,7 +260,7 @@ test('matching snapshots are not a safety verdict and failed comparison reads ca
   const baseline = '00000000-0000-4000-8000-000000000101';
   const summary = { homepage_sha256: '2'.repeat(64), external_scripts: 0, inline_scripts: 0, skipped_scripts: 0, script_limit_reached: false, captured_response_bytes: 5000, requests_made: 1, finished_at: 1793448000 };
   const current = { ...pending, state: 'collected', evidence_available: true, summary };
-  await page.route('**/api/site-checks', route => route.fulfill({ json: [current, { ...current, id: baseline, summary: { ...summary, finished_at: summary.finished_at - 100 } }] }));
+  await page.route('**/api/site-checks{,?scope=mine}', route => route.fulfill({ json: [current, { ...current, id: baseline, summary: { ...summary, finished_at: summary.finished_at - 100 } }] }));
   await page.route(`**/api/site-checks/${id}`, route => route.fulfill({ json: current }));
   const coverage = { captured_scripts: 0, skipped_scripts: 0, data_only_scripts: 0, script_limit_reached: false };
   const fingerprint = { sha256: '1'.repeat(64), bytes: 20, content_type: 'text/html', headers: {} };

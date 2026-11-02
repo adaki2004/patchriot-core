@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const reviewId = '00000000-0000-4000-8000-000000000010';
 const siteId = '00000000-0000-4000-8000-000000000020';
@@ -31,6 +34,7 @@ async function setup(page: Page, signedIn = true, permitted = true) {
     if (permitted && path === `/api/reviews/${reviewId}`) return route.fulfill({ json: review });
     if (permitted && path === `/api/site-checks/${siteId}`) return route.fulfill({ json: site });
     if (permitted && path === `/api/orders/${orderId}`) return route.fulfill({ json: order });
+    if (['/api/sources', '/api/withdrawals', '/api/agents', '/api/pentests'].includes(path)) return route.fallback();
     return route.fulfill({ status: 404, json: { error: 'not_found' } });
   });
   return { reads, writes };
@@ -43,7 +47,7 @@ test('a review bookmark survives reload and browser history without submitting w
   await expect(report.getByRole('heading', { name: 'Needs review', exact: true })).toBeVisible();
   await page.reload();
   await expect(report.getByRole('heading', { name: 'Needs review', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Watch log', exact: true }).click();
+  await page.getByRole('button', { name: 'Recent events', exact: true }).click();
   await expect(page).toHaveURL(/#\/incidents$/);
   await page.goBack();
   await expect(page).toHaveURL(new RegExp(`#/reviews/${reviewId}$`));
@@ -51,7 +55,8 @@ test('a review bookmark survives reload and browser history without submitting w
   await page.goForward();
   await expect(page).toHaveURL(/#\/incidents$/);
   await expect(report).toHaveCount(0);
-  await page.getByRole('button', { name: 'Relay setup', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Website' }).getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Pair an agent', exact: true }).click();
   const skip = page.getByRole('link', { name: 'Skip to content', exact: true });
   await skip.focus(); await skip.click();
   await expect(page).toHaveURL(/#\/guide$/);
@@ -61,7 +66,7 @@ test('a review bookmark survives reload and browser history without submitting w
 
 test('late history loading cannot move a bookmarked report below the screen', async ({ page }) => {
   await setup(page);
-  await page.route('**/api/reviews', async route => {
+  await page.route('**/api/reviews{,?scope=mine}', async route => {
     await new Promise(resolve => setTimeout(resolve, 250));
     await route.fulfill({ json: Array.from({ length: 30 }, (_, index) => ({ id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`, mode: 'website_agent', state: 'needs_review', created_at: 1793448000, deadline_at: 1793450100, steps: [] })) });
   });
@@ -75,9 +80,11 @@ test('late history loading cannot move a bookmarked report below the screen', as
 test('an anonymous bookmark waits for sign-in and a denied read exposes no report', async ({ page }) => {
   const calls = await setup(page, false);
   await page.goto(`/#/reviews/${reviewId}`);
-  await expect(page.getByRole('heading', { name: 'This page is private.', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in to continue.', exact: true })).toBeVisible();
   expect(calls.reads.some(path => path.startsWith('/api/reviews'))).toBe(false);
-  await page.getByRole('button', { name: 'Sign in to open this page →', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Account access' })).toBeVisible();
+  await page.getByText('Invitation or pilot code?', { exact: true }).click();
+    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
   await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
   await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Review report' }).getByRole('heading', { name: 'Needs review', exact: true })).toBeVisible();
@@ -120,12 +127,12 @@ test('invalid paths cannot become API paths and member links cannot open admin d
   const calls = await setup(page);
   for (const hash of [`#/reviews/${reviewId}/cancel`, '#/reviews/../../admin/payments', `#/sites/${siteId}?token=not-a-token`, '#/devices/anything', `#/orders/${orderId}/report/extra`]) {
     await page.goto(`/${hash}`);
-    await expect(page.getByRole('heading', { name: 'More defenders. Fewer blind spots.', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hello, Navigation fixture.', exact: true })).toBeVisible();
   }
-  for (const view of ['incident-desk', 'payment-desk']) {
+  for (const view of ['incident-desk', 'payment-desk', 'audit-desk']) {
     await page.goto(`/#/${view}`);
     await expect(page.getByRole('heading', { name: 'Administrator access required.', exact: true })).toBeVisible();
   }
-  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents'].includes(path))).toBe(true);
+  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/withdrawals', '/api/agents', '/api/pentests'].includes(path))).toBe(true);
   expect(calls.writes).toEqual([]);
 });

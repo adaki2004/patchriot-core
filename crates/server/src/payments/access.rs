@@ -35,8 +35,18 @@ impl ReviewAccess {
                 let bytes = policy
                     .filter(|v| v.len() <= 16 * 1024)
                     .ok_or(PaymentError::Configuration)?;
-                let policy: CheckoutPolicy =
+                let mut policy: CheckoutPolicy =
                     serde_json::from_slice(bytes).map_err(|_| PaymentError::Configuration)?;
+                // An EVM-controlled Intents account is its lowercase address.
+                // It is an account inside intents.near, not an EVM withdrawal.
+                if matches!(policy.recipient_type, RecipientType::Intents)
+                    && policy.recipient.starts_with("0x")
+                {
+                    if !Blockchain::Eth.accepts_address(&policy.recipient) {
+                        return Err(PaymentError::Configuration);
+                    }
+                    policy.recipient.make_ascii_lowercase();
+                }
                 policy.validate()?;
                 Ok(Self::Paid(Arc::new(CheckoutService {
                     policy,
@@ -57,12 +67,13 @@ pub struct CheckoutService {
     pub(super) provider: OneClick,
 }
 
-/// This first checkout supports simple EVM and NEAR refunds. Other network
-/// address formats need their own validation before adding them to the menu.
+/// Validate the address format for each offered payment/refund network. This
+/// does not prove that the customer controls the address.
 #[derive(Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Blockchain {
     Near,
+    Sol,
     Eth,
     Base,
     Arb,
@@ -74,6 +85,14 @@ pub enum Blockchain {
 
 impl Blockchain {
     pub(super) fn accepts_address(self, address: &str) -> bool {
+        if self == Self::Sol {
+            if !(32..=44).contains(&address.len()) {
+                return false;
+            }
+            let mut bytes = [0_u8; 32];
+            return bs58::decode(address).onto(&mut bytes).ok() == Some(bytes.len())
+                && bytes.iter().any(|byte| *byte != 0);
+        }
         if self != Self::Near {
             return address.len() == 42
                 && address.starts_with("0x")

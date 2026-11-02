@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const account = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Test requester', role: 'member', auth_method: 'invite' };
 const orderId = '00000000-0000-4000-8000-000000000002';
@@ -28,7 +31,7 @@ async function setup(page: Page, signedIn = true) {
 
 async function openOrder(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Orders', exact: true }).click();
+  await page.evaluate(() => { location.hash = '/orders'; });
   await page.getByRole('region', { name: 'Order history' }).getByRole('button').click();
   return page.getByRole('region', { name: 'Order details' });
 }
@@ -40,7 +43,7 @@ test('order history is private navigation and an empty pilot is not a checkout',
   await setup(page);
   await page.route('**/api/orders', route => route.fulfill({ json: [] }));
   await page.reload();
-  await page.getByRole('button', { name: 'Orders', exact: true }).click();
+  await page.evaluate(() => { location.hash = '/orders'; });
   await expect(page.getByRole('heading', { name: 'No paid orders yet.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Order history' })).toContainText('Paid checkout is not enabled');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -123,7 +126,7 @@ test('an outage preserves the last order while session expiry clears it', async 
   await expect(page.getByRole('heading', { name: 'No paid orders yet.' })).toHaveCount(0);
   failure = 401;
   await detail.getByRole('button', { name: 'Refresh order ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
   await expect(detail).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Orders', exact: true })).toHaveCount(0);
 });

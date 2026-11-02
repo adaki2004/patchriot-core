@@ -1,0 +1,897 @@
+{
+  "reviewed_on": "2026-11-02",
+  "note": "Public source research, not Patchriot findings. Twenty entries retain the linked report’s details and uncertainty; the earlier Polymarket and Linux entries are retained separately. Each entry must be reviewed and published through the incident desk. This file is not loaded automatically.",
+  "entries": [
+    {
+      "title": "Binance hot-wallet theft",
+      "occurred_on": "2026-10-29",
+      "evidence": "reported",
+      "summary": "Attackers compromised hot wallets. An initial theory involved a DevOps laptop reaching a service container, but Binance subsequently found additional breach points. The laptop explanation is provisional, not a completed root-cause analysis.",
+      "takeaway": "Affected authorization revoked, withdrawals temporarily suspended, security reviews and tracing initiated. November 1 update announced phased withdrawal restoration and approximately 95% replenishment; deposits remained operational. These are company statements, not an independent reserves audit.",
+      "sources": [
+        {
+          "label": "Binance update #2",
+          "url": "https://www.binance.com/en/support/announcement/detail/d3306d9dca5243548c813b605e1d1751"
+        },
+        {
+          "label": "initial update",
+          "url": "https://www.binance.com/en-GB/support/announcement/security-incident-update-2026-10-30-c5a8729a97ac486d963784d96c5642d7"
+        },
+        {
+          "label": "November 1 recovery update",
+          "url": "https://www.binance.com/en-GB/support/announcement/security-incident-recovery-update-4-withdrawals-resume-in-phases-2026-11-01-73911fb819b240f88b88256bdd318eda"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Binance hot-wallet theft",
+        "qualifying": "Oct 30; recovery update Nov 1",
+        "category": "Confirmed theft; investigation ongoing",
+        "fix": "Authorization revoked; phased withdrawals restored. Root cause and final recovery remain open.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Unauthorized withdrawals occurred around October 29, 20:05 UTC; Binance's October 30 update confirms the incident. Recovery update #4 is dated November 1."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Hot-wallet withdrawal infrastructure; a laptop is suspected. Host count and complete attack path remain unknown. Binance reports no evidence of leaked wallet private keys."
+          },
+          {
+            "label": "Impact",
+            "body": "Approximately $6.3 billion in token assets stolen, according to Binance. Its initial update reported about $3 billion frozen. Frozen assets are not necessarily recovered, and replenishment with company assets is a separate measure."
+          },
+          {
+            "label": "Unknown / post-mortem",
+            "body": "Full root cause, final net loss and recovery; technical post-mortem still promised in these notices."
+          }
+        ]
+      }
+    },
+    {
+      "title": "PHP2Shell and the PAN-OS / Fragnesia chain",
+      "occurred_on": "2026-10-21",
+      "evidence": "reported",
+      "summary": "CVE-2026-109618 and CVE-2026-109619 enable unauthenticated code execution through PHP memory/state corruption. Attackers chained them with Linux privilege escalation CVE-2026-46300 (“Fragnesia”) against exposed PAN-OS management servers, then pursued credentials and Active Directory access.",
+      "takeaway": "PHP 8.2.35, 8.3.36, 8.4.27 or 8.5.12; use distribution backports where appropriate. For appliances, apply the vendor's PAN-OS hotfix, not an independently replaced PHP runtime, and remove public management access. The appliance advisory supplies branch-specific versions.",
+      "sources": [
+        {
+          "label": "PHP advisory",
+          "url": "https://www.php.net/archive/2026.php"
+        },
+        {
+          "label": "Dream investigation",
+          "url": "https://dreamgroup.com/blog/chained-php2shell-exploit-roots-25-servers"
+        },
+        {
+          "label": "Unit 42 verification and correction",
+          "url": "https://unit42.paloaltonetworks.com/cve-2026-109618-cve-2026-109619/"
+        },
+        {
+          "label": "PAN-OS fixes",
+          "url": "https://security.paloaltonetworks.com/CVE-2026-109618"
+        }
+      ],
+      "catalogue": {
+        "short_name": "PHP2Shell / PAN-OS exploit chain",
+        "qualifying": "Oct 21; campaign report Oct 26–29",
+        "category": "Exploited vulnerabilities",
+        "fix": "Update PHP or the vendor PAN-OS hotfix; remove public management access.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "PHP patches October 21; Dream reported its October 25 discovery on October 26, updated October 29. Unit 42 independently verified the recovered tooling and results."
+          },
+          {
+            "label": "Compromised machines / impact",
+            "body": "Dream reports 25 firewall/management servers across the US, Japan, Taiwan and South Korea, including three in a US government-affiliated environment. Credential extraction and persistent access are reported; financial loss and full downstream compromise are unknown."
+          },
+          {
+            "label": "Uncertainty / technical reports",
+            "body": "Chinese nexus and AI-assisted development are assessments; finding AI tools does not prove they authored the exploit. Unit 42 retracted a separate October 23 PHP2Shell attribution before confirming this campaign."
+          }
+        ]
+      }
+    },
+    {
+      "title": "eMudhra intermediate certificate-authority compromise",
+      "occurred_on": "2026-10-19",
+      "evidence": "reported",
+      "summary": "Weak private keys associated with eight eMudhra intermediate certificates made certificate forgery possible. An attacker could impersonate arbitrary domains to a client still trusting those intermediates. This compromises authentication, not TLS encryption algorithms themselves.",
+      "takeaway": "Update trust stores and bundled verifiers, redeploy affected images and restart services as needed. Cloudflare lists cloudflared 2026.10.2 and platform-specific WARP/client updates. Test the actual application's certificate-validation path; a browser test does not validate a separate service.",
+      "sources": [
+        {
+          "label": "Cloudflare technical response and remediation matrix, October 20",
+          "url": "https://blog.cloudflare.com/emudhra-certificate-compromise"
+        }
+      ],
+      "catalogue": {
+        "short_name": "eMudhra intermediate-CA compromise",
+        "qualifying": "Oct 20 technical response",
+        "category": "Cryptographic trust failure",
+        "fix": "Update trust stores and bundled verifiers; redeploy affected clients and services.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Cloudflare's October 20 response says it learned of the issue October 19, approximately 17:00 UTC."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Certificate-signing keys and the trust paths that accept them; no count of successfully intercepted endpoints is established. A trusting browser or server is exposed, not automatically compromised."
+          },
+          {
+            "label": "Impact",
+            "body": "Potential traffic interception or alteration across many software stacks. Cloudflare says its review found no active exploitation on its services. No verified financial-loss total is available in that report."
+          },
+          {
+            "label": "Unknown / detailed response",
+            "body": "Wider exploitation and victim counts remain unknown. The cited response is Cloudflare's operational account, not a complete eMudhra root-cause post-mortem."
+          }
+        ]
+      }
+    },
+    {
+      "title": "LiteLLM 1.107.0 supply-chain compromise",
+      "occurred_on": "2026-10-21",
+      "evidence": "reported",
+      "summary": "A previously published, unrevoked administrative key enabled Agent Platform access on October 10. Attackers extracted an organization-owner GitHub token, acquired additional maintainer tokens, changed release workflows and published poisoned wheels and containers. Python startup hooks ran a credential stealer without requiring an explicit LiteLLM import.",
+      "takeaway": "Replace poisoned environments with verified clean artifacts, remove startup-hook persistence and rotate accessible secrets. The vendor rotated its image-signing key; first releases using the new key included 1.106.3 on October 24.",
+      "sources": [
+        {
+          "label": "vendor attack-chain post-mortem",
+          "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026-attack-chain"
+        },
+        {
+          "label": "affected artifacts and cleanup",
+          "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026"
+        },
+        {
+          "label": "Wiz payload and observed abuse",
+          "url": "https://www.wiz.io/blog/litellm-compromised-steals-credentials"
+        }
+      ],
+      "catalogue": {
+        "short_name": "LiteLLM 1.107.0",
+        "qualifying": "Oct 21; post-mortem Oct 23",
+        "category": "Software supply-chain compromise",
+        "fix": "Rebuild from verified clean artifacts, remove persistence and rotate exposed secrets.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Malicious release October 21; vendor's canonical attack-chain report October 23."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Maintainer identities and release infrastructure; downstream environments running affected 1.107.0 artifacts or floating container tags during the incident. Wiz reports approximately 49,000 downloads, which is not a count of infected machines."
+          },
+          {
+            "label": "Impact",
+            "body": "Cloud, developer and AI credentials exposed; Wiz observed subsequent use of stolen AWS credentials. Total downstream victims and financial loss are unknown."
+          },
+          {
+            "label": "Post-mortem / uncertainty",
+            "body": "Use the canonical report: it supersedes early theories about tokens in gateway logs."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Railway customer-secrets breach",
+      "occurred_on": "2026-10-20",
+      "evidence": "reported",
+      "summary": "Attackers reached internal systems, queried encrypted environment variables and obtained CI credentials that enabled decryption of a subset. Railway assesses that obtaining AI-provider keys was an objective; claims about the attacker's models and compute are its assessment.",
+      "takeaway": "Railway restricted and rebuilt internal systems, rotated credentials and invalidated access. Customers should rotate stored sensitive credentials at their issuers, revoke old credentials and redeploy. The status page says builds, API and dashboard were restored October 23; it cautions that absence of a higher-risk notification does not establish safety.",
+      "sources": [
+        {
+          "label": "preliminary incident report",
+          "url": "https://blog.railway.com/p/preliminary-report-october-security-incident"
+        },
+        {
+          "label": "status and customer remediation",
+          "url": "https://status.railway.com/incident/QH8L8B3E"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Railway secrets breach",
+        "qualifying": "Oct 21; preliminary report Oct 22",
+        "category": "Platform intrusion",
+        "fix": "Rotate stored secrets at their issuers, revoke old credentials and redeploy.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Public disclosure October 21; preliminary report dated October 22. Railway places the intrusion between October 20, 13:58 UTC and October 22, 03:32 UTC."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Internal platform and CI systems and customer-secret storage. Public reporting does not give a compromised-host or customer total. Envelope encryption and available logs prevent exact identification of every decrypted key."
+          },
+          {
+            "label": "Impact",
+            "body": "Secret exposure plus disrupted builds, deployments, dashboard/API access and support tooling. No aggregate monetary loss is established."
+          },
+          {
+            "label": "Unknown / post-mortem",
+            "body": "Specific exploit details and final scope remain withheld or unresolved."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Backdoored Claude Code extension in Cursor's marketplace",
+      "occurred_on": "2026-10-29",
+      "evidence": "reported",
+      "summary": "Tampered Anthropic.claude-code 2.1.312 and 2.1.313 packages collected host information and attempted an SSH backdoor, reverse tunnel and persistence. Cursor says Anthropic did not develop the malicious builds.",
+      "takeaway": "Malicious packages removed, marketplace rebuilt and attacker server taken down. Isolate affected hosts; remove keys, persistence and tunnels; assess rebuilding; rotate accessible credentials from a trusted device. Uninstalling alone is insufficient.",
+      "sources": [
+        {
+          "label": "Cursor's revised security notice, hashes and cleanup procedures",
+          "url": "https://cursor.com/blog/claude-code-extension-security-notice"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Cursor marketplace backdoor",
+        "qualifying": "Oct 29; revised Oct 30",
+        "category": "Extension supply-chain compromise",
+        "fix": "Isolate affected hosts; remove keys, tunnels and persistence. Uninstalling alone is insufficient.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Cursor notice October 29, revised October 30. Distribution window approximately 02:27–13:35 Pacific Time on October 29."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Windows/macOS endpoints that installed the tampered packages from Cursor's marketplace. Exact compromised-machine count is not given in the cited notice. Version number alone cannot distinguish legitimate and substituted builds; Cursor provides hashes."
+          },
+          {
+            "label": "Impact",
+            "body": "Host metadata sent, attacker SSH key planted and persistence installed. Cursor says errors and lack of administrator rights usually prevented enabling SSH and attacker login. That does not negate the other payload effects. Financial loss is unknown."
+          },
+          {
+            "label": "Unknown / technical notice",
+            "body": "Marketplace entry method and subsequent attacker access remain unresolved."
+          }
+        ]
+      }
+    },
+    {
+      "title": "French supermarket refrigeration-controller sabotage",
+      "occurred_on": "2026-10-11",
+      "evidence": "reported",
+      "summary": "Intruders manipulated remotely managed refrigeration systems. CERT-FR confirms numerous controller compromises; reporting describes altered defrost/temperature settings and resulting food-stock disruption.",
+      "takeaway": "Remove internet exposure, inspect configurations, restore compromised devices as instructed, update firmware and change default passwords. Reconnect management through a secured VPN/protected network. CERT-FR specifically recommends Strict security mode for Danfoss equipment. Emergency source-IP filtering is temporary protection.",
+      "sources": [
+        {
+          "label": "CERT-FR alert and recovery guidance",
+          "url": "https://cert.cyber.gouv.fr/alerte/CERTFR-2026-ALE-012/"
+        },
+        {
+          "label": "AP reporting, October 14",
+          "url": "https://apnews.com/article/81c2d5721f4df77f601f71741ef7c291"
+        }
+      ],
+      "catalogue": {
+        "short_name": "French supermarket refrigeration sabotage",
+        "qualifying": "Oct 12; alert revised Oct 16",
+        "category": "Operational-technology intrusion",
+        "fix": "Remove internet exposure, restore controllers, update firmware and replace default passwords.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Attacks reported October 11–12; CERT-FR alert October 12, revised October 16."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Danfoss AK-SM and AK-SC, Copeland xweb and Dixell xweb controllers. The official alert does not quantify compromised units. Store counts in coverage should not be equated with controller counts."
+          },
+          {
+            "label": "Impact",
+            "body": "Spoiled/discarded food and restocking disruption reported by AP. The cited sources do not establish a total financial loss or injury count."
+          },
+          {
+            "label": "Unknown / technical account",
+            "body": "No complete public post-mortem or demonstrated common CVE is supplied by the official alert; do not assume every controller was breached through the same flaw."
+          }
+        ]
+      }
+    },
+    {
+      "title": "CAPCOM ID customer-data breach",
+      "occurred_on": "2026-10-19",
+      "evidence": "reported",
+      "summary": "An external party accessed the shared account service used for Capcom web services and some online games. The company found customer-data leakage and unauthorized password changes, and says it completed emergency countermeasures.",
+      "takeaway": "Access blocked, affected passwords reset, emergency measures implemented and customer notification initiated. Customers should treat subsequent impersonation messages cautiously.",
+      "sources": [
+        {
+          "label": "Capcom's English disclosure, October 22",
+          "url": "https://www.capcom.co.jp/ir/english/news/html/e261022.html"
+        }
+      ],
+      "catalogue": {
+        "short_name": "CAPCOM ID breach",
+        "qualifying": "Oct 22",
+        "category": "Customer-data breach",
+        "fix": "Access blocked and affected passwords reset. Watch for follow-up impersonation.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Unauthorized access detected October 19; Capcom disclosed findings October 22."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "CAPCOM ID service; host count unknown. 11,774,247 records contained email addresses and account metadata, including creation/login information and last-login IP. Forty-three also contained birth date, gender, country/region and nickname; 196 accounts had passwords changed without authorization."
+          },
+          {
+            "label": "Impact",
+            "body": "Large-scale personal-data exposure and account interference. Capcom says it did not confirm leakage of users' original passwords; credit cards were not included. It reports no interruption to game play. Monetary impact is not quantified."
+          },
+          {
+            "label": "Unknown / detailed notice",
+            "body": "Server-level exploit, final scope and full root cause remain unpublished in the notice."
+          }
+        ]
+      }
+    },
+    {
+      "title": "GMO Onamae.com Desktop Cloud trading-server compromise",
+      "occurred_on": "2026-10-20",
+      "evidence": "reported",
+      "summary": "Attackers installed malware in hosted desktop-server environments used for trading tools. Customer reports indicate unauthorized trading activity and possible theft of stored trading credentials and other files.",
+      "takeaway": "Change trading-tool, brokerage and other stored credentials from a device outside the affected service, disconnect sessions, inspect transaction histories, contact brokers about unauthorized trades and enable available two-factor authentication. These customer actions are containment, not a patch for the hosting breach.",
+      "sources": [
+        {
+          "label": "GMO second report and urgent customer instructions, October 22",
+          "url": "https://internet.gmo/en/news/article/247"
+        }
+      ],
+      "catalogue": {
+        "short_name": "GMO Desktop Cloud trading compromise",
+        "qualifying": "Oct 21–22",
+        "category": "Hosted-server compromise",
+        "fix": "Rotate trading credentials from a clean device; review activity and contact brokers.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "GMO confirmed malicious programs October 20; notices October 21 and 22."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Some Desktop Cloud customer servers confirmed affected; 26,739 servers potentially affected across all plans. This is an exposure estimate, not a verified infection total. Stored MT4/MT5 and brokerage credentials may have been viewed."
+          },
+          {
+            "label": "Impact",
+            "body": "Unauthorized account operations reported; potential financial losses to traders, with no aggregate amount established. GMO says payment/card information is not stored on these service servers."
+          },
+          {
+            "label": "Unknown / detailed notice",
+            "body": "Entry vector, final infected-host count and final trading losses remain under investigation with an external security firm."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Quest Diagnostics Quanum LSM intrusion",
+      "occurred_on": "2026-10-21",
+      "evidence": "reported",
+      "summary": "An unauthorized party reached Quanum LSM, used by certain clients to order tests and retrieve results. Quest says it believes some patient records were accessed; that qualification matters while scope is being investigated.",
+      "takeaway": "Incident-response procedures, containment/remediation, external cybersecurity assistance and federal law-enforcement notification. No public customer-installable patch or CVE is identified in the filing.",
+      "sources": [
+        {
+          "label": "Quest SEC Form 8-K, Item 8.01",
+          "url": "https://www.sec.gov/Archives/edgar/data/1022079/000094787126000941/ss6979200_8k.htm"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Quest Quanum LSM",
+        "qualifying": "Oct 22 SEC filing",
+        "category": "Healthcare-system intrusion",
+        "fix": "Containment and investigation underway; no customer-installable patch identified.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Quest learned of unauthorized access October 21 and filed an SEC Form 8-K dated October 22."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Quanum LSM application/system. The filing does not enumerate servers, accounts, patients or individual data fields."
+          },
+          {
+            "label": "Impact",
+            "body": "Potential exposure of sensitive patient records. Quest reports no material disruption to business operations or patient service. Financial impact is not quantified; filing an 8-K does not by itself prove a quantified material loss."
+          },
+          {
+            "label": "Unknown / detailed disclosure",
+            "body": "Root cause, access duration, patient count and final data scope. The reviewed document is a corporate disclosure, not a forensic post-mortem."
+          }
+        ]
+      }
+    },
+    {
+      "title": "TeamUpdraft breach and UpdraftCentral key abuse",
+      "occurred_on": "2026-10-17",
+      "evidence": "reported",
+      "summary": "TeamUpdraft says a compromised key enabled access to its website and believes its customer database was accessed. Stored UpdraftCentral connection keys were used to reach connected WordPress sites and install malicious plugins/create accounts. This is distinct from a vulnerability in the UpdraftPlus plugin code or a poisoned plugin download.",
+      "takeaway": "UpdraftPlus 1.26.13 / Premium 2.26.13 or later revoke affected connections. Check/delete old keys, inspect all previously connected sites, remove malicious plugins/accounts, reset vendor login security and reauthorize storage as advised. Updating does not remove existing backdoors.",
+      "sources": [
+        {
+          "label": "TeamUpdraft incident and remediation page",
+          "url": "https://teamupdraft.com/blog/security-incident-october-2026/"
+        },
+        {
+          "label": "Patchstack's investigation of downstream backdoors",
+          "url": "https://patchstack.com/articles/updraftcentral-key-compromise-wordpress-backdoors/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "TeamUpdraft / UpdraftCentral",
+        "qualifying": "Oct 19 onward",
+        "category": "Vendor-to-customer intrusion",
+        "fix": "Update UpdraftPlus and revoke old connections; inspect sites and remove existing backdoors.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Unauthorized access identified October 17–18; updates and remediation published October 19 onward."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Vendor website/database and connected customer WordPress sites; totals unknown. Database contents included contact/billing data, password hashes, 2FA settings and service connection keys."
+          },
+          {
+            "label": "Impact",
+            "body": "Customer-data exposure and downstream site backdoors. Financial loss and full extent of actions on sites are unknown. The vendor says self-hosted UpdraftCentral was unaffected."
+          },
+          {
+            "label": "Unknown / technical sources",
+            "body": "The vendor's AI-use suggestion is an inference, not demonstrated causation."
+          }
+        ]
+      }
+    },
+    {
+      "title": "OVHcloud CLI release-asset substitution",
+      "occurred_on": "2026-10-19",
+      "evidence": "reported",
+      "summary": "A hijacked developer account replaced release binaries for v0.11.0–v0.15.0 with credential-stealing builds. OVHcloud attributes the account compromise to a malicious editor extension previously installed on a personal MacBook. Source code and the build chain were not affected.",
+      "takeaway": "Malicious assets removed, account suspended, repositories audited and release immutability enabled. v0.16.0 is the clean replacement. Identify suspect binaries by vendor hashes without executing them; investigate execution and rotate exposed credentials.",
+      "sources": [
+        {
+          "label": "OVHcloud advisory GHSA-862f-55f5-vmvw",
+          "url": "https://github.com/ovh/ovhcloud-cli/security/advisories/GHSA-862f-55f5-vmvw"
+        }
+      ],
+      "catalogue": {
+        "short_name": "OVHcloud CLI release substitution",
+        "qualifying": "Oct 19",
+        "category": "Binary supply-chain compromise",
+        "fix": "Replace suspect binaries with v0.16.0; inspect hashes and rotate exposed credentials.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "October 19, approximately 12:47–14:21 UTC (14:47–16:21 UTC+2 in the vendor timeline)."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Developer identity and downloadable assets; downstream hosts executing substituted binaries. OVHcloud reports approximately 250 downloads, not 250 confirmed infected machines. Earlier downloads of the same version numbers are unaffected."
+          },
+          {
+            "label": "Impact",
+            "body": "Malware targeted cloud credentials, SSH keys, container configuration and AI-assistant data. Final theft and financial loss are unquantified."
+          },
+          {
+            "label": "Unknown / post-mortem",
+            "body": "Exact downstream infection and loss counts. The vendor supplies a technical timeline and root-cause discussion."
+          }
+        ]
+      }
+    },
+    {
+      "title": "UTA0565 fake-news-site Chrome–Windows exploit chain",
+      "occurred_on": "2026-09-03",
+      "evidence": "reported",
+      "summary": "Phishing links led to cloned policy/news websites carrying a chain involving Chrome CVE-2026-85046 / CVE-2026-87491 and Windows CVE-2026-85880. It delivered CLEANGULP malware. Volexity connects the chain to a third actor it tracks as UTA0565, separate from two actors in its September 9 report.",
+      "takeaway": "Install current Chrome and Windows security updates and investigate the published payload indicators. Windows September updates address CVE-2026-85880; the precise update depends on OS release. This report does not supply a single Chrome version that fixes every component of the chain.",
+      "sources": [
+        {
+          "label": "Volexity September 21 technical investigation",
+          "url": "https://www.volexity.com/blog/2026/09/21/mind-the-patch-gap-part-2-fake-websites-used-to-deploy-chrome-windows-0-day-exploits/"
+        },
+        {
+          "label": "NHS England's September Windows remediation advisory",
+          "url": "https://digital.nhs.uk/cyber-alerts/2026/cc-4846"
+        }
+      ],
+      "catalogue": {
+        "short_name": "UTA0565 Chrome–Windows zero-day chain",
+        "qualifying": "Sep 21 investigation",
+        "category": "Targeted espionage",
+        "fix": "Update Chrome and Windows; investigate published payload indicators.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Volexity's September 21 investigation describes attacks September 3–4, including activity at the reporting-window boundary."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Windows endpoints running vulnerable Chrome, including targets in Asian government and policy-related organizations. The report gives no global machine total."
+          },
+          {
+            "label": "Impact",
+            "body": "Espionage access through a browser-to-OS compromise; monetary loss and total stolen-data volume unknown."
+          },
+          {
+            "label": "Uncertainty / technical report",
+            "body": "China linkage is Volexity's attribution assessment. “Zero-day” describes exploitation before available fixes, not current patch status."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Kapibala / Red Heron multi-product exploitation",
+      "occurred_on": "2026-09-21",
+      "evidence": "reported",
+      "summary": "An actor exploited WordPress and other exposed systems, pivoting with stolen credentials into a government SQL database. Separately, it exploited CVE-2026-7273 on Zyxel GS1900 switches to steal configuration and credential material.",
+      "takeaway": "Apply product-specific updates, remove backdoors and rotate stolen credentials. Zyxel's linked matrix supplies model-specific GS1900 firmware fixes. A WordPress-only update does not remediate the separate switch exposures.",
+      "sources": [
+        {
+          "label": "GreyNoise investigation and reconstructed timeline",
+          "url": "https://www.greynoise.io/blog/open-season-on-kapibala-attacker-steals-government-records-wordpress-exploitation"
+        },
+        {
+          "label": "Zyxel vulnerability and patch matrix",
+          "url": "https://www.zyxel.com/global/en/support/security-advisories/zyxel-security-advisory-for-stack-based-buffer-overflow-vulnerability-in-gs1900-series-switches-06-16-2026"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Kapibala / Red Heron campaign",
+        "qualifying": "Sep 21 investigation",
+        "category": "Multi-product exploitation",
+        "fix": "Apply product-specific WordPress and Zyxel fixes; remove backdoors and rotate credentials.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "GreyNoise investigation September 21; underlying activity spans May–September. The major government theft occurred in July, so this entry qualifies by its recent investigation, not a recent intrusion date."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "GreyNoise reports 49 WordPress victim organizations across 29 countries and 996 switches across 48 countries. Organizations are not a machine count. Victim identities are largely withheld."
+          },
+          {
+            "label": "Impact",
+            "body": "At least 18,566 government-related records, including plaintext passwords and personal information, reportedly extracted; switch configuration and hashed root credentials stolen. No financial-loss total."
+          },
+          {
+            "label": "Uncertainty / technical sources",
+            "body": "Chinese-speaking linkage and LLM-generated tooling are researcher assessments."
+          }
+        ]
+      }
+    },
+    {
+      "title": "VeloCloud Orchestrator superuser takeover",
+      "occurred_on": "2026-10-22",
+      "evidence": "reported",
+      "summary": "CVE-2026-114625, an SQL-injection issue, allows any authenticated user to gain operator privileges and impersonate a local superuser operator. It exposes privileged internal functionality and can affect the orchestrator host and managed data.",
+      "takeaway": "Upgrade to the matching fixed release or later supported fix. Hosted customers' patching was performed by the provider.",
+      "sources": [
+        {
+          "label": "Arista Security Advisory 0199, affected versions and solutions",
+          "url": "https://www.arista.com/en/support/advisories-notices/security-advisory/24838-security-advisory-0199"
+        }
+      ],
+      "catalogue": {
+        "short_name": "VeloCloud Orchestrator takeover",
+        "qualifying": "Oct 22 advisory",
+        "category": "Actively exploited privilege escalation",
+        "fix": "Upgrade the relevant Orchestrator branch; hosted deployments were patched by the provider.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Arista advisory October 22; vendor explicitly confirms active exploitation."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Vulnerable VeloCloud Orchestrator deployments. Assessed affected branches are 5.2.x before 5.2.3.18, 6.1.x before 6.1.3.10, and 6.4.x before 6.4.2.12. Hosted, including Dedicated, deployments were affected and patched. The vendor does not give a victim-host count; end-of-support releases were not assessed."
+          },
+          {
+            "label": "Impact",
+            "body": "Potential compromise of confidentiality, integrity and availability in network-management infrastructure. Exploitation is confirmed, but individual victims, data losses and financial impact are not disclosed."
+          },
+          {
+            "label": "Unknown / technical notice",
+            "body": "Initial credential acquisition, campaign scope and downstream consequences."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Brotli decoder / Node.js remote-code-execution vulnerability",
+      "occurred_on": "2026-10-21",
+      "evidence": "advisory",
+      "summary": "CVE-2026-111497 affects the bundled Brotli decoder. Malformed compressed input is incorrectly treated as awaiting more input, allowing bytes to overflow an eight-byte internal buffer. Applications decompressing attacker-controlled Brotli data through node:zlib can suffer memory corruption.",
+      "takeaway": "Update to 22.23.4, 24.22.1 or 26.12.1, respectively, or a later supported fixed release, and restart/redeploy affected processes. Other products bundling Brotli need their own vendor updates.",
+      "sources": [
+        {
+          "label": "Node.js October 21 security releases, Brotli section and release downloads",
+          "url": "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Brotli / Node.js decoder RCE",
+        "qualifying": "Oct 21 security release",
+        "category": "Memory-corruption vulnerability",
+        "fix": "Update Node.js to 22.23.4, 24.22.1 or 26.12.1, or a later supported fixed release.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Node.js security release October 21."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Vulnerable Node.js 22.x, 24.x and 26.x deployments that exercise the decoder. This technical advisory identifies affected software, not a compromised-machine total. Reachability depends on application behavior; not every Node.js server exposes the decoding path."
+          },
+          {
+            "label": "Impact",
+            "body": "Possible crashes, process-memory disclosure or remote code execution. The cited Node.js release does not quantify actual victims or financial losses, or establish exploitation in the wild."
+          },
+          {
+            "label": "Unknown / technical advisory",
+            "body": "Actual compromise at any particular organization cannot be inferred from a vulnerable dependency."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Cisco ASA / FTD SSL VPN denial of service",
+      "occurred_on": "2026-10-28",
+      "evidence": "reported",
+      "summary": "CVE-2026-76418 permits an unauthenticated crafted SSL VPN request to cause a firewall reload. It involves logic errors where secondary authentication is configured on a tunnel group. This is an availability attack, not evidence of remote code execution or data theft.",
+      "takeaway": "Branch-specific releases include ASA 9.20.4.50 / 9.22.3.200 and FTD 7.4.9 / 7.6.7; use the full vendor matrix for other branches. Cisco describes temporary configuration mitigations but warns that removing secondary authentication lowers security. Prefer the fixed release.",
+      "sources": [
+        {
+          "label": "Cisco advisory, prerequisites, fixed-release matrix and exploitation statement",
+          "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-tunnel-dos-s6mgkb75"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Cisco ASA / FTD VPN denial of service",
+        "qualifying": "Oct 28 advisory",
+        "category": "Actively exploited availability flaw",
+        "fix": "Install the branch-specific ASA/FTD fix. Prefer patching to weakening authentication.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Cisco advisory October 28; PSIRT says it learned of active exploitation during October."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "ASA or FTD devices running vulnerable releases with the relevant reachable VPN/configuration combination. Cisco gives no victim-device count; an affected version alone does not establish a successful attack."
+          },
+          {
+            "label": "Impact",
+            "body": "VPN/firewall service interruption from reloads. Downtime duration, financial cost and named victims remain undisclosed."
+          },
+          {
+            "label": "Unknown / technical notice",
+            "body": "Campaign identity, scale and downstream operational harm."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Microsoft 365 passkey-themed identity intrusions",
+      "occurred_on": "2026-09-09",
+      "evidence": "reported",
+      "summary": "Fake helpdesk calls/messages used passkey or SSO enrollment as a lure for adversary-in-the-middle phishing or device-code authorization. Attackers obtained sessions, registered their own authentication methods and used Microsoft Graph to discover and collect cloud data. The lure does not demonstrate a cryptographic break of passkeys.",
+      "takeaway": "Revoke sessions/refresh tokens, reset compromised credentials, remove attacker-enrolled factors and mailbox rules, and require secure authentication re-registration. Correlate identity events with Graph and cloud-workload logs; this is an identity-response problem without a single CVE patch.",
+      "sources": [
+        {
+          "label": "Microsoft investigation, evidence limits, hunting queries and remediation",
+          "url": "https://www.microsoft.com/en-us/security/blog/2026/09/09/passkey-themed-social-engineering-leads-identity-cloud-compromise/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Microsoft 365 passkey-lure intrusions",
+        "qualifying": "Sep 9 investigation",
+        "category": "Identity and cloud compromise",
+        "fix": "Revoke sessions and tokens; remove attacker-added factors and mailbox rules; re-register securely.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Microsoft investigation September 9; activity observed since May, with September examples."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Microsoft 365/Entra identities and accessible SharePoint, OneDrive and Exchange resources. Microsoft gives no affected-user, tenant or endpoint total. Account compromise can occur without endpoint malware."
+          },
+          {
+            "label": "Impact",
+            "body": "Observed high-volume document access/downloads and mailbox collection; some telemetry supports only possible access or suspected exfiltration. No aggregate financial loss is established."
+          },
+          {
+            "label": "Uncertainty / technical report",
+            "body": "Microsoft associates initial access with multiple actor clusters; do not attribute every intrusion to one group."
+          }
+        ]
+      }
+    },
+    {
+      "title": "CHOSEN BRICK surveillance of dissidents and journalists",
+      "occurred_on": "2026-09-15",
+      "evidence": "reported",
+      "summary": "Social engineering persuaded targets to run malicious files. The Windows malware supports screenshots, microphone capture, message/email theft and additional payload downloads, with Telegram and cloud storage used for communications/exfiltration. Registry Run keys provide persistence.",
+      "takeaway": "Investigate using the advisory's indicators, persistence locations and signatures; keep endpoint protection enabled, restrict untrusted software, update devices and use phishing-resistant MFA. No single vulnerability patch removes an established infection.",
+      "sources": [
+        {
+          "label": "joint CHOSEN BRICK technical advisory",
+          "url": "https://www.ncsc.gov.uk/news/iranian-cyber-targeting-of-dissidents-activists-and-journalists"
+        }
+      ],
+      "catalogue": {
+        "short_name": "CHOSEN BRICK",
+        "qualifying": "Sep 15 joint advisory",
+        "category": "Targeted surveillance malware",
+        "fix": "Investigate indicators and persistence; strengthen endpoint protection and authentication.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "Joint NCSC/FBI/AIVD advisory published September 15; malware used since at least 2025."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Personal and organizational Windows devices belonging to targeted individuals, including in the UK, US and Netherlands. No numerical infection total is published. The advisory says automated lateral movement has not been observed."
+          },
+          {
+            "label": "Impact",
+            "body": "Surveillance and exposure of contacts and communications. Some victims' personal details appeared on pro-Iranian leak sites, increasing personal-safety risks. Financial loss is not quantified; capabilities such as wiping should not be read as proof they were exercised on every victim."
+          },
+          {
+            "label": "Uncertainty / technical advisory",
+            "body": "Iranian-state linkage is the agencies' assessment; individual victims and full harm remain undisclosed."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Chainalysis internal-tools and customer-directory breach",
+      "occurred_on": "2026-10-30",
+      "evidence": "reported",
+      "summary": "An external actor reached internal systems/tools through what Chainalysis describes as offensive agentic techniques. The company has not published the entry point, specific vulnerabilities or the degree of AI autonomy.",
+      "takeaway": "Patching/hardening with external experts and broader platform review. Customers are advised to enable 2FA and watch unexpected reset requests/authentication prompts. No customer-installable version fix is specified.",
+      "sources": [
+        {
+          "label": "Chainalysis October 30 security notice and customer communication",
+          "url": "https://www.chainalysis.com/blog/security-incident-october-30/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Chainalysis internal-tools breach",
+        "qualifying": "Oct 30 notice",
+        "category": "Customer-directory exposure",
+        "fix": "Vendor hardening and review; enable 2FA and scrutinize unexpected authentication prompts.",
+        "report": {
+          "label": "60-day incident research, 2 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Date / evidence",
+            "body": "October 30 notice says unauthorized activity was detected during October."
+          },
+          {
+            "label": "Compromised machines / systems",
+            "body": "Unspecified internal systems and customer-directory records: user IDs, names, emails and organization-role labels. Numbers of hosts, users and organizations were still being determined."
+          },
+          {
+            "label": "Impact",
+            "body": "Confirmed access to those customer records. Chainalysis says it found no evidence of access to investigation content, query/transaction results, cleartext passwords, MFA secrets or session tokens. That is an investigation finding to date, not proof that every possibility has been excluded. Financial loss is unknown."
+          },
+          {
+            "label": "Unknown / detailed notice",
+            "body": "Full root cause and per-organization exposure; a technical post-mortem was not present in the reviewed notice. The company explicitly says this is unrelated to Binance."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Polymarket: a monitoring script turned hostile",
+      "occurred_on": "2026-10-29",
+      "evidence": "confirmed",
+      "summary": "Hudson Rock retrieved a script from a DebugBear URL used by Polymarket and found code seeking a logged-in trading client, then attempting asset sales and transfers. Two downloads matched. It also found a Polymarket build recording the integration’s removal. That confirms the captured malicious script, not every alleged loss or the exact compromise path. The researchers explicitly leave the exposure window and aggregate losses unresolved.",
+      "takeaway": "Our takeaway: a third-party script running beside a wallet can reach authority already present in the page. Keep monitoring code away from signing surfaces where possible. An allowed script host is not a guarantee that tomorrow’s bytes are safe.",
+      "sources": [
+        {
+          "label": "Hudson Rock — captured-script analysis, 29 October",
+          "url": "https://www.infostealers.com/article/polymarket-breach-alert-wallet-draining-code-found-in-a-third-party-script/"
+        }
+      ]
+    },
+    {
+      "title": "Linux: local access can become root",
+      "occurred_on": "2026-10-23",
+      "evidence": "advisory",
+      "summary": "CloudLinux’s 23 October advisory describes ZDI-CAN-33367, a Linux networking flaw that can let an ordinary local user alter read-only files and gain root when the required namespace access is available. This is a local privilege-escalation advisory, not evidence that every Linux server was hacked. Its 30 October update lists fixed kernels for several CloudLinux releases; support channels differ.",
+      "takeaway": "Check your distribution’s advisory and installed kernel, then apply and activate its supported fix. For agent hosts, a container still depends on the host kernel. The presence of a container alone does not settle this risk.",
+      "sources": [
+        {
+          "label": "CloudLinux — vendor advisory, updated 30 October",
+          "url": "https://blog.cloudlinux.com/zdi-can-33367"
+        }
+      ]
+    }
+  ],
+  "research_source": "https://github.com/Identity-md/research/blob/fe8416d818f06948f2186110bce97dbdcc644068/jobs/5409eb16-a899-4635-ae2b-7513ba46b3f9/files/artifacts/report.md"
+}

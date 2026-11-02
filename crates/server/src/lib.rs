@@ -1,14 +1,18 @@
 //! Browser sessions and an authenticated gateway to the private dispatcher.
-//! Prototype access uses one-use invitations. Google federation is a separate
+//! Prototype access uses approved invitations and passwords. Google federation is a separate
 //! integration; an invitation must never be presented as a verified Google identity.
 
+mod access;
 mod auth;
 mod diagnostics;
 mod gateway;
 mod incidents;
 pub mod payments;
+mod pentests;
 pub mod review_codes;
+mod review_target;
 mod sites;
+mod sources;
 
 use axum::{
     Json, Router,
@@ -25,6 +29,7 @@ use tower_http::{
     set_header::SetResponseHeaderLayer,
 };
 
+pub use access::bootstrap_admin;
 pub use auth::{create_invite, disable_account, invite_account};
 
 #[derive(Clone)]
@@ -33,46 +38,58 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub client: reqwest::Client,
     pub(crate) review_access: payments::access::ReviewAccess,
+    pub(crate) payouts: Option<Arc<payments::payouts::PayoutService>>,
 }
 
 pub struct Config {
     pub public_origin: String,
     pub dispatcher_url: String,
+    /// Public relay endpoint, configured separately from the private gateway URL.
+    pub relay_origin: Option<String>,
     pub internal_key: String,
     pub web_root: Option<PathBuf>,
     pub secure_cookies: bool,
 }
 
 impl Config {
+    fn origin(value: &str) -> Result<url::Url, &'static str> {
+        let url = url::Url::parse(value).map_err(|_| "invalid service URL")?;
+        let local = match url.host() {
+            Some(url::Host::Domain("localhost")) => true,
+            Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+            _ => false,
+        };
+        if !(url.scheme() == "https" || url.scheme() == "http" && local)
+            || url.host().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.path() != "/"
+            || url.query().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(
+                "service URLs require HTTPS except explicit loopback, and cannot contain credentials, paths or queries",
+            );
+        }
+        Ok(url)
+    }
+
+    pub fn with_relay_origin(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        self.relay_origin = value
+            .map(|value| Self::origin(&value).map(|url| url.origin().ascii_serialization()))
+            .transpose()?;
+        Ok(self)
+    }
+
     pub fn new(
         public_origin: String,
         dispatcher_url: String,
         internal_key: String,
         web_root: Option<PathBuf>,
     ) -> Result<Self, &'static str> {
-        fn origin(value: &str) -> Result<url::Url, &'static str> {
-            let url = url::Url::parse(value).map_err(|_| "invalid service URL")?;
-            let local = match url.host() {
-                Some(url::Host::Domain("localhost")) => true,
-                Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-                Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-                _ => false,
-            };
-            if !(url.scheme() == "https" || url.scheme() == "http" && local)
-                || !url.username().is_empty()
-                || url.password().is_some()
-                || url.path() != "/"
-                || url.query().is_some()
-                || url.fragment().is_some()
-            {
-                return Err(
-                    "service URLs require HTTPS except explicit loopback, and cannot contain credentials, paths or queries",
-                );
-            }
-            Ok(url)
-        }
-        let public = origin(&public_origin)?;
-        let dispatcher = origin(&dispatcher_url)?;
+        let public = Self::origin(&public_origin)?;
+        let dispatcher = Self::origin(&dispatcher_url)?;
         if internal_key.len() < 32
             || internal_key.len() > 256
             || internal_key.chars().any(char::is_whitespace)
@@ -83,6 +100,7 @@ impl Config {
             secure_cookies: public.scheme() == "https",
             public_origin: public.origin().ascii_serialization(),
             dispatcher_url: dispatcher.origin().ascii_serialization(),
+            relay_origin: None,
             internal_key,
             web_root,
         })
@@ -110,11 +128,16 @@ impl AppState {
             config: Arc::new(config),
             client,
             review_access: payments::access::ReviewAccess::default(),
+            payouts: None,
         })
     }
 
     pub fn with_review_access(mut self, access: payments::access::ReviewAccess) -> Self {
         self.review_access = access;
+        self
+    }
+    pub fn with_payouts(mut self, service: Arc<payments::payouts::PayoutService>) -> Self {
+        self.payouts = Some(service);
         self
     }
 }
@@ -162,6 +185,20 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/session", get(auth::session))
         .route("/api/payments", get(payments::summary))
+        .route("/api/earnings", get(payments::earnings::list))
+        .route(
+            "/api/withdrawals",
+            get(payments::payouts::list).post(payments::payouts::create),
+        )
+        .route(
+            "/api/withdrawals/{id}/confirm",
+            post(payments::payouts::confirm),
+        )
+        .route(
+            "/api/withdrawals/{id}/cancel",
+            post(payments::payouts::cancel),
+        )
+        .route("/api/admin/treasury", get(payments::payouts::desk))
         .route("/api/admin/payments", get(payments::desk::list))
         .route("/api/checkout", get(payments::access::settings))
         .route("/api/review-codes", get(review_codes::list))
@@ -185,9 +222,26 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/incidents", get(incidents::drafts))
         .route("/api/admin/incidents/{id}", post(incidents::edit))
         .route("/api/auth/redeem", post(auth::redeem))
+        .route("/api/auth/login", post(access::login))
+        .route("/api/auth/activate", post(access::activate))
+        .route("/api/access-requests", post(access::request_access))
+        .route("/api/admin/access", get(access::list))
+        .route("/api/admin/access/{id}/decision", post(access::decide))
+        .route("/api/admin/accounts", post(access::create_account))
+        .route(
+            "/api/admin/accounts/{id}/invite",
+            post(access::renew_invite),
+        )
+        .route(
+            "/api/admin/accounts/{id}/coupon",
+            post(access::issue_coupon),
+        )
+        .route("/api/admin/accounts/{id}/disable", post(access::disable))
         .route("/api/auth/logout", post(auth::logout))
         .route("/api/fleet", get(gateway::fleet))
         .route("/api/devices", get(gateway::devices))
+        .route("/api/agents", get(gateway::agents))
+        .route("/api/pairing-info", get(gateway::pairing_info))
         .route("/api/pairings/claim", post(gateway::claim))
         .route("/api/devices/{id}/decision", post(gateway::decision))
         .route(
@@ -197,6 +251,32 @@ pub fn router(state: AppState) -> Router {
         .route("/api/reviews/{id}", get(gateway::review))
         .route("/api/reviews/{id}/cancel", post(gateway::cancel_review))
         .route("/api/reviews/{id}/report", get(gateway::report))
+        .route(
+            "/api/sources",
+            get(sources::list)
+                .post(sources::create)
+                .layer(DefaultBodyLimit::max(
+                    patchriot_protocol::sources::MAX_SOURCE_BODY_BYTES,
+                )),
+        )
+        .route("/api/pentests", get(pentests::list).post(pentests::create))
+        .route("/api/pentests/{id}/decision", post(pentests::decide))
+        .route("/api/pentests/{id}/review-plan", get(pentests::plan))
+        .route("/api/pentests/{id}/review", post(pentests::start))
+        .route("/api/sources/{id}", get(sources::detail))
+        .route("/api/sources/{id}/decision", post(sources::decide))
+        .route("/api/sources/{id}/delete", post(sources::delete))
+        .route("/api/sources/{id}/evidence", get(sources::evidence))
+        .route("/api/sources/{id}/review-plan", get(sources::review_plan))
+        .route("/api/sources/{id}/review", post(sources::create_review))
+        .route(
+            "/api/sources/{id}/review-code",
+            post(review_codes::redeem_source),
+        )
+        .route(
+            "/api/sources/{id}/checkout",
+            post(payments::browser_checkout::create_source),
+        )
         .route("/api/site-checks", get(sites::list).post(sites::create))
         .route("/api/site-checks/{id}", get(sites::detail))
         .route(

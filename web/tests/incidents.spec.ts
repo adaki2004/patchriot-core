@@ -1,5 +1,8 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 const content = {
   title: 'A source-backed advisory', occurred_on: '2025-01-01', evidence: 'advisory',
@@ -18,27 +21,66 @@ async function setup(page: Page, role?: 'member' | 'admin') {
   await page.route('**/api/incidents', route => route.fulfill({ json: entries }));
 }
 
-test('public log supports keyboard and touch selection without executing source text', async ({ page }) => {
+test('public catalogue supports keyboard selection and reads source text without executing it', async ({ page }) => {
   await setup(page);
   await page.goto('/');
-  await page.getByRole('button', { name: 'Watch log', exact: true }).click();
-  const tabs = page.getByRole('tab');
-  await expect(tabs).toHaveCount(2);
-  await tabs.first().focus();
+  await page.getByRole('button', { name: 'Recent events', exact: true }).click();
+  const rows = page.getByRole('table', { name: 'Published incidents' }).getByRole('button');
+  await expect(rows).toHaveCount(2);
+  await rows.first().focus();
   await page.keyboard.press('ArrowDown');
-  await expect(tabs.nth(1)).toBeFocused();
-  await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel')).toContainText('<img src=x onerror=alert(1)>');
-  await expect(page.locator('.incident-terminal img, .incident-terminal script')).toHaveCount(0);
-  await expect(page.getByRole('tabpanel')).toContainText('Reported · details developing');
+  await expect(rows.nth(1)).toBeFocused();
+  await page.keyboard.press('Enter');
+  const detail = page.locator('.incident-reading');
+  await expect(detail).toContainText('<img src=x onerror=alert(1)>');
+  await expect(detail.locator('img, script')).toHaveCount(0);
+  await expect(detail).toContainText('Reported · details developing');
+  await expect(detail.getByRole('link', { name: 'Source advisory' })).toHaveAttribute('rel', 'noopener noreferrer nofollow');
+  await detail.getByRole('button', { name: 'Back to catalogue', exact: false }).click();
+  await expect(rows.nth(1)).toBeFocused();
   await page.keyboard.press('Home');
-  await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
-  await tabs.nth(1).click();
-  await expect(page.getByRole('tabpanel')).toContainText('<script>alert(1)</script>');
-  const source = page.getByRole('link', { name: 'Source advisory' });
-  await expect(source).toHaveAttribute('rel', 'noopener noreferrer nofollow');
+  await page.keyboard.press('Enter');
+  await expect(detail).toContainText('A source-backed advisory');
+  await detail.getByRole('button', { name: 'Next incident →' }).click();
+  await expect(detail).toContainText('<script>alert(1)</script>');
+  await detail.getByRole('button', { name: 'Back to catalogue', exact: false }).click();
   await expect(page.getByRole('button', { name: 'Incident desk', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('catalogue text remains readable when idle, hovered or keyboard-focused in each theme', async ({ page }) => {
+  await setup(page);
+  for (const design of ['collective']) {
+    await page.goto(`/?design=${design}#/incidents`);
+    const table = page.getByRole('table', { name: 'Published incidents' });
+    await expect(table.getByRole('button')).toHaveCount(2);
+    for (const state of ['initial', 'hover', 'focused']) {
+      if (state === 'hover') await table.getByRole('button').nth(1).hover();
+      if (state === 'focused') {
+        await table.getByRole('button').first().focus();
+        await page.keyboard.press('ArrowDown');
+        await expect(table.getByRole('button').nth(1)).toBeFocused();
+      }
+      const ratios = await table.locator('strong, td > span').evaluateAll(elements => {
+        function luminance(color: string) {
+          const rgb = color.match(/[\d.]+/g)!.slice(0, 3).map(value => {
+            const channel = Number(value) / 255;
+            return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+          });
+          return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+        }
+        return elements.map(element => {
+          let background = element.parentElement!;
+          while (getComputedStyle(background).backgroundColor === 'rgba(0, 0, 0, 0)' && background.parentElement) background = background.parentElement;
+          const ink = luminance(getComputedStyle(element).color);
+          const paper = luminance(getComputedStyle(background).backgroundColor);
+          return (Math.max(ink, paper) + .05) / (Math.min(ink, paper) + .05);
+        });
+      });
+      for (const ratio of ratios) expect(ratio, `${design} / ${state}: text needs 4.5:1 contrast`).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
 });
 
 test('a failed refresh keeps previous entries and explicitly marks them stale', async ({ page }) => {
@@ -47,14 +89,38 @@ test('a failed refresh keeps previous entries and explicitly marks them stale', 
   await page.route('**/api/incidents', route => route.fulfill(failing ? { status: 503, json: { error: 'database_unavailable' } } : { json: entries }));
   await page.clock.install();
   await page.goto('/');
-  await expect(page.getByRole('tab')).toHaveCount(2);
+  await expect(page.getByRole('table', { name: 'Published incidents' }).getByRole('button')).toHaveCount(2);
   failing = true;
   await page.clock.fastForward(61_000);
   await expect(page.getByRole('alert')).toContainText('last successful response');
-  await expect(page.getByRole('tab')).toHaveCount(2);
+  await expect(page.getByRole('table', { name: 'Published incidents' }).getByRole('button')).toHaveCount(2);
   failing = false;
   await page.getByRole('button', { name: 'Retry watch log' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('a catalogue row opens all report sections, full remediation and attributed source links', async ({ page }) => {
+  await setup(page);
+  const catalogue = {
+    short_name: 'Example release', qualifying: 'October disclosure; intrusion began earlier', category: 'Release-channel compromise',
+    fix: 'Replace the affected build and rotate credentials.',
+    report: { label: 'Original research report', url: 'https://example.com/public-report' },
+    sections: [{ label: 'Impact and limits', body: 'Downloads do not establish infections.' }, { label: 'Unknown', body: '<script>untrusted source text</script>' }],
+  };
+  await page.route('**/api/incidents', route => route.fulfill({ json: [{ ...entries[0], content: { ...content, catalogue } }] }));
+  await page.goto('/?design=collective#/incidents');
+  const table = page.getByRole('table', { name: 'Published incidents' });
+  await expect(table.getByRole('columnheader')).toHaveText(['Short name', 'Qualifying disclosure / investigation', 'Category', 'Fix / status']);
+  await expect(table).toContainText(catalogue.fix);
+  await table.getByText(catalogue.qualifying).click();
+  const detail = page.getByRole('article', { name: content.title });
+  await expect(detail).toContainText(content.summary);
+  await expect(detail).toContainText(content.takeaway);
+  for (const section of catalogue.sections) await expect(detail).toContainText(section.body);
+  await expect(detail.locator('script')).toHaveCount(0);
+  await expect(detail.getByRole('link', { name: 'Original research report' })).toHaveAttribute('href', catalogue.report.url);
+  await detail.getByRole('button', { name: 'Back to catalogue', exact: false }).click();
+  await expect(table.getByRole('button', { name: 'Example release' })).toBeFocused();
 });
 
 test('admin saves separately from publication and cannot publish unsaved changes', async ({ page }) => {
@@ -77,6 +143,7 @@ test('admin saves separately from publication and cannot publish unsaved changes
     await route.fulfill({ json: saved });
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'New entry +' }).click();
   await page.getByLabel('Title', { exact: true }).fill(content.title);
@@ -116,6 +183,7 @@ test('replacing an incident draft asks before discarding unsaved edits', async (
     if (discard) await dialog.accept(); else await dialog.dismiss();
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   const list = page.getByRole('complementary', { name: 'Saved incident drafts' });
   await list.getByRole('button').filter({ hasText: 'first draft' }).click();
@@ -148,6 +216,7 @@ test('declining an imported replacement preserves both the current edits and res
     if (discard) await dialog.accept(); else await dialog.dismiss();
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'New entry +' }).click();
   await page.getByLabel('Title', { exact: true }).fill('Current unsaved review');
@@ -193,7 +262,8 @@ for (const reopened of ['first', 'second']) test(`a delayed incident save preser
   });
   try {
     await page.goto('/');
-    await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
+    await page.getByText('Administration', { exact: true }).click();
+  await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
     const list = page.getByRole('complementary', { name: 'Saved incident drafts' });
     await list.getByRole('button').filter({ hasText: 'first draft' }).click();
     await page.getByLabel('Title', { exact: true }).fill('First draft saved slowly');
@@ -233,6 +303,7 @@ test('research import stays local and unsaved until the admin saves the editable
     await route.fulfill({ json: { id: route.request().url().split('/').at(-1), revision: 1, content: body.content, published_revision: null, published_at: null, updated_at: '2025-01-04T00:00:00Z' } });
   });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'Load research JSON' }).click();
   const imported = { ...content, title: '<img src=x onerror=alert(1)>', summary: 'Untrusted research claim. Check its sources.' };
@@ -260,6 +331,7 @@ test('research brief copies a dated public-only request without starting work or
   const writes: string[] = [];
   page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await expect(page.getByText('Private draft canary', { exact: true })).toBeVisible();
   const before = Date.now();
@@ -298,6 +370,7 @@ test('research import rejects oversized files, extra fields and incomplete repor
   const writes: string[] = [];
   page.on('request', request => { if (request.method() === 'POST') writes.push(request.url()); });
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Incident desk', exact: true }).click();
   await page.getByRole('button', { name: 'Load research JSON' }).click();
   await page.getByLabel('JSON file').setInputFiles({ name: 'too-large.json', mimeType: 'application/json', buffer: Buffer.alloc(12_001, 65) });

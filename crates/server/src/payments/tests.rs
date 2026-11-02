@@ -1,5 +1,52 @@
 use super::*;
 
+#[test]
+fn provider_defaults_cannot_change_recipients_amounts_or_routing() {
+    let request = serde_json::json!({"dry":false,"amount":"10000000","recipient":"treasury.near","refundTo":"customer.near","deadline":"2026-11-01T12:00:00+00:00"});
+    let mut echo = request.clone();
+    echo["deadline"] = json!("2026-11-01T12:00:00.000Z");
+    echo["confidentiality"] = json!("public");
+    echo["quoteWaitingTimeMs"] = json!(0);
+    echo["insured"] = json!(false);
+    echo["appFees"] = json!([{"recipient":"provider.near","fee":1}]);
+    assert!(matches_request(&request, &echo));
+    assert_eq!(app_fee_bps(&echo["appFees"]), Some(1));
+    echo["appFees"][0]["limitOrderId"] = Value::Null;
+    assert!(matches_request(&request, &echo));
+    for (field, value) in [
+        ("recipient", json!("someone-else.near")),
+        ("refundTo", json!("someone-else.near")),
+        ("amount", json!("9000000")),
+        ("deadline", json!("2026-11-01T12:00:01Z")),
+        ("dry", json!(true)),
+        ("confidentiality", json!("shield")),
+        ("insured", json!(true)),
+        ("customRecipientMsg", json!("execute_something")),
+        ("virtualChainRecipient", json!("someone-else.near")),
+        ("newRoutingField", json!(false)),
+        ("appFees", json!([{"recipient":"provider.near","fee":101}])),
+        (
+            "appFees",
+            json!([{"recipient":"provider.near","fee":60},{"recipient":"another.near","fee":60}]),
+        ),
+        ("appFees", json!([{"recipient":"provider.near","fee":-1}])),
+        (
+            "appFees",
+            json!([{"recipient":"provider.near","fee":1,"limitOrderId":"other-order"}]),
+        ),
+        (
+            "appFees",
+            json!([{"recipient":"provider.near","fee":1,"unknown":null}]),
+        ),
+    ] {
+        let mut changed = echo.clone();
+        changed[field] = value;
+        assert!(!matches_request(&request, &changed), "accepted {field}");
+    }
+    echo.as_object_mut().unwrap().remove("refundTo");
+    assert!(!matches_request(&request, &echo));
+}
+
 #[path = "browser_checkout_tests.rs"]
 mod browser_checkout;
 #[path = "checkout_tests.rs"]
@@ -21,14 +68,41 @@ use std::{
     },
 };
 
-struct TestDb {
-    pool: PgPool,
+#[tokio::test]
+async fn provider_deposit_grace_does_not_extend_the_customers_payment_window() {
+    let db = TestDb::new().await;
+    let (terms, mut quote) = db.quote();
+    let requested = date(&terms.quote_request["deadline"]).unwrap();
+    quote.quote["deadline"] = json!(requested + Duration::days(3));
+    quote.quote["timeWhenInactive"] = quote.quote["deadline"].clone();
+    quote.quote_request["appFees"] =
+        json!([{"recipient":"provider.near","fee":1,"limitOrderId":null}]);
+    let (deadline, _, _) = validate_quote(&terms, &quote).unwrap();
+    assert_eq!(deadline, requested);
+    let id = record_quote(&db.pool, &terms, &quote).await.unwrap();
+    let invoice: Invoice = sqlx::query_as("SELECT * FROM payment_invoices WHERE id=$1")
+        .bind(id)
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        invoice.deadline.timestamp_millis(),
+        requested.timestamp_millis()
+    );
+    assert!(invoice.watch_until > date(&quote.quote["deadline"]).unwrap());
+    quote.quote["deadline"] = json!(requested + Duration::days(3) + Duration::seconds(1));
+    assert!(validate_quote(&terms, &quote).is_err());
+    db.finish().await;
+}
+
+pub(super) struct TestDb {
+    pub(super) pool: PgPool,
     admin: PgPool,
     schema: String,
-    account: Uuid,
+    pub(super) account: Uuid,
 }
 impl TestDb {
-    async fn new() -> Self {
+    pub(super) async fn new() -> Self {
         let url = std::env::var("PATCHRIOT_TEST_DATABASE_URL")
             .expect("set PATCHRIOT_TEST_DATABASE_URL to a local test PostgreSQL database");
         let admin = PgPoolOptions::new()
@@ -73,7 +147,7 @@ impl TestDb {
             account,
         }
     }
-    fn quote(&self) -> (InvoiceTerms, QuoteResponse) {
+    pub(super) fn quote(&self) -> (InvoiceTerms, QuoteResponse) {
         let deadline = (Utc::now() + Duration::minutes(5)).to_rfc3339();
         let request = json!({
             "dry":false, "swapType":"EXACT_OUTPUT", "depositType":"ORIGIN_CHAIN",
@@ -124,7 +198,7 @@ impl TestDb {
         sqlx::query_as("SELECT (SELECT count(*) FROM payment_ledger), (SELECT count(*) FROM payment_funding_events)")
             .fetch_one(&self.pool).await.unwrap()
     }
-    async fn finish(self) {
+    pub(super) async fn finish(self) {
         self.pool.close().await;
         sqlx::query(sqlx::AssertSqlSafe(format!(
             "DROP SCHEMA {} CASCADE",
@@ -142,6 +216,63 @@ fn status(quote: &QuoteResponse, state: &str) -> Value {
         "correlationId":Uuid::new_v4(), "quoteResponse":quote, "status":state, "updatedAt":Utc::now(),
         "swapDetails":{"amountOut":"1000000", "intentHashes":["fixture-intent"], "nearTxHashes":["fixture-transaction"]}
     })
+}
+
+#[test]
+fn status_may_omit_processing_defaults_but_never_payment_terms() {
+    let saved = json!({"insured":false,"quoteWaitingTimeMs":2000,"recipient":"treasury.near","amount":"10000000","refundTo":"payer.near"});
+    let echo = json!({"recipient":"treasury.near","amount":"10000000","refundTo":"payer.near","referral":null,"virtualChainRecipient":null,"virtualChainRefundRecipient":null});
+    assert!(matches_status_request(&saved, &echo));
+    for field in ["recipient", "amount", "refundTo"] {
+        let mut bad = echo.clone();
+        bad.as_object_mut().unwrap().remove(field);
+        assert!(!matches_status_request(&saved, &bad));
+    }
+    let mut bad = saved.clone();
+    bad["insured"] = json!(true);
+    assert!(!matches_status_request(&bad, &echo));
+    for field in [
+        "referral",
+        "virtualChainRecipient",
+        "virtualChainRefundRecipient",
+    ] {
+        let mut bad = echo.clone();
+        bad[field] = json!("other.near");
+        assert!(!matches_status_request(&saved, &bad));
+    }
+}
+
+#[tokio::test]
+async fn live_status_without_nested_trace_id_still_binds_the_complete_quote() {
+    let db = TestDb::new().await;
+    let provider = MockProvider::new(Value::Null).await;
+    for altered in [false, true] {
+        let (id, quote) = db.invoice().await;
+        let mut body = status(&quote, "SUCCESS");
+        body["quoteResponse"]
+            .as_object_mut()
+            .unwrap()
+            .remove("correlationId");
+        if altered {
+            body["quoteResponse"]["quote"]["depositAddress"] = json!("other.fixture.near");
+        }
+        provider.set(body);
+        assert_eq!(
+            reconcile_once(&db.pool, &provider.client)
+                .await
+                .unwrap()
+                .unavailable,
+            0
+        );
+        let (state, reason) = db.state(id).await;
+        assert_eq!(state, if altered { "needs_review" } else { "settled" });
+        assert_eq!(
+            reason.as_deref(),
+            altered.then_some("quote_binding_mismatch")
+        );
+    }
+    assert_eq!(db.counts().await, (1, 1));
+    db.finish().await;
 }
 type ObservedRequest = (HashMap<String, String>, bool);
 struct MockProvider {
@@ -327,7 +458,7 @@ async fn quote_response_cannot_change_payment_or_refund_terms() {
         ("/quote/amountIn", json!("0")),
         ("/quote/depositAddress", json!("")),
         ("/quote/deadline", json!(Utc::now() - Duration::seconds(1))),
-        ("/quote/deadline", json!(Utc::now() + Duration::minutes(10))),
+        ("/quote/deadline", json!(Utc::now() + Duration::days(4))),
         ("/correlationId", json!("")),
     ] {
         let mut response = json!(expected);

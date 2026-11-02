@@ -1,10 +1,15 @@
+import { emptyDashboard } from './helpers';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
 
 function payment() {
   return {
     invoice_id: '00000000-0000-4000-8000-000000000001', account_id: '00000000-0000-4000-8000-000000000002', account_name: 'Fixture customer', account_disabled: true,
     asset: `nep141:${'a'.repeat(180)}.fixture.near`, required_amount: '9007199254740993', received_amount: '9007199254740993',
+    origin_asset: 'nep141:fixture.input.near', deposit_address: 'fixture-deposit.near', deposit_memo: null,
+    recipient: '0x1111111111111111111111111111111111111111', recipient_type: 'INTENTS', payment_confirmed: true,
     payment_state: 'settled', payment_reason: null, poll_error: null, provider_updated_at: new Date().toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     ledger_amount: '9007199254740993', ledger_credit: 'customer_funds', order_id: '00000000-0000-4000-8000-000000000003', order_state: 'cancelled', order_error: null,
     review_id: '00000000-0000-4000-8000-000000000004', funding_state: 'delivered', funding_error: null,
@@ -18,6 +23,7 @@ async function setup(page: Page, role: 'admin' | 'member' | null = 'admin') {
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+  await page.route('**/api/admin/treasury', route => route.fulfill({ json: { liabilities: '20000000', platform_revenue: '0', observation: null, claims: [], work: [] } }));
   await page.route('**/api/admin/payments', route => {
     expect(route.request().method()).toBe('GET'); state.calls++;
     return route.fulfill(state.status === 200 ? { json: state.rows } : { status: state.status, json: { error: state.status === 403 ? 'admin_required' : state.status === 401 ? 'sign_in_required' : 'database_unavailable' } });
@@ -28,6 +34,7 @@ async function setup(page: Page, role: 'admin' | 'member' | null = 'admin') {
 test('admin sees exact funds and stopped work without a refund action', async ({ page }, info) => {
   await setup(page);
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Payment desk', exact: true }).click();
   const records = page.getByRole('region', { name: 'Admin payment records' });
   await expect(records).toContainText('Newest 50');
@@ -36,6 +43,11 @@ test('admin sees exact funds and stopped work without a refund action', async ({
   await expect(records).toContainText('9007199254740993');
   expect(await records.textContent()).not.toContain('9007199254740992');
   await expect(records).toContainText('settled');
+  await expect(records.locator('.payment-record > summary')).toContainText('Paid · needs attention');
+  await records.getByText('Deposit and treasury destination', { exact: true }).click();
+  await expect(records).toContainText('Inside NEAR Intents');
+  await expect(records).toContainText('fixture-deposit.near');
+  await expect(records).toContainText('00000000-0000-4000-8000-000000000003');
   await expect(records).toContainText('cancelled');
   await expect(records).toContainText('does not authorize a refund');
   await expect(records.getByRole('button', { name: /refund|activate|transfer/i })).toHaveCount(0);
@@ -55,6 +67,7 @@ test('members and visitors have no payment desk navigation or admin reads', asyn
 test('a forbidden or unavailable refresh hides cached admin records', async ({ page }) => {
   const state = await setup(page);
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Payment desk', exact: true }).click();
   await expect(page.getByText('Fixture customer', { exact: false })).toBeVisible();
   for (const status of [503, 403]) {
@@ -69,13 +82,14 @@ test('a forbidden or unavailable refresh hides cached admin records', async ({ p
   }
   state.status = 401;
   await page.getByRole('button', { name: 'Refresh payments ↻', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in ↗', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign in or request access', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Admin payment records' })).toHaveCount(0);
 });
 
 test('an empty history explains that a quote is not a credit', async ({ page }) => {
   const state = await setup(page); state.rows = [];
   await page.goto('/');
+  await page.getByText('Administration', { exact: true }).click();
   await page.getByRole('button', { name: 'Payment desk', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No payment records yet.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Admin payment records' })).toContainText('quote alone does not create a ledger credit');

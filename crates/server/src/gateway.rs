@@ -1,20 +1,46 @@
 use crate::{ApiError, AppState, auth};
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use patchriot_protocol::{
-    CancelReview, ClaimPairing, CreateReview, DeviceDecision, DeviceView, FleetSummary,
-    PairingStatus, ReviewView,
+    AgentSummary, CancelReview, ClaimPairing, CreateReview, DeviceDecision, DeviceView,
+    FleetSummary, PairingDeployment, PairingStatus, ReviewView,
 };
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use uuid::Uuid;
 
 // Up to 200 devices or 50 review summaries, including escaped operator labels
 // and saved payment terms. Individual responses retain the smaller default.
 const LIST_RESPONSE_MAX_BYTES: usize = 512 * 1024;
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ListScope {
+    Mine,
+    #[default]
+    All,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ListFilter {
+    #[serde(default)]
+    scope: ListScope,
+}
+
+impl ListFilter {
+    /// A personal list must stay personal even for an administrator. Narrow
+    /// this request's downstream role; never grant privileges from a query.
+    pub(crate) fn restrict(&self, mut session: auth::Session) -> auth::Session {
+        if matches!(self.scope, ListScope::Mine) {
+            session.role = "member".into();
+        }
+        session
+    }
+}
 
 pub(crate) async fn request<T: Serialize, R: DeserializeOwned>(
     state: &AppState,
@@ -169,6 +195,50 @@ pub async fn devices(
     .await
 }
 
+pub async fn agents(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<AgentSummary>>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    request_with_limit::<(), _>(
+        &state,
+        reqwest::Method::GET,
+        "/internal/agents",
+        Some(&session),
+        None,
+        LIST_RESPONSE_MAX_BYTES,
+    )
+    .await
+}
+
+#[derive(Serialize)]
+pub(crate) struct PairingInfo {
+    relay_origin: String,
+    audience: String,
+}
+
+pub async fn pairing_info(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<PairingInfo>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    let relay_origin = state.config.relay_origin.clone().ok_or_else(|| {
+        ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "pairing_setup_unavailable")
+    })?;
+    let Json(deployment) = request::<(), PairingDeployment>(
+        &state,
+        reqwest::Method::GET,
+        "/internal/pairing-info",
+        Some(&session),
+        None,
+    )
+    .await?;
+    Ok(Json(PairingInfo {
+        relay_origin,
+        audience: deployment.audience,
+    }))
+}
+
 pub async fn claim(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -207,9 +277,10 @@ pub async fn decision(
 
 pub async fn reviews(
     State(state): State<AppState>,
+    Query(filter): Query<ListFilter>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<ReviewView>>, ApiError> {
-    let session = auth::require_session(&headers, &state).await?;
+    let session = filter.restrict(auth::require_session(&headers, &state).await?);
     request_with_limit::<(), _>(
         &state,
         reqwest::Method::GET,
@@ -227,12 +298,13 @@ pub async fn review(
     Path(id): Path<Uuid>,
 ) -> Result<Json<ReviewView>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    request::<(), _>(
+    request_with_limit::<(), _>(
         &state,
         reqwest::Method::GET,
         &format!("/internal/reviews/{id}"),
         Some(&session),
         None,
+        4 * 1024 * 1024,
     )
     .await
 }

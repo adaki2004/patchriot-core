@@ -20,8 +20,11 @@ pub(crate) mod browser_checkout;
 pub mod cancellation;
 pub mod checkout;
 pub(crate) mod desk;
+pub mod earnings;
 pub mod funding;
 pub(crate) mod orders;
+pub mod payouts;
+pub mod worker;
 
 const API_ORIGIN: &str = "https://1click.chaindefuser.com";
 const RESPONSE_LIMIT: usize = 128 * 1024;
@@ -51,10 +54,21 @@ pub struct QuoteResponse {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProviderStatus {
-    quote_response: QuoteResponse,
+    quote_response: StatusQuote,
     status: String,
     updated_at: DateTime<Utc>,
     swap_details: Value,
+}
+
+// Live status echoes omit the original correlation ID; the envelope's ID is
+// for that HTTP request, not the payment. Always bind the full saved quote and
+// request, including deposit address, recipient, refund address and amounts.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StatusQuote {
+    correlation_id: Option<String>,
+    quote_request: Value,
+    quote: Value,
 }
 
 #[derive(Clone, FromRow)]
@@ -141,6 +155,72 @@ fn date(value: &Value) -> Option<DateTime<Utc>> {
         .map(|v| v.with_timezone(&Utc))
 }
 
+/// 1Click echoes server defaults and the partner fee schedule. Those do not
+/// change our fixed recipient/output amount. Bound their cost and reject any
+/// other addition; save the complete accepted echo for exact status matching.
+fn matches_request(requested: &Value, echoed: &Value) -> bool {
+    if app_fee_bps(&echoed["appFees"]).is_none() {
+        return false;
+    }
+    let (Some(requested), Some(echoed)) = (requested.as_object(), echoed.as_object()) else {
+        return false;
+    };
+    if !requested.iter().all(|(key, value)| {
+        if key == "deadline" {
+            match (date(value), echoed.get(key).and_then(date)) {
+                (Some(wanted), Some(actual)) => {
+                    wanted.timestamp_millis() == actual.timestamp_millis() && actual <= wanted
+                }
+                _ => false,
+            }
+        } else {
+            echoed.get(key) == Some(value)
+        }
+    }) {
+        return false;
+    }
+    echoed.iter().all(|(key, value)| {
+        if requested.contains_key(key) {
+            return true;
+        }
+        match key.as_str() {
+            "confidentiality" => value == "public",
+            "quoteWaitingTimeMs" => value == 0,
+            "insured" => value == false,
+            "appFees" => app_fee_bps(value).is_some(),
+            _ => false,
+        }
+    })
+}
+
+/// Provider-added app fees may total at most 1%. The payer sees the exact input
+/// amount before transferring; this ceiling never reduces the service output.
+fn app_fee_bps(value: &Value) -> Option<u64> {
+    if value.is_null() {
+        return Some(0);
+    }
+    let fees = value.as_array()?;
+    if fees.len() > 8 {
+        return None;
+    }
+    let mut total = 0_u64;
+    for fee in fees {
+        let fee = fee.as_object()?;
+        if fee
+            .keys()
+            .any(|key| !["recipient", "fee", "limitOrderId"].contains(&key.as_str()))
+            || fee
+                .get("limitOrderId")
+                .is_some_and(|value| !value.is_null())
+            || !access::Blockchain::Near.accepts_address(fee.get("recipient")?.as_str()?)
+        {
+            return None;
+        }
+        total = total.checked_add(fee.get("fee")?.as_u64()?)?;
+    }
+    (total <= 100).then_some(total)
+}
+
 fn validate_quote_request(
     terms: &InvoiceTerms,
     now: DateTime<Utc>,
@@ -185,13 +265,16 @@ fn validate_quote<'a>(
     let now = Utc::now();
     let requested_deadline = validate_quote_request(terms, now)?;
     let quote = &response.quote;
-    let deadline = date(&quote["deadline"]).ok_or(PaymentError::InvalidQuote)?;
-    if response.quote_request != terms.quote_request
+    let provider_deadline = date(&quote["deadline"]).ok_or(PaymentError::InvalidQuote)?;
+    // Live 1Click deposits can remain active for three days after the requested
+    // deadline. Our payment window stays shorter; late receipts are held for
+    // review. The existing seven-day poll window covers that provider grace.
+    let deadline = provider_deadline.min(requested_deadline);
+    if !matches_request(&terms.quote_request, &response.quote_request)
         || atom_amount(&quote["amountOut"]) != Some(terms.required_amount)
         || !positive_input_amount(&quote["amountIn"])
         || deadline <= now
-        || deadline > now + Duration::hours(1)
-        || deadline > requested_deadline
+        || provider_deadline > requested_deadline + Duration::days(3)
         || text(&Value::String(response.correlation_id.clone())).is_none()
         || [
             "virtualChainRecipient",
@@ -301,6 +384,7 @@ impl OneClick {
             origin: origin.into(),
             api_key,
             client: reqwest::Client::builder()
+                .user_agent(concat!("Patchriot/", env!("CARGO_PKG_VERSION")))
                 .no_proxy()
                 .redirect(reqwest::redirect::Policy::none())
                 .connect_timeout(std::time::Duration::from_secs(2))
@@ -438,6 +522,39 @@ fn transaction_evidence(details: &Value, recipient_type: &Value) -> bool {
     }
 }
 
+fn matches_status_request(saved: &Value, echo: &Value) -> bool {
+    // Live status omits these request-processing defaults. Neither chooses the
+    // asset, amount, recipient or refund route; all payment terms stay exact.
+    let mut echo = echo.clone();
+    let Some(echo_fields) = echo.as_object_mut() else {
+        return false;
+    };
+    for field in [
+        "referral",
+        "virtualChainRecipient",
+        "virtualChainRefundRecipient",
+    ] {
+        if saved.get(field).is_none() && echo_fields.get(field) == Some(&Value::Null) {
+            echo_fields.remove(field);
+        }
+    }
+    let mut saved = saved.clone();
+    let Some(object) = saved.as_object_mut() else {
+        return false;
+    };
+    if echo.get("quoteWaitingTimeMs").is_none()
+        && object
+            .get("quoteWaitingTimeMs")
+            .is_some_and(|v| v.as_u64().is_some_and(|n| n <= 30_000))
+    {
+        object.remove("quoteWaitingTimeMs");
+    }
+    if echo.get("insured").is_none() && object.get("insured") == Some(&Value::Bool(false)) {
+        object.remove("insured");
+    }
+    saved == echo
+}
+
 async fn apply_status(
     pool: &PgPool,
     id: Uuid,
@@ -459,8 +576,11 @@ async fn apply_status(
     let response = &status.quote_response;
     let (mut state, mut reason, mut received) =
         ("needs_review", Some("unsupported_provider_status"), None);
-    if response.correlation_id != invoice.correlation_id
-        || response.quote_request != invoice.quote_request
+    if response
+        .correlation_id
+        .as_ref()
+        .is_some_and(|id| id != &invoice.correlation_id)
+        || !matches_status_request(&invoice.quote_request, &response.quote_request)
         || response.quote != invoice.quote
     {
         reason = Some("quote_binding_mismatch");

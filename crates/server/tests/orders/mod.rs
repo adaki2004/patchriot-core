@@ -29,6 +29,7 @@ async fn seed(test: &TestApp, account: Uuid) -> (Uuid, Uuid, Uuid) {
     let terms = CheckoutTerms {
         presentation: None,
         site_check_id: Uuid::new_v4(),
+        source_id: None,
         consent: CreateWebsiteReview {
             request_id: request,
             snapshot_sha256: "a".repeat(64),

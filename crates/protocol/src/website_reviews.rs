@@ -23,6 +23,10 @@ pub struct WebsiteReviewPlan {
     pub site_check_id: Uuid,
     pub snapshot_sha256: String,
     pub candidates: Vec<WebsiteReviewer>,
+    /// Server-selected investigator, reproducer and challenger. An empty list
+    /// means no complete proposal; clients must not choose replacements silently.
+    #[serde(default)]
+    pub recommended_device_ids: Vec<Uuid>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -329,6 +333,7 @@ mod tests {
     fn older_plans_and_fleet_summaries_keep_the_default_time_budget() {
         let plan: WebsiteReviewPlan = serde_json::from_value(json!({"site_check_id":Uuid::new_v4(),"snapshot_sha256":"a".repeat(64),"candidates":[]})).unwrap();
         assert_eq!(plan.review_timeout_seconds, 2100);
+        assert!(plan.recommended_device_ids.is_empty());
         let fleet: crate::FleetSummary = serde_json::from_value(
             json!({"online_devices":0,"online_operators":0,"online_compute_groups":0}),
         )

@@ -2,7 +2,7 @@ export type Account = {
   id: string;
   display_name: string;
   role: 'member' | 'admin';
-  auth_method: 'invite' | 'google';
+  auth_method: 'invite' | 'google' | 'password';
 };
 
 export type Session = { account: Account | null; csrf_token: string | null };
@@ -15,16 +15,43 @@ export type Device = {
   runtime: 'owned_fixture' | 'hermes';
   runtime_version: string;
   declared_model: string | null;
+  reported_os?: string | null;
   compute_group: string;
   approval: 'pending' | 'approved' | 'revoked';
   private_work_approved?: boolean;
   website_reviews?: boolean;
+  live_tests?: boolean;
   state: string;
   last_seen_at: number | null;
   reports_received?: number | null;
 };
 
 const messages: Record<string, string> = {
+  withdrawals_unavailable: 'Withdrawals are not enabled on this installation.',
+  invalid_withdrawal: 'Check the amount, receiving network and wallet address. The minimum is 10 USDC.',
+  insufficient_earnings: 'There are not enough available earnings for this withdrawal.',
+  withdrawal_in_progress: 'A withdrawal is already reserved. Check its saved status.',
+  withdrawal_changed: 'This withdrawal changed or has expired. Refresh its status before continuing.',
+  source_file_count: 'Choose 1–12 source files.',
+  invalid_source_path: 'Use supported text files with simple, unique paths. No hidden files, archives or credential files.',
+  invalid_source_text: 'Each file must be nonempty UTF-8 text, at most 16 KiB, without binary or hidden direction-control characters.',
+  source_too_large: 'Choose at most 48 KiB of source in total.',
+  source_may_contain_secret: 'A file or note appears to contain a credential. Remove it before uploading. This check cannot detect every secret.',
+  source_upload_limit: 'The upload limit has been reached. Remove an old retained upload or try again later.',
+  invalid_source_request: 'Add a title, requested check and permission note, and confirm private storage.',
+  conflicting_source_request: 'This upload changed. Start a fresh request or open the saved upload.',
+  source_already_decided: 'This upload was already decided or has expired. Refresh its status.',
+
+  live_test_pilot_only: 'Live tests are available only in the approved pilot; paid and coupon checkout for live tests is not enabled.',
+  pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
+  invalid_credentials: 'The username or password is incorrect, or this account is unavailable.',
+  invalid_username: 'Use 3–40 letters, numbers, dots, hyphens or underscores. Start with a letter or number.',
+  username_unavailable: 'That username is already taken. Choose another.',
+  invalid_password: 'Use at least 15 characters, at most 256 bytes.',
+  invalid_contact: 'Enter a valid email address.',
+  login_unavailable: 'Sign-in is temporarily unavailable. Please try again shortly.',
+  account_access_changed: 'This request was already handled or that email has an account. Refresh Users to find it.',
+  account_unavailable: 'That account cannot be changed here. Administrator access uses the local operator tools.',
   invalid_or_expired_invite: 'This invitation is invalid, expired or already used. Request a fresh code.',
   sign_in_required: 'Your session has ended. Sign in again to continue.',
   csrf_required: 'Your session changed. Refresh the page before trying again.',
