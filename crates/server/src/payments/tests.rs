@@ -217,6 +217,39 @@ fn status(quote: &QuoteResponse, state: &str) -> Value {
         "swapDetails":{"amountOut":"1000000", "intentHashes":["fixture-intent"], "nearTxHashes":["fixture-transaction"]}
     })
 }
+
+#[tokio::test]
+async fn live_status_without_nested_trace_id_still_binds_the_complete_quote() {
+    let db = TestDb::new().await;
+    let provider = MockProvider::new(Value::Null).await;
+    for altered in [false, true] {
+        let (id, quote) = db.invoice().await;
+        let mut body = status(&quote, "SUCCESS");
+        body["quoteResponse"]
+            .as_object_mut()
+            .unwrap()
+            .remove("correlationId");
+        if altered {
+            body["quoteResponse"]["quote"]["depositAddress"] = json!("other.fixture.near");
+        }
+        provider.set(body);
+        assert_eq!(
+            reconcile_once(&db.pool, &provider.client)
+                .await
+                .unwrap()
+                .unavailable,
+            0
+        );
+        let (state, reason) = db.state(id).await;
+        assert_eq!(state, if altered { "needs_review" } else { "settled" });
+        assert_eq!(
+            reason.as_deref(),
+            altered.then_some("quote_binding_mismatch")
+        );
+    }
+    assert_eq!(db.counts().await, (1, 1));
+    db.finish().await;
+}
 type ObservedRequest = (HashMap<String, String>, bool);
 struct MockProvider {
     client: OneClick,

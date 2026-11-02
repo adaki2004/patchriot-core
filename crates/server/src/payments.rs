@@ -52,10 +52,21 @@ pub struct QuoteResponse {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ProviderStatus {
-    quote_response: QuoteResponse,
+    quote_response: StatusQuote,
     status: String,
     updated_at: DateTime<Utc>,
     swap_details: Value,
+}
+
+// Live status echoes omit the original correlation ID; the envelope's ID is
+// for that HTTP request, not the payment. Always bind the full saved quote and
+// request, including deposit address, recipient, refund address and amounts.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StatusQuote {
+    correlation_id: Option<String>,
+    quote_request: Value,
+    quote: Value,
 }
 
 #[derive(Clone, FromRow)]
@@ -530,7 +541,10 @@ async fn apply_status(
     let response = &status.quote_response;
     let (mut state, mut reason, mut received) =
         ("needs_review", Some("unsupported_provider_status"), None);
-    if response.correlation_id != invoice.correlation_id
+    if response
+        .correlation_id
+        .as_ref()
+        .is_some_and(|id| id != &invoice.correlation_id)
         || response.quote_request != invoice.quote_request
         || response.quote != invoice.quote
     {
