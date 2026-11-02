@@ -144,7 +144,7 @@ Before an upgrade, back up PostgreSQL and retain the installed binary and web fi
 
 **Private agent connections:** the dispatcher has an optional, separate agent-facing listener. For a Tailscale installation, bind both listeners to loopback and expose only the agent listener with Tailscale Serve. Set core’s `PATCHRIOT_RELAY_ORIGIN` to that private HTTPS `.ts.net` URL; keep `PATCHRIOT_DISPATCHER_URL` on the internal listener. The relay’s `mesh-check --dispatcher URL` diagnoses the connection without pairing or reading its key. Tailnet admission, device approval and permission to read private material remain separate. The dispatcher README contains the network policy and setup commands; the [relay guide](https://github.com/adaki2004/patchriot-relay#private-tailscale-connection) covers the contributor side. A team’s private installation uses separate services and storage; this does not add hosted multi-tenant provisioning.
 
-**Pairing and agent information:** admitted users get deployment-specific instructions under **Pair an agent**. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private gateway address as a fallback. A signed pairing challenge alone cannot enroll a device: an enabled account must claim it, then an admin approves it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
+**Pairing and agent information:** only administrators can open **Pair an agent** and claim managed devices during the beta. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private dispatcher address as a fallback. A signed pairing challenge alone cannot enroll a device; staff must claim and approve it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
 
 ## Website evidence
 
@@ -425,3 +425,11 @@ Agents have no direct external network. The relay handles model calls, and repor
 </details>
 
 Original code is [AGPL-3.0-only](LICENSE). The shared [protocol crate](crates/protocol) is [Apache-2.0](crates/protocol/LICENSE). Attribution is in [NOTICE](NOTICE). Credentials, customer source and reports stay out of Git.
+
+## Container deployment
+
+`docker build -t patchriot-core:local .` builds the website and Rust server together. The image runs as an unprivileged user; supply runtime configuration through your deployment service, never build arguments. It listens on `PORT` (default `8080`) unless `PATCHRIOT_CORE_BIND` is set. Use `/api/health` for the service health check.
+
+On Railway, keep PostgreSQL and dispatcher in the same private project environment. `PATCHRIOT_DISPATCHER_URL` may use `http://SERVICE.railway.internal:PORT`; [Railway encrypts that private hop](https://docs.railway.com/networking/private-networking). This exception does not apply to the website or relay URL. Keep their HTTPS origins explicit, and expose only core publicly. The dispatcher URL is server configuration, never browser configuration. Set `PATCHRIOT_PUBLIC_ORIGIN` to the exact website origin before enabling sign-in.
+
+Do not put the treasury signing key in the web service. Payment reconciliation and payouts remain separate processes with their existing settings. DNS, a reachable private dispatcher and configured accounts are still required; an image build is not a running deployment.

@@ -1146,6 +1146,31 @@ fn service_configuration_rejects_insecure_or_credentialed_destinations() {
     );
 }
 
+#[test]
+fn railway_private_http_is_only_allowed_for_the_configured_dispatcher() {
+    let key = format!("test-service-{}", Uuid::new_v4());
+    let private = "http://dispatcher.railway.internal:7411";
+    let config = Config::new(ORIGIN.into(), private.into(), key.clone(), None).unwrap();
+    assert_eq!(config.dispatcher_url, private);
+    assert!(config.with_relay_origin(Some(private.into())).is_err());
+    assert!(Config::new(private.into(), private.into(), key.clone(), None).is_err());
+    for bad in [
+        "http://railway.internal",
+        "http://dispatcher.railway.internal.evil.example",
+        "http://dispatcher.railway.internal/path",
+        "http://key@dispatcher.railway.internal",
+        "http://dispatcher.railway.internal?token=secret",
+        "http://other.internal",
+        "http://-bad.railway.internal",
+        "http://a.b.railway.internal",
+    ] {
+        assert!(
+            Config::new(ORIGIN.into(), bad.into(), key.clone(), None).is_err(),
+            "{bad}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn pairing_recovery_errors_are_specific_without_forwarding_private_dispatcher_text() {
     let payload = Arc::new(Mutex::new((
