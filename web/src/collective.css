@@ -167,6 +167,8 @@
 .live-stage-list [data-state=completed] .stage-dot { background: #7599e7; border-color: #7599e7; }
 .live-stage-list :is([data-state=leased], [data-state=running]) .stage-dot { background: var(--accent); border-color: var(--accent); }
 .live-stage-list small, .live-stage-list p { grid-column: 2; color: var(--muted); margin: 0; font: 11px/1.6 var(--body-font); }
+.live-activity { grid-column: 2; border-top: 1px solid var(--line); padding-top: 10px; font: 11px/1.6 var(--body-font); }
+.live-activity strong { display: block; margin-bottom: 4px; }
 .report-exports { margin: 20px 0 30px; }
 .report-exports details { font-size: 12px; }
 .live-assessment { min-width: 0; }

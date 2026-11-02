@@ -18,7 +18,7 @@ async function setup(page: import('@playwright/test').Page, failed = false) {
   await page.route('**/api/fleet', r => r.fulfill({ json: {} }));
   await page.route('**/api/review-codes', r => r.fulfill({ json: [] }));
   await page.route('**/api/devices', r => r.fulfill({ json: [] }));
-  const review = { id, mode: 'pentest_agent', state: failed ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  const review = { id, mode: 'pentest_agent', state: failed ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.goto(`/#/reviews/${id}`);
 }
@@ -27,6 +27,8 @@ test('live reports show saved progress, inert findings, and referenced requests'
   await setup(page);
   await expect(page.getByRole('progressbar', { name: 'Role reports received' })).toHaveAttribute('value', '1');
   await expect(page.getByText('1 of 3 role reports received', { exact: true })).toBeVisible();
+  await expect(page.getByText('Running scoped tools', { exact: true })).toBeVisible();
+  await expect(page.getByText('8 requests · 0 model calls · 2 tool runs recorded', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Scout', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Recon', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Verifier', exact: true })).toBeVisible();

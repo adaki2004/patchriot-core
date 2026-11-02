@@ -6,7 +6,7 @@ import { useDialog } from './useDialog';
 import { WebsiteEvidence } from './WebsiteReview';
 import type { WebsiteContext, WebsiteResult } from './WebsiteReview';
 import { LiveEvidence, LiveProgress, LiveReportDownloads, liveRoles } from './LiveReport';
-import type { LiveResult, LiveStep } from './LiveReport';
+import type { LiveActivity, LiveResult, LiveStep } from './LiveReport';
 import type { PentestContext } from './Pentests';
 import { SponsoredReviews } from './ReviewCodes';
 
@@ -21,7 +21,7 @@ type AgentResult = {
 type Step = {
   role: 'investigator' | 'reproducer' | 'challenger'; state: string; attempts: number;
   device_id: string | null; operator_id: string | null; compute_group: string | null;
-  result: { runs: Run[] } | AgentResult | WebsiteResult | LiveResult | null; fixture_matches: boolean | null; evidence_complete?: boolean | null;
+  result: { runs: Run[] } | AgentResult | WebsiteResult | LiveResult | null; fixture_matches: boolean | null; evidence_complete?: boolean | null; progress?: LiveActivity | null;
 };
 type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; steps: Step[]; evidence_source: string; pentest?: PentestContext; website?: WebsiteContext; source?: { source_id: string; snapshot_sha256: string; reviewers: WebsiteContext['reviewers'] }; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
 
@@ -95,7 +95,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   const [busy, setBusy] = useState(false);
   const review = detail.data;
   const material = review?.website ?? review?.source;
-  const liveSteps: LiveStep[] = review?.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null })) ?? [];
+  const liveSteps: LiveStep[] = review?.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, progress: s.progress, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null })) ?? [];
   useEffect(() => { if (review) onChange(); }, [review?.state, onChange]);
   useEffect(() => {
     panel.current?.focus({ preventScroll: true });
