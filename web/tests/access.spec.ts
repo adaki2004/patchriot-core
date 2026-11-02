@@ -25,7 +25,7 @@ test('password login is persistent and clears sensitive fields after success', a
     await page.route('**/api/session', request => request.fulfill({ json: { account: admin, csrf_token: 'test-csrf' } }));
     return route.fulfill({ json: { ok: true } });
   });
-  await page.goto('/?design=collective#/home');
+  await page.goto('/#/home');
   await page.locator('header').getByRole('button', { name: 'App' }).click();
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Sign in or request access' })).toBeVisible();

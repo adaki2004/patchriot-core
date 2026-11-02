@@ -11,7 +11,7 @@ import { UIIcon } from './UIIcon';
 type Earnings = { balance: { available: string } };
 
 // Unfinished decisions come before reports and running work, even when they are older.
-const needsAction = (state: string) => ['needs_review', 'failed', 'awaiting_payment', 'collected', 'approved'].includes(state);
+const needsAction = (state: string) => ['needs_review', 'failed', 'awaiting_payment', 'awaiting_verification', 'collected', 'approved'].includes(state);
 const workPriority = (state: string) => needsAction(state) ? 0 : state === 'completed' ? 1 : auditActive(state) ? 2 : 3;
 
 export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet | null; onOpen: (view: View, id?: string | null) => void }) {
@@ -32,7 +32,7 @@ export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet
     <section className="work-card recent-work"><div className="card-title"><div><p className="section-kicker">YOUR NEXT STEPS</p><h2>What needs your attention?</h2></div><button onClick={() => onOpen('audits')}>View all audits <span aria-hidden="true">↗</span></button></div>
       {audits.error && <p className="notice error" role="alert">Audits could not fully refresh. Saved entries may be out of date. <button className="inline" onClick={audits.refresh}>Retry audits</button></p>}
       {!audits.ready && !audits.error && <p role="status">Loading audits…</p>}
-      {ready && total === 0 && <div className="workspace-empty"><UIIcon name="folder" /><h3>A fresh pair of eyes.</h3><p>Start with a website or a few source files.<br />Your requests and reports will appear here.</p><button onClick={() => onOpen('request')}>Create your first request <UIIcon name="arrow" /></button></div>}
+      {ready && total === 0 && <div className="workspace-empty"><UIIcon name="folder" /><h3>A fresh pair of eyes.</h3><p>Start with a website you control.<br />Your requests and reports will appear here.</p><button onClick={() => onOpen('request')}>Create your first request <UIIcon name="arrow" /></button></div>}
       <AuditRows items={work.slice(0, 5)} onOpen={onOpen} />
       <p className="card-note"><UIIcon name="lock" />{ready ? `${total} recent ${total === 1 ? 'audit' : 'audits'} in your account. ` : ''}Decisions first, then reports and work in progress.</p>
     </section>

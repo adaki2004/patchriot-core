@@ -6,7 +6,7 @@ type Run = { id: string; mode: string; state: string; created_at: number; steps:
 type Website = { id: string; scope: { homepage: string }; state: string; created_at: number };
 type Source = { id: string; title: string; state: string; created_at: number };
 export type Audit = { key: string; id: string; view: 'sites' | 'sources' | 'reviews' | 'pentests'; title: string; kind: 'Website' | 'Source code' | 'Example'; state: string; created: number; run?: Run };
-const labels: Record<string, string> = { pending_approval: 'Awaiting approval', queued: 'Queued', collecting: 'Saving snapshot', collected: 'Choose review team', approved: 'Choose review team', awaiting_payment: 'Awaiting payment', running: 'Agents working', completed: 'Report ready', needs_review: 'Needs attention', failed: 'Incomplete', cancelled: 'Cancelled', rejected: 'Not approved', deleted: 'Files deleted', expired: 'Expired' };
+const labels: Record<string, string> = { awaiting_verification: 'Verify domain', pending_approval: 'Awaiting approval', queued: 'Queued', collecting: 'Saving snapshot', collected: 'Choose review team', approved: 'Choose review team', awaiting_payment: 'Awaiting payment', running: 'Agents working', completed: 'Report ready', needs_review: 'Needs attention', failed: 'Incomplete', cancelled: 'Cancelled', rejected: 'Not approved', deleted: 'Files deleted', expired: 'Expired' };
 export const auditLabel = (state: string) => labels[state] ?? state.replaceAll('_', ' ');
 export const auditActive = (state: string) => ['queued', 'collecting', 'running', 'awaiting_payment', 'pending_approval'].includes(state);
 
@@ -15,7 +15,7 @@ export function useAudits(all = false) {
   const suffix = all ? '?scope=all' : '?scope=mine';
   const runs = useLive<Run[]>(`/reviews${suffix}`, true, 30_000);
   const websites = useLive<Website[]>(`/site-checks${suffix}`, true, 30_000);
-  const live = useLive<{id:string; scope:{origins:string[]};state:string;created_at:number}[]>(`/pentests${suffix}`, true, 30_000);
+  const live = useLive<{id:string; scope:{origins:string[]};state:string;created_at:number;ownership_verified?:boolean}[]>(`/pentests${suffix}`, true, 30_000);
   const sources = useLive<Source[]>(`/sources${suffix}`, true, 30_000);
   const used = new Set<string>();
   const attach = (item: Audit, match: (run: Run) => boolean): Audit => {
@@ -25,7 +25,7 @@ export function useAudits(all = false) {
     return run ? { ...item, run, state: run.state, created: Math.max(item.created, run.created_at) } : item;
   };
   const items: Audit[] = [
-    ...(live.data ?? []).map(item => attach({key:`live:${item.id}`,id:item.id,view:'pentests',title:item.scope.origins.join(', '),kind:'Website',state:item.state,created:item.created_at}, run => run.pentest?.pentest_id===item.id)),
+    ...(live.data ?? []).map(item => attach({key:`live:${item.id}`,id:item.id,view:'pentests',title:item.scope.origins.join(', '),kind:'Website',state:item.state === 'pending_approval' && !item.ownership_verified ? 'awaiting_verification' : item.state,created:item.created_at}, run => run.pentest?.pentest_id===item.id)),
     ...(websites.data ?? []).map(item => attach({ key: `site:${item.id}`, id: item.id, view: 'sites', title: item.scope.homepage, kind: 'Website', state: item.state, created: item.created_at }, run => run.website?.site_check_id === item.id)),
     ...(sources.data ?? []).map(item => attach({ key: `source:${item.id}`, id: item.id, view: 'sources', title: item.title, kind: 'Source code', state: item.state, created: item.created_at }, run => run.source?.source_id === item.id)),
   ];

@@ -28,7 +28,7 @@ test('personal audits join material to its latest report while staff records sta
     if (url.pathname === '/api/sources') return route.fulfill({ json: [source] });
     return route.fulfill({ json: url.searchParams.get('scope') === 'all' ? [site, { ...site, id: '00000000-0000-4000-8000-000000000006', scope: { homepage: 'https://staff-only.example/' } }] : [site] });
   });
-  await page.goto('/?design=signal#/overview');
+  await page.goto('/#/overview');
   await expect(page.locator('.recent-work .audit-row')).toHaveCount(2);
   await expect(page.getByLabel('1 of 3 role reports received')).toBeVisible();
   await expect(page.locator('.recent-work .card-note')).toContainText('2 recent audits in your account.');
@@ -91,7 +91,7 @@ test('unavailable personal data is not reported as zero earnings or an empty aud
 test('pairing uses the configured address, warns for loopback and shell-quotes its audience', async ({ page }) => {
   await setup(page);
   await page.route('**/api/pairing-info', route => route.fulfill({ json: { relay_origin: 'http://127.0.0.1:7511', audience: "operator's pilot" } }));
-  await page.goto('/?design=terminal&relay=https://untrusted.example#/guide');
+  await page.goto('/?relay=https://untrusted.example#/guide');
   await page.getByRole('navigation', { name: 'Pairing steps' }).getByRole('button', { name: '3 Connect', exact: true }).click();
   await expect(page.locator('.connection-address')).toContainText('http://127.0.0.1:7511');
   await expect(page.locator('.pair-command pre')).toContainText("--audience 'operator'\\''s pilot'");

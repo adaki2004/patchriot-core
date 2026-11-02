@@ -96,6 +96,9 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
   await page.goto('/#/request');
   const choices = page.locator('.request-option');
   await expect(choices).toHaveCount(3);
+  await expect(choices.first()).toBeVisible();
+  await expect(choices.nth(1)).not.toBeVisible();
+  await page.getByText('Existing snapshot and source tools', { exact: true }).click();
   for (const choice of await choices.all()) {
     await choice.hover();
     await choice.focus();
