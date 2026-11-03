@@ -19,3 +19,6 @@
 .report-download-main { display: flex; align-items: center; gap: 18px; margin: 22px 0; flex-wrap: wrap; }.textmode-ui .report-download-main .primary { font: 600 15px var(--body-font); padding: 14px 20px; min-height: 48px; }.report-download-main p { font-size: 13px; color: #aab9d6; margin: 0; }
 .tool-evidence article > details { margin: 12px 0; }.http-evidence .request-evidence { margin: 16px 0; }
 @media(max-width:640px) { .report-overview, .textmode-ui .report-overview { padding: 20px; }.report-counts { gap: 10px; }.report-counts dt { font-size: 11px; }.report-counts dd { font-size: 26px; }.report-section-heading { flex-direction: column; }.report-section-heading label { flex: auto; width: 100%; }.textmode-ui .report-tab-list button { padding: 13px 12px; font-size: 13px; }.textmode-ui .report-finding > summary { flex-wrap: wrap; padding: 16px; gap: 10px; }.finding-name { flex-basis: calc(100% - 54px); }.severity-label { margin-left: 43px; }.finding-toggle { margin-left: auto; }.report-finding-body { padding: 0 18px 22px; }.report-agent { padding: 18px; }.report-agent dl { gap: 24px; }.report-download-main > button { width: 100%; } }
+
+.report-checks article { padding: 1rem 0; border-bottom: 1px solid var(--line, #303c4c); }
+.report-checks h4 small { margin-left: .6rem; color: var(--muted, #a4b0bf); font-weight: 400; }

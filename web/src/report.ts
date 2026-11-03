@@ -60,3 +60,15 @@ export function teamDescription(input: ReportInput) {
 }
 
 export const reportLimits = 'An automated assessment within the approved scope. It does not replace a full human penetration test. Tool matches and agent agreement do not prove exploitability. Suggested fixes have not been applied or retested.';
+
+export type CoverageCheck = { id: string; origin: string; title: string; status: string; summary: string; evidence_ids: number[] };
+export function coverageChecks(result: LiveResult | null): CoverageCheck[] {
+  return (result?.tool_runs ?? []).filter(t => t.tool === 'patchriot-baseline' && !t.output_truncated).flatMap(t => {
+    try {
+      const data = JSON.parse(t.output_excerpt);
+      if (data.profile !== 'web-checks-v1' || !Array.isArray(data.checks) || data.checks.length > 40) return [];
+      return data.checks.filter((c: CoverageCheck) => c && ['id', 'origin', 'title', 'summary'].every(k => typeof c[k as keyof CoverageCheck] === 'string' && String(c[k as keyof CoverageCheck]).length <= 2000) && ['completed', 'finding', 'inconclusive', 'skipped', 'unsupported'].includes(c.status) && Array.isArray(c.evidence_ids) && c.evidence_ids.every(id => t.evidence_ids.includes(id) && result!.evidence.some(e => e.id === id)));
+    } catch { return []; }
+  });
+}
+export const checkLabels: Record<string, string> = { completed: 'Completed', finding: 'Potential issue', inconclusive: 'Inconclusive', skipped: 'Skipped', unsupported: 'Unsupported' };

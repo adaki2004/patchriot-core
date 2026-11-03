@@ -1,3 +1,4 @@
+import { coverageChecks } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
@@ -130,4 +131,15 @@ test('active decoration respects reduced motion', async ({ page }) => {
   await setup(page);
   await expect(page.getByRole('heading', { name: 'Recon is on the case.' })).toBeVisible();
   expect(await page.locator('.assessment-orbit-signal').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+});
+
+test('coverage accepts recorded checks with valid provenance and rejects invented request IDs', () => {
+  const check = { id: 'cors', origin: 'https://owned.example', title: 'CORS', status: 'finding', summary: 'Review the credentialed-origin response.', evidence_ids: [1] };
+  const tool = { tool: 'patchriot-baseline', version: 'web-checks-v1', output_truncated: false, evidence_ids: [1], output_excerpt: JSON.stringify({ profile: 'web-checks-v1', checks: [check] }) };
+  const source = { ...result, tool_runs: [tool] } as unknown as LiveResult;
+  expect(coverageChecks(source)).toEqual([check]);
+  tool.output_excerpt = JSON.stringify({ profile: 'web-checks-v1', checks: [{ ...check, evidence_ids: [999] }] });
+  expect(coverageChecks(source)).toEqual([]);
+  tool.output_excerpt = '<script>fixture only</script>';
+  expect(coverageChecks(source)).toEqual([]);
 });

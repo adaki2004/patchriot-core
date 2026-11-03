@@ -9,12 +9,12 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 **OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Enter a public HTTPS website URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Successful DNS verification opens checkout automatically; staff can still block a request. Reports retain the recorded requests, findings and incomplete checks. The report separates numbered findings, each agent’s contribution, coverage and technical evidence. Missing assessments and execution limits stay visible; agent agreement is not presented as independent confirmation. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
 
-The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does not change accounts, move funds or run load tests. Broader application testing and richer evidence packs are being developed; the product name does not imply complete OWASP coverage or certification.
+The pilot is read-only by default. Dedicated HTTP Basic accounts and bearer API tokens can extend access. An explicit disposable-environment option permits bounded POST submissions. Browser login forms, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
 
 | Assessment | What you provide | Status |
 | --- | --- | --- |
 | **Black box** | A website or API URL and proof of control | First product |
-| **Grey box** | The URL, a dedicated test account and application context | In development |
+| **Grey box** | The URL and a dedicated HTTP Basic account or bearer API token | Managed pilot; no browser login |
 | **White box** | Source code plus an approved test environment | Planned; existing source-text review is a separate, limited tool |
 | **SIaaS** | Your own agents, infrastructure and access rules | Roadmap |
 
@@ -72,7 +72,7 @@ An investigator makes a claim, a reproducer checks it and a challenger questions
 | Payments | Single-use codes and NEAR Intents checkout for live, snapshot and source reviews; 90/10 accounting and reserved operator withdrawals |
 | Existing tools | Approved saved-page and source-text reviews remain accessible |
 | In development | Broader OWASP checks, clearer evidence packs and public deployment |
-| Later | Authenticated testing, recurring checks, managed private networks and confidential execution |
+| Later | Browser login flows, recurring checks, managed private networks and confidential execution |
 
 ## Developer setup: run your own copy
 
@@ -202,7 +202,7 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. ARTEX is included by default. Verification lets the requester proceed to checkout without a staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff gave your account a coupon. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
 
-This mode makes real **GET, HEAD and OPTIONS** requests. Agents can inspect scripts, discover same-origin routes and test non-destructive hypotheses; there are no login credentials, account changes, transactions or load tests. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
+This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v1** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes stay read-only. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
 Live assessments use the same access policy as snapshot and source reviews: `pilot` is free, `coupons` requires a one-use code, `paid` accepts payment or a code, and `closed` pauses new work. The free `/api/pentests/:id/review` route remains blocked in coupon and paid modes. Use `/api/pentests/:id/review-code` or `/api/pentests/:id/checkout`, with the same live consent fields inside `consent`. Ownership, the exact scope/profile, the named team and provider consent are checked before admission. A paid reservation cannot lease agents until a matching settlement is recorded; permission and team eligibility are checked again then. Revoked or expired permission cannot be purchased back. Failed or cancelled paid work retains funds for staff review; cancellation does not automatically refund a settled payment.
 
@@ -446,3 +446,11 @@ Original code is [AGPL-3.0-only](LICENSE). The shared [protocol crate](crates/pr
 On Railway, keep PostgreSQL and dispatcher in the same private project environment. `PATCHRIOT_DISPATCHER_URL` may use `http://SERVICE.railway.internal:PORT`; [Railway encrypts that private hop](https://docs.railway.com/networking/private-networking). This exception does not apply to the website or relay URL. Keep their HTTPS origins explicit. Core and the separate agent-only gateway may receive public domains; the internal dispatcher and database must stay private. The dispatcher URL is server configuration, never browser configuration. Set `PATCHRIOT_PUBLIC_ORIGIN` to the exact website origin before enabling sign-in.
 
 Do not put the treasury signing key in the web service. Payment reconciliation and payouts remain separate processes with their existing settings. DNS, a reachable private dispatcher and configured accounts are still required; an image build is not a running deployment.
+
+### Test accounts and recorded coverage
+
+In **New website test → Test accounts & form submissions**, choose HTTP Basic or a bearer API token and a protected GET path on the same host. The path must return 2xx with the account and 401/403 without it. Use a disposable, low-privilege account. Unsupported browser login, SSO, MFA and CAPTCHA cannot be selected. Availability requires three approved agents with the matching capabilities before checkout.
+
+Credentials are encrypted in the dispatcher, delivered only to the assigned relay's active lease and removed from container/model input. The relay adds them to approved requests and redacts known credentials and session values from retained text. Assigned operators can still access plaintext. Each credential set serves one assessment and is deleted when work ends, permission is revoked or its 24-hour lifetime expires. Revoke the test account afterwards; deletion cannot recall data already received by an operator.
+
+The **Coverage & tools** tab and PDF include versioned check results: completed, potential issue, inconclusive, skipped or unsupported. Configuration-file probes use a random-path control; query reflection alone is not called XSS. Authenticated coverage requires both a successful account request and a denied anonymous control. Older reports keep their original evidence and do not gain invented checks.

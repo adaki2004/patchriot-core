@@ -1,3 +1,4 @@
+import { coverageChecks, checkLabels } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { reportSummary, reportRoles, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
@@ -151,6 +152,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.begin('05 / Coverage & limitations');
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);
+    for (const c of coverageChecks(s.result)) { p.paragraph(`${c.title} — ${checkLabels[c.status]}`, 10, blue); p.paragraph(c.summary, 9); p.paragraph(`${c.origin} · Requests: ${c.evidence_ids.join(', ') || 'none'}`, 8, muted); }
     const limits = s.result?.assessment?.limitations;
     if (limits?.length) limits.forEach((limit, i) => p.paragraph(`${i + 1}. ${limit}`));
     else p.paragraph(roleOutcome(s).detail);

@@ -95,10 +95,11 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.goto('/#/request');
   const choices = page.locator('button.request-option');
-  await expect(choices).toHaveCount(3);
-  await expect(page.locator('.roadmap-product[aria-disabled=true]')).toHaveCount(3);
+  await expect(choices).toHaveCount(4);
+  await expect(page.locator('.roadmap-product[aria-disabled=true]')).toHaveCount(2);
   await expect(choices.first()).toBeVisible();
-  await expect(choices.nth(1)).not.toBeVisible();
+  await expect(choices.nth(1)).toBeVisible();
+  await expect(choices.nth(2)).not.toBeVisible();
   await page.getByText('Existing snapshot and source tools', { exact: true }).click();
   for (const choice of await choices.all()) {
     await choice.hover();
