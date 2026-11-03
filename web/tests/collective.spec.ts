@@ -7,7 +7,7 @@ test('Collective shows the selected hero, logo and consistent navigation', async
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.goto('/#/home');
   await expect(page.locator('html')).toHaveAttribute('data-design', 'collective');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('BUILD YOURDEFENSE NETWORK.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('BUILD YOURDEFENSE MESH.');
   await expect(page.locator('header .brand-mark')).toHaveAttribute('src', '/brand/white-hat.png');
   expect((await page.locator('header .brand-mark').boundingBox())!.width).toBeGreaterThanOrEqual(64);
   const navigation = page.getByRole('navigation', { name: 'Website' });
