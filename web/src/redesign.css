@@ -1,4 +1,4 @@
-:root { --body-font: 'Source Sans 3', sans-serif; --heading-font: 'Monogram', monospace; --mono-font: 'IBM Plex Mono', monospace; --paper: #faf9f5; --surface: #fffefa; --ink: #24251f; --muted: #6b6b61; --line: #deded4; --accent: #8a3426; --tint: #f1f0e8; --radius: 3px; font-family: var(--body-font); color: var(--ink); background: var(--paper); }
+:root { --body-font: 'Source Sans 3', sans-serif; --heading-font: 'Pixelify Sans', sans-serif; --mono-font: 'IBM Plex Mono', monospace; --paper: #faf9f5; --surface: #fffefa; --ink: #24251f; --muted: #6b6b61; --line: #deded4; --accent: #8a3426; --tint: #f1f0e8; --radius: 3px; font-family: var(--body-font); color: var(--ink); background: var(--paper); }
 body { font-family: var(--body-font); }
 h1, h2, h3 { font-family: var(--heading-font); font-weight: 600; letter-spacing: -.025em; }
 h1 { line-height: 1.06; } h2 { line-height: 1.2; } h3 { line-height: 1.3; }

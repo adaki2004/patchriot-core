@@ -44,8 +44,8 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
-  await expect(page.locator('.tm-footnote')).toContainText('scoped HTTP testing');
-  await expect(page.locator('.tm-footnote')).toContainText('Agent agreement is not a security guarantee.');
+  await expect(page.locator('.tm-footnote')).toContainText('An automated first check, before a human penetration test.');
+  await expect(page.locator('.tm-footnote')).toContainText('It cannot discover every vulnerability or certify a website as safe.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
@@ -397,9 +397,8 @@ for (const [code, status, guidance] of [
     accepted = true;
     return route.fulfill({ json: { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' } });
   });
-  await page.goto('/');
-  await page.evaluate(() => { location.hash = '/guide'; });
-    await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
+  await page.goto('/#/guide');
+  await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
   await dialog.getByLabel('Operator name', { exact: true }).fill('My operator profile');
