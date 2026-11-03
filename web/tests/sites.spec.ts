@@ -179,7 +179,7 @@ test('website reports keep model claims as text and do not label completion a sa
   const review = { id, mode: 'website_agent', state: 'completed', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result, fixture_matches: null, evidence_complete: true })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
   await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({ json: review }));
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.getByRole('button', { name: 'Website snapshot review', exact: false }).click();
   const detail = page.getByRole('region', { name: 'Review report' });
   await expect(detail.getByRole('heading', { name: 'Reports received' })).toBeVisible();
@@ -203,7 +203,7 @@ test('recorded website timeouts show what stopped instead of implying a complete
   const review = { id, mode: 'website_agent', state: 'needs_review', steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: 'completed', attempts: 1, device_id: String(i), operator_id: account.id, compute_group: 'one-host', result: { ...result, inspected_snapshot_sha256: i === 0 ? result.snapshot_sha256 : i === 1 ? null : '4'.repeat(64), execution: { ...result.execution, duration_ms: i === 0 ? 51000 : 0, inference_calls: i === 0 ? 1 : 0, terminal_calls: i === 0 ? 1 : 0 } }, fixture_matches: null, evidence_complete: false })), created_at: 1793448000, deadline_at: 1793450100, evidence_source: 'operator_reported_static_website_review_not_a_safety_verdict' };
   await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({ json: review }));
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.getByRole('button', { name: 'Website snapshot review', exact: false }).click();
   const detail = page.getByRole('region', { name: 'Review report' });
   await expect(detail.getByRole('heading', { name: 'Needs review' })).toBeVisible();

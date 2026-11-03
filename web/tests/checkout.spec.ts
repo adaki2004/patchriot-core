@@ -110,8 +110,9 @@ test('a lost code reply survives refresh and resumes only the saved request', as
   await expect(page.getByRole('alert')).toContainText('you will not need the code again');
   const original = state.codeSubmissions[0];
   await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.reload();
+  await page.getByText('Coupon history & interrupted checkouts', { exact: true }).click();
   const history = page.getByRole('region', { name: 'Coupon assessments', exact: true });
   await expect(history).toContainText('Start not confirmed');
   await history.getByText('Saved sharing permission', { exact: true }).click();

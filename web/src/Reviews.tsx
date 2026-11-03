@@ -5,7 +5,7 @@ import { useLive } from './useLive';
 import { useDialog } from './useDialog';
 import { WebsiteEvidence } from './WebsiteReview';
 import type { WebsiteContext, WebsiteResult } from './WebsiteReview';
-import { LiveEvidence, LiveProgress, LiveReportDownloads, liveRoles } from './LiveReport';
+import { LiveEvidence, LiveProgress, LiveStatus, LiveReportDownloads, liveRoles } from './LiveReport';
 import type { LiveActivity, LiveResult, LiveStep } from './LiveReport';
 import type { PentestContext } from './Pentests';
 import { SponsoredReviews } from './ReviewCodes';
@@ -110,6 +110,28 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   const operators = new Set(review?.steps.flatMap(step => step.operator_id ? [step.operator_id] : []));
   const groups = new Set(review?.steps.flatMap(step => step.compute_group ? [`${step.operator_id}:${step.compute_group}`] : []));
   const devices = new Set(review?.steps.flatMap(step => step.device_id ? [step.device_id] : []));
+  if (review?.mode === 'pentest_agent') {
+    const team = review.pentest?.reviewers ?? [];
+    const teamOperators = new Set(team.map(r => r.operator_id)).size;
+    const teamGroups = new Set(team.map(r => `${r.operator_id}:${r.compute_group}`)).size;
+    const reports = review.steps.filter(s => s.result);
+    const target = review.pentest?.scope.origins.map(origin => { try { return new URL(origin).host; } catch { return origin; } }).join(', ');
+    return <section ref={panel} tabIndex={-1} className="review-detail panel live-review" aria-label="Review report">
+      <div className="section-heading"><div><p className="eyebrow">PRIVATE WEBSITE ASSESSMENT</p><h2 className="review-target">{target || 'Website test'}</h2><p className="fine">Started {new Date(review.created_at * 1000).toLocaleString()}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
+      {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} <button className="inline" onClick={detail.refresh}>Retry report</button></div>}
+      <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} />
+      <LiveProgress steps={liveSteps} state={review.state} />
+      <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a website ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
+      {!!reports.length && <section className="received-reports" aria-label="Received reports"><h2>What the agents found</h2><div className="review-steps">{reports.map(step => <article className="review-step" key={step.role}><div className="step-title"><h3>{liveRoles[step.role]}</h3><span className="pill">{step.evidence_complete ? 'Report received' : 'Incomplete report'}</span></div><Evidence step={step} /></article>)}</div></section>}
+      <details className="assessment-disclosure report-technical"><summary>Downloads & test details</summary>
+        <LiveReportDownloads id={review.id} steps={liveSteps} origins={review.pentest?.scope.origins ?? []} />
+        <a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a>
+        <dl><dt>Reference</dt><dd>{id}</dd><dt>Website</dt><dd>{review.pentest?.scope.origins.join(', ')}</dd><dt>Test plan</dt><dd>{review.pentest?.scope.objective}</dd><dt>Model provider</dt><dd>{review.pentest?.provider}</dd><dt>Selected team</dt><dd>{team.length} agents · {teamOperators} operator(s) · {teamGroups} machine group(s). Shared machines and models are not independent reviewers.</dd></dl>
+        <ol>{team.map((r, i) => <li key={r.device_id}>{Object.values(liveRoles)[i]} · {r.device_name} · {r.declared_model}</li>)}</ol>
+      </details>
+      <p className="report-footnote">An automated check of public website behavior. It does not cover logged-in accounts or replace a full penetration test.</p>
+    </section>;
+  }
   return <section ref={panel} tabIndex={-1} className="review-detail panel" aria-label="Review report">
     <div className="section-heading"><div><p className="eyebrow">{!review ? 'PRIVATE REVIEW' : review.mode === 'pentest_agent' ? 'LIVE WEBSITE / PRIVATE REPORT' : review.mode === 'source_agent' ? 'SOURCE CODE / PRIVATE AGENT REVIEW' : review.mode === 'website_agent' ? 'WEBSITE SNAPSHOT / PRIVATE AGENT REVIEW' : `ACCESS CONTROL / ${review.mode === 'owned_agent' ? 'LOCAL AGENT CHECK' : 'OWNED FIXTURE'}`}</p><h2>{review ? reviewLabel(review) : detail.error ? 'Review unavailable' : 'Loading review…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
     {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} {detail.error && <button className="inline" onClick={detail.refresh}>Retry report</button>}</div>}
@@ -131,19 +153,19 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   </section>;
 }
 
-export function Reviews({ csrf, selected, onSelect, onOpenOrders }: { csrf: string; selected: string | null; onSelect: (id: string | null) => void; onOpenOrders?: () => void }) {
+export function Reviews({ csrf, selected, onSelect, onOpenOrders, admin = false }: { csrf: string; selected: string | null; onSelect: (id: string | null) => void; onOpenOrders?: () => void; admin?: boolean }) {
   const reviews = useLive<Review[]>('/reviews?scope=mine');
   const [creating, setCreating] = useState(false);
   return <>
-    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reviews</h1><p className="subtle">Inspect agent reports and example checks. Start new work under Request an audit.</p></div><button className="primary" onClick={() => setCreating(true)}>New example review +</button></section>
+    {!selected && <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reports</h1><p className="subtle">Follow your tests and review the findings.</p></div><a className="primary" href="#/pentests">Test a website ↗</a></section>}
     {reviews.error && <div className="notice error" role="alert">{reviews.error} <button className="inline" onClick={reviews.refresh}>Retry</button></div>}
     {selected && <ReviewDetail key={selected} id={selected} csrf={csrf} onClose={() => onSelect(null)} onChange={reviews.refresh} onOpenOrders={onOpenOrders} />}
-    <SponsoredReviews csrf={csrf} onOpen={id => { reviews.refresh(); onSelect(id); }} />
-    <section className="panel"><div className="table-toolbar"><strong>{reviews.data ? `${reviews.data.length} ${reviews.data.length === 1 ? 'review' : 'reviews'}` : 'Loading reviews…'}</strong><button className="quiet" onClick={reviews.refresh}>Refresh reviews ↻</button></div>
-      {reviews.data?.length === 0 && <div className="empty"><h2>Make the evidence visible.</h2><p>Run quick fixture tests or let local agents inspect the supplied bug and fix.</p></div>}
+    <details className="assessment-disclosure"><summary>Coupon history & interrupted checkouts</summary><SponsoredReviews csrf={csrf} onOpen={id => { reviews.refresh(); onSelect(id); }} /></details>
+    {!selected && <section className="panel"><div className="table-toolbar"><strong>{reviews.data ? `${reviews.data.length} ${reviews.data.length === 1 ? 'report' : 'reports'}` : 'Loading reports…'}</strong><button className="quiet" onClick={reviews.refresh}>Refresh reports ↻</button></div>
+      {reviews.data?.length === 0 && <div className="empty"><h2>No tests yet.</h2><p>Start with a website you own. Your progress and findings will appear here.</p></div>}
       {Boolean(reviews.data?.length) && <div className="review-list">{reviews.data!.map(review => <button className={`review-item ${selected === review.id ? 'selected' : ''}`} key={review.id} onClick={() => onSelect(review.id)}><span><strong>{review.mode === 'pentest_agent' ? 'Live website test' : review.mode === 'source_agent' ? 'Source code review' : review.mode === 'website_agent' ? 'Website snapshot review' : 'Access-control example'}</strong><small>{review.mode === 'owned_fixture' ? 'Fixture tests' : review.mode === 'pentest_agent' ? 'Live agents' : 'Local agents'} · {new Date(review.created_at * 1000).toLocaleString()} · {review.id.slice(0, 8)}</small></span><span>{reviewLabel(review)} <span aria-hidden="true">↗</span></span></button>)}</div>}
-    </section>
-    <p className="fine">At most three active reviews per account. Each run needs three approved devices in its chosen mode. The relay setup guide explains how to contribute.</p>
-    {creating && <NewReview csrf={csrf} onCreated={review => { reviews.refresh(); onSelect(review.id); }} onClose={() => setCreating(false)} />}
+    </section>}
+    {admin && <details className="assessment-disclosure"><summary>Developer checks · staff only</summary><p>Run a built-in example to check the review infrastructure. This does not assess a customer website.</p><button className="quiet" onClick={() => setCreating(true)}>Run example check</button></details>}
+    {admin && creating && <NewReview csrf={csrf} onCreated={review => { reviews.refresh(); onSelect(review.id); }} onClose={() => setCreating(false)} />}
   </>;
 }

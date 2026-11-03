@@ -13,13 +13,14 @@ const result: LiveResult = {
   evidence: [{ id: 1, method: 'GET', url: 'https://owned.example/debug?token=synthetic-value', status: 200, request_headers: {}, headers: { 'content-type': 'application/json' }, body_excerpt: '{"debug":"fixture"}', body_sha256: 'b'.repeat(64), observed_at: 1793640000, truncated: false, error: null }, { id: 2, method: 'GET', url: 'https://owned.example/control', status: 404, headers: {}, body_excerpt: 'Not found', truncated: false, error: null }], raw_summary: '',
 };
 
-async function setup(page: import('@playwright/test').Page, failed = false) {
+async function setup(page: import('@playwright/test').Page, failed = false, stopped = false) {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role: 'member' }, csrf_token: 'test-csrf' } }));
   await page.route('**/api/fleet', r => r.fulfill({ json: {} }));
   await page.route('**/api/review-codes', r => r.fulfill({ json: [] }));
   await page.route('**/api/devices', r => r.fulfill({ json: [] }));
-  const review = { id, mode: 'pentest_agent', state: failed ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  const review = { id, mode: 'pentest_agent', state: stopped ? 'failed' : failed ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  if (stopped) review.steps = review.steps.map((step, i) => ({ ...step, state: i ? 'cancelled' : 'failed', result: null, progress: null }));
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.goto(`/#/reviews/${id}`);
 }
@@ -27,12 +28,15 @@ async function setup(page: import('@playwright/test').Page, failed = false) {
 test('live reports show saved progress, inert findings, and referenced requests', async ({ page }) => {
   await setup(page);
   await expect(page.getByRole('progressbar', { name: 'Role reports received' })).toHaveAttribute('value', '1');
-  await expect(page.getByText('1 of 3 role reports received', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 of 3 reports received', { exact: true })).toBeVisible();
+  await page.getByText('Latest activity', { exact: true }).click();
   await expect(page.getByText('Running scoped tools', { exact: true })).toBeVisible();
   await expect(page.getByText('8 requests · 0 model calls · 2 tool runs recorded', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Scout', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Recon', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Verifier', exact: true })).toBeVisible();
+  await expect(page.locator('.live-stage-list').getByText('Recon', { exact: true })).toBeVisible();
+  await expect(page.locator('.live-stage-list').getByText('Verifier', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run example check' })).toHaveCount(0);
+  await expect(page.getByText('No evidence received yet.', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '<script>window.fake=true</script>' })).toBeVisible();
   expect(await page.evaluate(() => 'fake' in window)).toBe(false);
   await page.getByRole('combobox', { name: 'Filter findings', exact: true }).selectOption('unconfirmed');
@@ -48,6 +52,7 @@ test('live reports show saved progress, inert findings, and referenced requests'
 
 test('report and endpoint exports preserve scope without putting query values in Postman', async ({ page }) => {
   await setup(page);
+  await page.getByText('Downloads & test details', { exact: true }).click();
   const postman = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export observed endpoints' }).click();
   const download = await postman;
@@ -107,4 +112,24 @@ test('a failed role retains requests and does not present missing assessment as 
   await expect(page.getByText('No findings match this filter.')).toHaveCount(0);
   await page.getByText('Request evidence (2)', { exact: true }).click();
   await expect(page.getByText('HTTP #1', { exact: true })).toBeVisible();
+});
+
+
+test('a stopped test is explained without empty reports, fake motion or example actions', async ({ page }) => {
+  await setup(page, false, true);
+  await expect(page.getByRole('heading', { name: 'The test stopped early.' })).toBeVisible();
+  await expect(page.getByText(/Scout stopped before its report arrived/)).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveAttribute('value', '0');
+  await expect(page.getByRole('region', { name: 'Received reports' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /New example|Run example|Cancel test/ })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Test a website' })).toBeVisible();
+  expect(await page.locator('.assessment-orbit-signal').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('active decoration respects reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await setup(page);
+  await expect(page.getByRole('heading', { name: 'Recon is on the case.' })).toBeVisible();
+  expect(await page.locator('.assessment-orbit-signal').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
 });

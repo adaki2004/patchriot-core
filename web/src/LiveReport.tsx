@@ -1,4 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
+import './assessment.css';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
@@ -14,10 +15,22 @@ const support: Record<string, string> = { observed: 'Observed behavior', reprodu
 
 export function LiveProgress({ steps, state }: { steps: LiveStep[]; state: string }) {
   const received = steps.filter(s => s.result !== null).length;
-  return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><div><p className="eyebrow">THREE ROLES / ONE SCOPE</p><h3>{received} of 3 role reports received</h3></div><span className="status-chip">{state.replaceAll('_', ' ')}</span></div><progress aria-label="Role reports received" value={received} max={3} />
-    <ol className="live-stage-list">{steps.map(s => <li key={s.role} data-state={s.state}><span className="stage-dot" aria-hidden="true" /><strong>{liveRoles[s.role]}</strong><small>{s.result ? s.evidence_complete ? 'Report received' : 'Report needs review' : s.state === 'leased' || s.state === 'running' ? 'Working' : s.state === 'failed' ? 'Stopped' : s.state === 'cancelled' ? 'Cancelled' : 'Waiting'}</small><p>{roleDuty[s.role]}</p>{!s.result && ['leased', 'running'].includes(s.state) && s.progress && <div className="live-activity"><strong>{phases[s.progress.progress.phase]}</strong><p>{s.progress.progress.http_requests} requests · {s.progress.progress.inference_calls} model calls · {s.progress.progress.completed_tools} tool runs recorded</p><small>Last relay update: {new Date(s.progress.received_at * 1000).toLocaleTimeString()}</small></div>}</li>)}</ol>
-    <p className="fine">Progress comes from saved role reports; activity counts come from the assigned relay. It does not estimate how much of the website is covered. {state === 'failed' || state === 'cancelled' ? 'Work stopped; earlier evidence remains available.' : 'Each role runs after the previous one.'}</p>
+  return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><h3>The review team</h3><span className="fine">{received} of 3 reports received</span></div><progress aria-label="Role reports received" value={received} max={3} />
+    <ol className="live-stage-list">{steps.map((s, i) => <li key={s.role} data-state={s.state}><span className="stage-number" aria-hidden="true">{s.result && s.evidence_complete ? '✓' : `0${i + 1}`}</span><div><strong>{liveRoles[s.role]}</strong><small>{s.result ? s.evidence_complete ? 'Report received' : 'Needs review' : s.state === 'leased' || s.state === 'running' ? 'Working' : s.state === 'failed' ? 'Stopped' : s.state === 'cancelled' ? 'Not completed' : 'Up next'}</small></div><p>{roleDuty[s.role]}</p>{!s.result && ['leased', 'running'].includes(s.state) && s.progress && <details className="live-activity"><summary>Latest activity</summary><strong>{phases[s.progress.progress.phase]}</strong><p>{s.progress.progress.http_requests} requests · {s.progress.progress.inference_calls} model calls · {s.progress.progress.completed_tools} tool runs recorded</p><small>Last update: {new Date(s.progress.received_at * 1000).toLocaleTimeString()}</small></details>}</li>)}</ol>
+    <p className="fine">{state === 'failed' || state === 'cancelled' ? 'This test has stopped. Any reports received remain available below.' : 'Agents work one after another. You can leave this page and return later.'}</p>
   </section>;
+}
+
+export function LiveStatus({ steps, state, deadline }: { steps: LiveStep[]; state: string; deadline: number }) {
+  const active = steps.find(s => ['leased', 'running'].includes(s.state));
+  const stopped = steps.find(s => s.state === 'failed');
+  const working = state === 'running' && !!active;
+  const title = state === 'awaiting_payment' ? 'Waiting for payment.' : state === 'failed' ? 'The test stopped early.' : state === 'cancelled' ? 'Test cancelled.' : state === 'needs_review' ? 'Some checks need a closer look.' : state === 'completed' ? 'Your reports are ready.' : working ? `${liveRoles[active.role]} is on the case.` : 'Your test is in the queue.';
+  const description = state === 'awaiting_payment' ? 'Testing starts after payment is confirmed. Check your order for the current payment status.' : state === 'failed' ? `${stopped && !stopped.result ? `${liveRoles[stopped.role]} stopped before its report arrived. ` : ''}The assessment did not finish. This is not a clean bill of health for your website.` : state === 'cancelled' ? 'No further stages will start. You can still read any reports already received.' : state === 'needs_review' ? 'The agents returned their reports, but some work or evidence is incomplete. Read the flagged results below.' : state === 'completed' ? 'Read what the agents found and the suggested fixes below. Findings still need your review.' : working ? `${roleDuty[active.role]} This page updates automatically.` : 'Your place is saved. Testing starts when an assigned agent is available.';
+  return <div className="assessment-status" data-active={working} data-state={state}>
+    <div className="assessment-status-copy"><span className="assessment-kicker">{state === 'failed' ? 'INCOMPLETE ASSESSMENT' : state === 'cancelled' ? 'STOPPED' : state === 'completed' ? 'REPORTS RECEIVED' : state === 'needs_review' ? 'NEEDS ATTENTION' : working ? 'TEST IN PROGRESS' : 'WAITING TO START'}</span><h2>{title}</h2><p>{description}</p>{['queued', 'running'].includes(state) && <small>Run window ends at {new Date(deadline * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. The run may finish earlier.</small>}</div>
+    <div className="assessment-orbit" aria-hidden="true"><img src="/brand/review-orbit.png" alt="" width="1536" height="1024" /><span className="assessment-orbit-signal" /></div>
+  </div>;
 }
 
 function save(filename: string, content: string, mime: string) {

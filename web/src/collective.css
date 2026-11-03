@@ -220,3 +220,47 @@
 }
 
 .queue-note { max-width: 180px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+/* Reports lead with the current state; evidence stays available on demand. */
+.live-review { padding: clamp(20px, 3vw, 40px); }
+.live-review .review-target { margin: 8px 0; overflow-wrap: anywhere; font: 500 clamp(23px, 2.6vw, 36px)/1.2 var(--body-font); }
+.assessment-status { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 32%); align-items: center; gap: 24px; margin: 26px 0 0; padding: 24px 28px; background: #10131b; border: 1px solid var(--line); overflow: hidden; }
+.assessment-status-copy { position: relative; z-index: 1; }
+.assessment-status-copy h2 { margin: 12px 0; font: 500 clamp(26px, 3vw, 38px)/1.15 var(--body-font); letter-spacing: -.025em; }
+.assessment-status-copy p { max-width: 60ch; margin: 0 0 12px; color: var(--muted); font: 16px/1.6 var(--body-font); }
+.assessment-status-copy small { color: var(--muted); font-size: 12px; }
+.assessment-status[data-state=failed] .assessment-kicker { color: #f6a598; }
+.assessment-orbit { position: relative; isolation: isolate; }
+.assessment-orbit img { width: 100%; height: auto; display: block; mix-blend-mode: screen; }
+.assessment-orbit-signal { position: absolute; inset: 12% 16%; border: 1px solid #7599e75c; border-radius: 50%; opacity: 0; }
+.assessment-status[data-active=true] .assessment-orbit-signal { animation: review-orbit-pulse 4s ease-out infinite; }
+@keyframes review-orbit-pulse { 0% { transform: scale(.8); opacity: 0; } 25% { opacity: .65; } 100% { transform: scale(1.35); opacity: 0; } }
+.live-review .live-progress { margin: 0; padding: 26px 0 16px; border: 0; background: none; }
+.live-review .live-progress h3 { margin: 0; font: 500 18px/1.3 var(--body-font); }
+.live-review .live-stage-list { gap: 12px; }
+.live-review .live-stage-list li { align-items: start; padding: 18px; gap: 8px 12px; border: 1px solid var(--line); background: #ffffff02; }
+.live-review .live-stage-list li[data-state=leased], .live-review .live-stage-list li[data-state=running] { border-color: #7599e7; }
+.live-review .live-stage-list small { display: block; }
+.live-review .stage-number { color: var(--muted); font: 12px/24px var(--mono); }
+.live-review .live-stage-list p { grid-column: 1 / -1; }
+.live-review .live-stage-list .live-activity { grid-column: 1 / -1; border-top: 1px solid var(--line); padding-top: 10px; }
+.live-review .live-activity summary { color: var(--muted); font-size: 12px; cursor: pointer; }
+.live-review .live-activity strong { display: block; font-size: 13px; margin: 12px 0 4px; }
+.live-review .report-controls { justify-content: flex-end; padding-bottom: 14px; }
+.received-reports { margin-top: 28px; }
+.received-reports > h2 { font: 500 24px/1.3 var(--body-font); margin-bottom: 20px; }
+.report-technical { margin-top: 20px; }
+.report-technical dl { display: grid; grid-template-columns: 125px minmax(0, 1fr); gap: 12px 20px; font-size: 13px; }
+.report-technical dt { color: var(--muted); }
+.report-technical dd { margin: 0; overflow-wrap: anywhere; }
+.report-footnote { color: var(--muted); font: 12px/1.6 var(--body-font); margin: 22px 0 0; }
+@media (max-width: 700px) {
+  .assessment-status { grid-template-columns: 1fr; padding: 22px; gap: 0; }
+  .assessment-orbit { width: min(210px, 100%); margin: 4px auto -12px; }
+  .live-review .live-stage-list { grid-template-columns: 1fr; }
+  .report-technical dl { grid-template-columns: 1fr; gap: 4px; }
+  .report-technical dd { margin-bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .assessment-status[data-active=true] .assessment-orbit-signal { animation: none; } }
+
+.live-review:focus { outline: none; }

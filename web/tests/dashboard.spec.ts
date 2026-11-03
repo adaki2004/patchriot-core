@@ -518,7 +518,7 @@ test('keeps conflicting evidence visible without presenting it as a successful r
   await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
   await page.goto('/');
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.getByRole('button', { name: 'Access-control example', exact: false }).click();
   const report = page.getByRole('region', { name: 'Review report' });
   await expect(report).toBeFocused();
@@ -529,8 +529,8 @@ test('keeps conflicting evidence visible without presenting it as a successful r
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('agent checks are an explicit choice and a retry keeps the same request identity', async ({ page }) => {
-  await setup(page, true);
+test('staff example checks are explicit and a retry keeps the same request identity', async ({ page }) => {
+  await setup(page, true, 'admin');
   await page.route('**/api/fleet', route => route.fulfill({ json: { ...fleet, agent_review_timeout_seconds: 5700 } }));
   const submitted: Record<string, unknown>[] = [];
   let release!: () => void;
@@ -544,8 +544,9 @@ test('agent checks are an explicit choice and a retry keeps the same request ide
   });
   try {
     await page.goto('/');
-    await openAuditTool(page, 'Reports & examples');
-    await page.getByRole('button', { name: 'New example review +' }).click();
+    await openAuditTool(page, 'Reports');
+    await page.getByText('Developer checks · staff only', { exact: true }).click();
+    await page.getByRole('button', { name: 'Run example check' }).click();
     await expect(page.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
     await page.getByRole('radio', { name: 'Local agent check', exact: false }).check();
     await expect(page.getByText('Expires after 95 minutes', { exact: false })).toBeVisible();
@@ -578,7 +579,7 @@ test('agent reports preserve missing evidence and render model prose as inert te
   await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
   await page.goto('/');
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.getByRole('button', { name: 'Access-control example', exact: false }).click();
   const report = page.getByRole('region', { name: 'Review report' });
   await expect(report.getByRole('heading', { name: 'Needs review' })).toBeVisible();
