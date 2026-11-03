@@ -184,7 +184,9 @@ function App() {
         <button className={auditView ? 'active' : ''} onClick={() => setView('audits')}><UIIcon name="folder" className="nav-icon" />Audits</button>
         {isAdmin && <button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><UIIcon name="plus" className="nav-icon" />Pair an agent</button>}
         <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}><UIIcon name="agent" className="nav-icon" />{isAdmin ? 'Agent approvals' : 'My agents'}</button>
-
+        <button className={view === 'agents' ? 'active' : ''} aria-current={view === 'agents' ? 'page' : undefined} onClick={() => setView('agents')}>Network agents</button>
+        <button className={view === 'orders' ? 'active' : ''} aria-current={view === 'orders' ? 'page' : undefined} onClick={() => setView('orders')}>Orders</button>
+        <button className={view === 'earnings' ? 'active' : ''} aria-current={view === 'earnings' ? 'page' : undefined} onClick={() => setView('earnings')}>Earnings</button>
         {isAdmin && <details className="admin-navigation" open={adminView}><summary>Administration</summary><button className={view === 'audit-desk' ? 'active' : ''} onClick={() => setView('audit-desk')}>Audit activity</button><button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button><button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button><button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button><button className={view === 'contact-inbox' ? 'active' : ''} onClick={() => setView('contact-inbox')}>Contact inbox</button></details>}
         <div className="workspace-nav-bottom"><span className="workspace-avatar" aria-hidden="true">{account.display_name.slice(0, 1).toUpperCase()}</span><div><strong>{account.display_name}</strong><small>Your private workspace</small></div></div>
       </nav>}

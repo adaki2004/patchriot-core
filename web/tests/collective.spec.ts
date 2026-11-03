@@ -88,6 +88,23 @@ test('the same header keeps Dashboard visible on public and private pages', asyn
   expect(reads.filter(path => /\/api\/(reviews|site-checks|sources)/.test(path)).every(path => path.endsWith('?scope=mine'))).toBe(true);
 });
 
+test('agents, orders and earnings keep the normal workspace menu on reload and navigation', async ({ page }) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r => r.fulfill({ json: { account: { id: 'nav-member', display_name: 'Member', role: 'member' }, csrf_token: 'test-csrf' } }));
+  await page.route('**/api/agents', r => r.fulfill({ json: [] }));
+  for (const [path, label] of [['agents', 'Network agents'], ['orders', 'Orders'], ['earnings', 'Earnings']]) {
+    await page.goto(`/#/${path}`);
+    const menu = page.getByRole('navigation', { name: 'Workspace', exact: true });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-current', 'page');
+    await page.reload();
+    await expect(menu.getByRole('button', { name: label, exact: true })).toBeInViewport();
+    await menu.getByRole('button', { name: 'Overview', exact: true }).click();
+    await expect(page).toHaveURL(/#\/overview$/);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});
+
 test('Collective audit choices keep readable text when hovered or focused', async ({ page }) => {
   await emptyDashboard(page);
   await page.route('**/api/session', route => route.fulfill({ json: { account: { id: 'contrast-test', display_name: 'Reviewer', role: 'member' }, csrf_token: 'test-only' } }));

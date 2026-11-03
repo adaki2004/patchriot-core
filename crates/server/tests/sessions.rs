@@ -98,6 +98,26 @@ async fn live_pilot_requires_session_csrf_and_cannot_bypass_coupon_or_closed_acc
         assert_eq!(denied.2["error"], "live_test_pilot_only");
         let decision=test.request("POST",&format!("/api/pentests/{}/decision",Uuid::new_v4()),json!({"approved":true,"scope_sha256":"a".repeat(64),"note":"member cannot approve"}),&headers).await;
         assert_eq!(decision.0, StatusCode::FORBIDDEN);
+        let staff_path = format!("/api/pentests/{}/authorize-owned-test", Uuid::new_v4());
+        let grant = json!({"scope_sha256":"a".repeat(64),"note":"member cannot grant permission"});
+        assert_eq!(
+            test.request("POST", &staff_path, grant.clone(), &headers)
+                .await
+                .0,
+            StatusCode::FORBIDDEN
+        );
+        let (admin_cookie, _) = test.login("admin").await;
+        assert_eq!(
+            test.request(
+                "POST",
+                &staff_path,
+                grant,
+                &[("cookie", &admin_cookie), ("origin", ORIGIN)]
+            )
+            .await
+            .0,
+            StatusCode::FORBIDDEN
+        );
         test.finish().await;
     }
 }

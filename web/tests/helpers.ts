@@ -6,7 +6,10 @@ export async function emptyDashboard(page: Page) {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() === 'GET') {
       if (['/api/pentests', '/api/pentest-tools', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/agents'].includes(path)) return route.fulfill({ json: [] });
-      if (path === '/api/withdrawals') return route.fulfill({ json: { balance: { earned: '0', available: '0', reserved: '0', paid: '0' }, withdrawals: [] } });
+      if (path === '/api/withdrawals') return route.fulfill({ json: { enabled: false, minimum_claim: '10000000', balance: { earned: '0', available: '0', reserved: '0', paid: '0' }, destinations: [], claims: [], receipts: [] } });
+      if (path === '/api/earnings') return route.fulfill({ json: { work: [] } });
+      if (path === '/api/devices') return route.fulfill({ json: [] });
+      if (path === '/api/fleet') return route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } });
     }
     return route.fallback();
   });

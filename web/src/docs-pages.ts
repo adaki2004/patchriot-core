@@ -6,6 +6,7 @@ export const docPages = [
   { id: 'request', title: 'Request a review', group: 'Using Patchriot' },
   { id: 'agents', title: 'Managed agents', group: 'Using Patchriot' },
   { id: 'payments', title: 'Price and payments', group: 'Using Patchriot' },
+  { id: 'safety', title: 'Testing, risks & limits', group: 'Using Patchriot' },
   { id: 'deployment', title: 'Before going live', group: 'Under the hood' },
   { id: 'verify', title: 'Don’t trust. Verify.', group: 'Under the hood' },
   { id: 'architecture', title: 'Services and boundaries', group: 'Under the hood' },
