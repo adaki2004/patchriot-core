@@ -132,7 +132,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
         <dl><dt>Reference</dt><dd>{id}</dd><dt>Website</dt><dd>{review.pentest?.scope.origins.join(', ')}</dd><dt>Test plan</dt><dd>{review.pentest?.scope.objective}</dd><dt>Model provider</dt><dd>{review.pentest?.provider}</dd><dt>Selected team</dt><dd>{team.length} agents · {teamOperators} operator(s) · {teamGroups} machine group(s). Shared machines and models are not independent reviewers.</dd></dl>
         <ol>{team.map((r, i) => <li key={r.device_id}>{Object.values(liveRoles)[i]} · {r.device_name} · {r.declared_model}</li>)}</ol>
       </details>
-      <p className="report-footnote">An automated check of public website behavior. It does not cover logged-in accounts or replace a full penetration test.</p>
+      <p className="report-footnote">An automated assessment within the approved methods and account access. It does not replace a full human penetration test.</p>
     </section>;
   }
   return <section ref={panel} tabIndex={-1} className="review-detail panel" aria-label="Review report">
