@@ -9,6 +9,8 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 **OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Enter a public HTTPS website URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Successful DNS verification opens checkout automatically; staff can still block a request. Reports retain the recorded requests, findings and incomplete checks. The report separates numbered findings, each agent’s contribution, coverage and technical evidence. Missing assessments and execution limits stay visible; agent agreement is not presented as independent confirmation. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
 
+Repeat findings appear once in the report, with each agent’s contribution and request references retained. Grouping requires matching titles and the same first cited request, including its authentication context and inputs. Different severity or support stays marked for review; the highest reported severity is shown. Uncertain matches stay separate. PDF and Markdown use the same grouping; the evidence JSON preserves the original reports.
+
 The pilot is read-only by default. Dedicated HTTP Basic accounts and bearer API tokens can extend access. An explicit disposable-environment option permits bounded POST submissions. Browser login forms, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
 
 | Assessment | What you provide | Status |

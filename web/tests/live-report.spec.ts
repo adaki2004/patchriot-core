@@ -1,4 +1,4 @@
-import { coverageChecks } from '../src/report';
+import { coverageChecks, reportFindings, reportSummary, type ReportInput } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
@@ -142,4 +142,69 @@ test('coverage accepts recorded checks with valid provenance and rejects invente
   expect(coverageChecks(source)).toEqual([]);
   tool.output_excerpt = '<script>fixture only</script>';
   expect(coverageChecks(source)).toEqual([]);
+});
+
+function repeatedReport(): ReportInput {
+  return { id, state: 'completed', created_at: 1, origins: ['https://owned.example'], steps: (['investigator', 'reproducer', 'challenger'] as const).map(role => ({ role, state: 'completed', evidence_complete: true, result: structuredClone(result) })) };
+}
+
+test('repeated findings count once while keeping all roles, citations and conflicting conclusions', () => {
+  const report = repeatedReport();
+  report.steps[1].result!.assessment!.findings[0].support = 'reproduced';
+  report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
+  report.steps[2].result!.assessment!.findings[0].severity = 'info';
+  const findings = reportFindings(report);
+  expect(findings).toHaveLength(2);
+  expect(findings[0].disputed).toBe(true);
+  expect(findings[0].finding.severity).toBe('low');
+  expect(findings[0].contributions.map(c => c.role)).toEqual(['investigator', 'reproducer', 'challenger']);
+  expect(findings[0].contributions[2].finding.support).toBe('not_reproduced');
+  expect(findings[0].contributions.every(c => c.finding.evidence_ids.join(',') === '1,2')).toBe(true);
+  expect(reportSummary(report).description).toContain('grouping 6 agent claims');
+  expect(report.steps.every(s => s.result!.assessment!.findings.length === 2)).toBe(true);
+});
+
+test('matching labels do not merge different paths, query values, auth contexts or POST bodies', () => {
+  for (const change of ['path', 'query', 'auth', 'body', 'missing']) {
+    const report = repeatedReport();
+    const evidence = report.steps[1].result!.evidence[0];
+    if (change === 'path') evidence.url = 'https://owned.example/other?token=synthetic-value';
+    if (change === 'query') evidence.url = 'https://owned.example/debug?token=another-value';
+    if (change === 'auth') evidence.authenticated = true;
+    if (change === 'body') { evidence.method = 'POST'; evidence.request_body_sha256 = 'c'.repeat(64); }
+    if (change === 'missing') report.steps[1].result!.evidence.shift();
+    expect(reportFindings(report), change).toHaveLength(4);
+  }
+  const report = repeatedReport();
+  report.steps[0].result!.assessment!.findings.push(structuredClone(result.assessment!.findings[0]));
+  expect(reportFindings(report)).toHaveLength(3); // Never erase two claims by one author.
+});
+
+test('only the narrow HSTS spelling variant is normalized, without hiding a different conclusion', () => {
+  const report = repeatedReport();
+  for (const step of report.steps) step.result!.assessment!.findings[0].title = 'Strict-Transport-Security header absent on all responses';
+  report.steps[1].result!.assessment!.findings[0].title = 'Strict-Transport-Security absent on all responses';
+  expect(reportFindings(report)).toHaveLength(2);
+  report.steps[2].result!.assessment!.findings[0].title = 'Strict-Transport-Security header present on all responses';
+  expect(reportFindings(report)).toHaveLength(3);
+});
+
+test('the grouped report and downloaded Markdown retain all contributions without counting them twice', async ({ page }) => {
+  await setup(page);
+  const report = repeatedReport();
+  report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
+  await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: { ...report, mode: 'pentest_agent', deadline_at: 1793643000, pentest: { scope: { origins: report.origins, methods: ['GET'] }, reviewers: [] } } }));
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Findings (2)', exact: true })).toBeVisible();
+  await expect(page.getByText(/Roles differ — review needed/)).toBeVisible();
+  await page.locator('.report-finding > summary').first().click();
+  await expect(page.getByRole('button', { name: 'Inspect Verifier evidence' })).toBeVisible();
+  await page.getByText('Other downloads & test details', { exact: true }).click();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download readable report' }).click();
+  const md = await readFile((await (await download).path())!, 'utf8');
+  expect(md).toContain('## Observations (2)');
+  expect(md).toContain('Roles differ — review needed.');
+  for (const role of ['investigator', 'reproducer', 'challenger']) expect(md).toContain(`${role}#1`);
+  expect(md.match(/^### [SRV]-\d+$/gm)).toHaveLength(2);
 });

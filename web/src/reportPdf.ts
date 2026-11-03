@@ -99,7 +99,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.heading('Reported severity');
   for (const severity of severities) p.paragraph(`${severity === 'info' ? 'Informational' : severity[0].toUpperCase() + severity.slice(1)}: ${summary.findings.filter(r => r.finding.severity === severity).length}`, 11);
   p.heading('How to use this report');
-  p.paragraph('Start with the numbered findings. Check the claimed impact, evidence references and recommended action. Each finding retains its author; repeated titles or agreement are not treated as independent confirmation. Informational observations may describe intentional behavior.');
+  p.paragraph('Start with the numbered findings. Repeat claims with matching titles and first cited requests are grouped; each original contribution stays available. Differences in severity or support are marked for review, with the highest reported severity shown. Agreement is not independent confirmation. Informational observations may describe intentional behavior.');
   p.paragraph(summary.partial ? 'Follow up on the incomplete stages before treating this assessment as finished. A missing report is not a report of no vulnerabilities.' : 'Validate material findings and retest any changes. A completed automated run cannot establish the absence of vulnerabilities.');
   p.paragraph(reportLimits, 10, muted);
 
@@ -123,7 +123,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.paragraph(`${s.result.evidence.length} recorded requests · ${s.result.execution.inference_calls} model calls · ${Math.round(s.result.execution.duration_ms / 1000)} seconds`, 9, muted);
     p.label('Provider / model', `${s.result.execution.provider} / ${s.result.execution.model}`);
     p.paragraph(s.result.assessment?.summary ?? 'No usable assessment was returned. Request and tool records do not by themselves establish a vulnerability.');
-    const refs = summary.findings.filter(f => f.role === s.role).map(f => f.id);
+    const refs = summary.findings.filter(f => f.contributions.some(c => c.role === s.role)).map(f => f.id);
     if (refs.length) p.paragraph(`Observations: ${refs.join(', ')}`, 10, blue);
   }
 
@@ -135,17 +135,24 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.paragraph(`${row.id} / ${f.severity.toUpperCase()} / ${reportRoles[row.role].toUpperCase()}`, 10, blue);
     p.heading(f.title, 1);
     p.paragraph(`${supportLabels[f.support] ?? 'Unconfirmed'}${row.complete ? '' : ' · From a partial assessment'}. Severity and support are the agent’s assessment.`, 10, muted);
+    if (row.disputed) p.paragraph('Roles differ — review needed. The highest reported severity is shown, not a confirmed verdict.', 11, blue);
     p.heading('Observation & impact'); p.paragraph(f.explanation);
     p.heading('Recommended action'); p.paragraph(f.suggested_action);
     p.paragraph('Recommendation only. No patch was applied or retested.', 9, muted);
     p.heading('Reproduction recorded by the agent'); p.paragraph(f.reproduction);
-    p.heading('Supporting request references');
-    for (const id of f.evidence_ids) {
-      const e = row.result.evidence.find(e => e.id === id);
-      if (!e) { p.paragraph(`${reportRoles[row.role]} #${id}: missing from the recorded evidence.`); continue; }
-      p.paragraph(`${reportRoles[row.role]} #${id} · ${e.method} · HTTP ${e.status ?? 'no response'}`, 10, blue);
-      p.paragraph(e.url, 9);
-      if (e.body_sha256) p.paragraph(`Response fingerprint: ${e.body_sha256}`, 8, muted);
+    for (const c of row.contributions) {
+      p.heading(`${reportRoles[c.role]} — supporting contribution`);
+      p.paragraph(`${c.finding.severity} · ${supportLabels[c.finding.support] ?? c.finding.support}${c.complete ? '' : ' · Partial assessment'}`, 9, muted);
+      if (c.finding.explanation !== f.explanation) p.paragraph(c.finding.explanation);
+      if (c.finding.reproduction !== f.reproduction) { p.heading('Reproduction'); p.paragraph(c.finding.reproduction); }
+      if (c.finding.suggested_action !== f.suggested_action) { p.heading('Suggested action'); p.paragraph(c.finding.suggested_action); }
+      for (const id of c.finding.evidence_ids) {
+        const e = c.result.evidence.find(e => e.id === id);
+        if (!e) { p.paragraph(`${reportRoles[c.role]} #${id}: missing from the recorded evidence.`); continue; }
+        p.paragraph(`${reportRoles[c.role]} #${id} · ${e.method} · HTTP ${e.status ?? 'no response'}`, 10, blue);
+        p.paragraph(e.url, 9);
+        if (e.body_sha256) p.paragraph(`Response fingerprint: ${e.body_sha256}`, 8, muted);
+      }
     }
     p.paragraph('Response excerpts, headers and tool transcripts are available in the private report’s Technical evidence view and the separate evidence JSON download. References are scoped to their agent.', 9, muted);
   });
@@ -159,7 +166,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     else p.paragraph(roleOutcome(s).detail);
   }
   p.begin('06 / Tool register & record');
-  p.paragraph('Roles share baseline tools. Their assigned methods differ; a listed method is not proof that a check ran. Compare their own request references and limitations.', 9, muted);
+  p.paragraph('Discovery tools map the site; later roles check specific claims. Older reports may repeat scanners. The register below shows what actually ran; assigned methods alone do not establish coverage.', 9, muted);
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);
     p.paragraph('Assigned methods: ' + roleMethods[s.role].join('; '), 9, muted);

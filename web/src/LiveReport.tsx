@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import './assessment.css';
-import { stopExplanation, type ReportInput } from './report';
+import { reportFindings, stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
@@ -42,15 +42,21 @@ function save(filename: string, content: string, mime: string) {
 // Keep model/target text inert when someone opens the exported Markdown.
 const block = (value: string) => { const fence = '`'.repeat(Array.from(value.matchAll(/`+/g)).reduce((max, m) => Math.max(max, m[0].length + 1), 3)); return `${fence}text\n${value}\n${fence}`; };
 
-function markdown(id: string, steps: LiveStep[], origins: string[]) {
+export function reportMarkdown(id: string, steps: LiveStep[], origins: string[]) {
   const lines = ['# Patchriot — private website review', `Review: ${id}`, 'Scope:', block(origins.join('\n')), 'Role reports and operator-recorded HTTP evidence. Agreement is not proof of safety. Remediation is a recommendation; no production patch was tested.'];
+  const findings = reportFindings({ id, steps, origins, state: '', created_at: 0 });
+  lines.push(`## Observations (${findings.length})`, 'Repeat claims are grouped by title and first cited request. Original contributions and role-scoped references are retained. Different severities or support require review; the highest reported severity is shown.');
+  for (const row of findings) {
+    lines.push(`### ${row.id}`, block(`${row.finding.title}\nSeverity: ${row.finding.severity}`));
+    if (row.disputed) lines.push('Roles differ — review needed.');
+    for (const c of row.contributions) lines.push(`#### ${liveRoles[c.role]} contribution`, block(`Severity: ${c.finding.severity}\nSupport: ${support[c.finding.support] ?? c.finding.support}\n${c.complete ? 'Assessment received' : 'Partial assessment'}`), 'Impact and evidence:', block(c.finding.explanation), 'Reproduction:', block(c.finding.reproduction), 'Recommended fix (not tested):', block(c.finding.suggested_action), `HTTP references: ${c.finding.evidence_ids.map(n => `${c.role}#${n}`).join(', ')}`);
+  }
   for (const s of steps) {
     lines.push(`## ${liveRoles[s.role]}`, s.evidence_complete ? 'Report received with recorded requests.' : 'Incomplete role: inspect the evidence and missing checks.');
     if (!s.result) { lines.push('No report received.'); continue; }
     const r = s.result;
     if (r.assessment) {
       lines.push(block(r.assessment.summary));
-      for (const [i, f] of r.assessment.findings.entries()) lines.push(`### Finding ${i + 1}`, block(`${f.title}\nSeverity: ${f.severity}\nSupport: ${support[f.support] ?? f.support}`), 'Impact and evidence:', block(f.explanation), 'Reproduction:', block(f.reproduction), 'Recommended fix (not tested):', block(f.suggested_action), `HTTP references: ${f.evidence_ids.map(n => `${s.role}#${n}`).join(', ')}`);
       lines.push('### Coverage limits', block(r.assessment.limitations.join('\n')));
     } else lines.push('No usable structured assessment was returned.');
     if (r.tool_runs?.length) {
@@ -101,7 +107,7 @@ export function LiveReportDownloads({ id, steps, origins }: { id: string; steps:
   function exportPostman() {
     save(`patchriot-${id}-endpoints.postman.json`, JSON.stringify({ info: { name: 'Patchriot observed endpoints', _postman_id: id, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json', description: 'Observed requests, not a complete API specification. Query values and headers are omitted. These observations do not establish authorization or BOLA. Review scope before sending any request.' }, item: endpoints.map(e => ({ name: `${e.method} ${e.url}`, request: { method: e.method, url: { raw: e.url, query: e.query.map(key => ({ key, value: '', disabled: true, description: 'Observed name; value omitted from export.' })) }, description: `Observed HTTP status: ${[...e.statuses].join(', ') || 'No response'}. References: ${e.refs.join(', ')}. Credentials and request bodies are omitted; see the private report for account-access evidence.` }, response: [] })) }, null, 2), 'application/json');
   }
-  return <section className="report-exports"><div className="review-actions"><button className="quiet" onClick={() => save(`patchriot-${id}-report.md`, markdown(id, steps, origins), 'text/markdown')}>Download readable report ↓</button><button className="quiet" disabled={!endpoints.length} onClick={exportPostman}>Export observed endpoints ↓</button></div><details><summary>What is in the endpoint export?</summary><p>A Postman collection of the URLs and methods actually requested, with response codes and evidence references. Query values and headers are omitted. It is not a complete API specification. A publicly reachable route alone does not prove broken authorization.</p></details></section>;
+  return <section className="report-exports"><div className="review-actions"><button className="quiet" onClick={() => save(`patchriot-${id}-report.md`, reportMarkdown(id, steps, origins), 'text/markdown')}>Download readable report ↓</button><button className="quiet" disabled={!endpoints.length} onClick={exportPostman}>Export observed endpoints ↓</button></div><details><summary>What is in the endpoint export?</summary><p>A Postman collection of the URLs and methods actually requested, with response codes and evidence references. Query values and headers are omitted. It is not a complete API specification. A publicly reachable route alone does not prove broken authorization.</p></details></section>;
 }
 
 function RequestEvidence({ entry }: { entry: HttpRecord }) {
