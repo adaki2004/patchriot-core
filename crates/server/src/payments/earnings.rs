@@ -32,15 +32,17 @@ struct RoleCredit {
     reported_model: String,
     inference_calls: i32,
     terminal_calls: i32,
+    http_requests: i32,
 }
 
 fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static str> {
     if view.state != "completed" || view.steps.len() != 3 || amount < 10 {
         return Err("review_not_complete");
     }
-    let (people, hash) = match (&view.website, &view.source) {
-        (Some(c), None) => (&c.reviewers, &c.snapshot_sha256),
-        (None, Some(c)) => (&c.reviewers, &c.snapshot_sha256),
+    let (people, hash) = match (&view.website, &view.source, &view.pentest) {
+        (Some(c), None, None) => (&c.reviewers, &c.snapshot_sha256),
+        (None, Some(c), None) => (&c.reviewers, &c.snapshot_sha256),
+        (None, None, Some(c)) => (&c.reviewers, &c.scope_sha256),
         _ => return Err("earning_context_mismatch"),
     };
     if people.len() != 3 {
@@ -71,14 +73,23 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
         {
             return Err("earning_role_mismatch");
         }
-        let run = match &step.result {
+        let (state, cleanup, duration, model, inference, terminal, http) = match &step.result {
             Some(WorkResult::Website(r))
                 if view.website.is_some()
                     && r.valid()
                     && r.snapshot_sha256 == *hash
                     && r.inspected_snapshot_sha256.as_ref() == Some(hash) =>
             {
-                &r.execution
+                let run = &r.execution;
+                (
+                    run.state,
+                    run.cleanup_confirmed,
+                    run.duration_ms,
+                    &run.model,
+                    run.inference_calls,
+                    run.terminal_calls,
+                    0,
+                )
             }
             Some(WorkResult::Source(r))
                 if view.source.is_some()
@@ -86,14 +97,41 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
                     && r.snapshot_sha256 == *hash
                     && r.inspected_snapshot_sha256.as_ref() == Some(hash) =>
             {
-                &r.execution
+                let run = &r.execution;
+                (
+                    run.state,
+                    run.cleanup_confirmed,
+                    run.duration_ms,
+                    &run.model,
+                    run.inference_calls,
+                    run.terminal_calls,
+                    0,
+                )
+            }
+            Some(WorkResult::Pentest(r))
+                if view
+                    .pentest
+                    .as_ref()
+                    .is_some_and(|c| r.evidence_complete(&c.scope))
+                    && r.scope_sha256 == *hash =>
+            {
+                let run = &r.execution;
+                (
+                    run.state,
+                    run.cleanup_confirmed,
+                    run.duration_ms,
+                    &run.model,
+                    run.inference_calls,
+                    0,
+                    run.http_requests,
+                )
             }
             _ => return Err("earning_result_mismatch"),
         };
-        if run.state != WebsiteRunState::Completed
-            || !run.cleanup_confirmed
-            || run.inference_calls == 0
-            || run.terminal_calls == 0
+        if state != WebsiteRunState::Completed
+            || !cleanup
+            || inference == 0
+            || (terminal == 0 && http == 0)
         {
             return Err("earning_execution_incomplete");
         }
@@ -102,11 +140,12 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
             operator: person.operator_id,
             device: person.device_id,
             amount: total / 3 + i64::from((index as i64) < total % 3),
-            reported_duration_ms: i64::try_from(run.duration_ms)
+            reported_duration_ms: i64::try_from(duration)
                 .map_err(|_| "earning_duration_invalid")?,
-            reported_model: run.model.clone(),
-            inference_calls: i32::from(run.inference_calls),
-            terminal_calls: i32::from(run.terminal_calls),
+            reported_model: model.clone(),
+            inference_calls: i32::from(inference),
+            terminal_calls: i32::from(terminal),
+            http_requests: i32::from(http),
         });
     }
     if output
@@ -168,9 +207,9 @@ async fn allocate(
         .bind(candidate.invoice_id).bind(candidate.review_id).bind(&candidate.asset).bind(candidate.amount)
         .bind(candidate.amount/10).bind(candidate.amount-candidate.amount/10).bind(result_hash).execute(&mut *tx).await?;
     for role in roles {
-        sqlx::query("INSERT INTO operator_earnings(invoice_id,role,operator_id,device_id,amount,reported_duration_ms,reported_model,inference_calls,terminal_calls) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)")
+        sqlx::query("INSERT INTO operator_earnings(invoice_id,role,operator_id,device_id,amount,reported_duration_ms,reported_model,inference_calls,terminal_calls,http_requests) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
             .bind(candidate.invoice_id).bind(role.role).bind(role.operator).bind(role.device).bind(role.amount)
-            .bind(role.reported_duration_ms).bind(role.reported_model).bind(role.inference_calls).bind(role.terminal_calls).execute(&mut *tx).await?;
+            .bind(role.reported_duration_ms).bind(role.reported_model).bind(role.inference_calls).bind(role.terminal_calls).bind(role.http_requests).execute(&mut *tx).await?;
     }
     sqlx::query("UPDATE payment_funding_events SET earnings_next_check_at=NULL,earnings_error=NULL WHERE invoice_id=$1")
         .bind(candidate.invoice_id).execute(&mut *tx).await?;
@@ -241,6 +280,7 @@ struct WorkCredit {
     reported_model: String,
     inference_calls: i32,
     terminal_calls: i32,
+    http_requests: i32,
     created_at: DateTime<Utc>,
 }
 
@@ -251,7 +291,7 @@ pub(crate) async fn list(
     let session = auth::require_session(&headers, &state).await?;
     let amount: String = sqlx::query_scalar("SELECT COALESCE(sum(e.amount),0)::text FROM operator_earnings e JOIN earning_allocations a USING(invoice_id) WHERE e.operator_id=$1 AND a.asset=$2")
         .bind(session.id).bind(SETTLEMENT_ASSET).fetch_one(&state.pool).await?;
-    let work: Vec<WorkCredit> = sqlx::query_as("SELECT e.invoice_id,a.review_id,e.role,e.device_id,e.amount::text,e.reported_duration_ms,e.reported_model,e.inference_calls,e.terminal_calls,a.created_at FROM operator_earnings e JOIN earning_allocations a USING(invoice_id) WHERE e.operator_id=$1 ORDER BY a.created_at DESC,e.role LIMIT 100")
+    let work: Vec<WorkCredit> = sqlx::query_as("SELECT e.invoice_id,a.review_id,e.role,e.device_id,e.amount::text,e.reported_duration_ms,e.reported_model,e.inference_calls,e.terminal_calls,e.http_requests,a.created_at FROM operator_earnings e JOIN earning_allocations a USING(invoice_id) WHERE e.operator_id=$1 ORDER BY a.created_at DESC,e.role LIMIT 100")
         .bind(session.id).fetch_all(&state.pool).await?;
     Ok(Json(
         serde_json::json!({"asset":SETTLEMENT_ASSET,"earned":amount,"minimum_claim":MINIMUM_CLAIM.to_string(),"work":work}),

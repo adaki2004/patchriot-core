@@ -38,6 +38,34 @@ pub struct CreateWebsiteReview {
     /// operator pool is authorized by this consent.
     pub device_ids: Vec<Uuid>,
     pub accepts_operator_access: bool,
+    /// Live assessments disclose their inference provider separately. Omitted
+    /// on older snapshot/source consent so saved payment terms remain stable.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub accepts_provider_access: bool,
+}
+
+impl From<crate::pentests::StartPentest> for CreateWebsiteReview {
+    fn from(input: crate::pentests::StartPentest) -> Self {
+        Self {
+            request_id: input.request_id,
+            snapshot_sha256: input.scope_sha256,
+            device_ids: input.device_ids,
+            accepts_operator_access: input.accepts_operator_access,
+            accepts_provider_access: input.accepts_provider_access,
+        }
+    }
+}
+
+impl From<CreateWebsiteReview> for crate::pentests::StartPentest {
+    fn from(input: CreateWebsiteReview) -> Self {
+        Self {
+            request_id: input.request_id,
+            scope_sha256: input.snapshot_sha256,
+            device_ids: input.device_ids,
+            accepts_operator_access: input.accepts_operator_access,
+            accepts_provider_access: input.accepts_provider_access,
+        }
+    }
 }
 
 /// A service price chosen by core. Amounts are positive smallest-unit integers,

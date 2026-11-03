@@ -1,5 +1,8 @@
 use super::*;
-use axum::{extract::Path, routing::post};
+use axum::{
+    extract::Path,
+    routing::{get, post},
+};
 use patchriot_core::{
     payments::access::ReviewAccess,
     review_codes::{issue, revoke},
@@ -15,6 +18,8 @@ struct Network {
     reviews: Arc<Mutex<HashMap<(Uuid, Uuid), Value>>>,
     lose_reply: Arc<AtomicBool>,
     wrong_binding: Arc<AtomicBool>,
+    live_ready: Arc<AtomicBool>,
+    live_devices: Vec<Uuid>,
     task: tokio::task::JoinHandle<()>,
 }
 
@@ -29,6 +34,11 @@ impl Network {
         Self::for_source(false).await
     }
     async fn for_source(source: bool) -> Self {
+        Self::for_kind(source, false).await
+    }
+    async fn for_kind(source: bool, live: bool) -> Self {
+        let live_devices = (0..3).map(|_| Uuid::new_v4()).collect::<Vec<_>>();
+        let live_ready = Arc::new(AtomicBool::new(true));
         let calls = Arc::new(Mutex::new(Vec::new()));
         let reviews = Arc::new(Mutex::new(HashMap::new()));
         let lose_reply = Arc::new(AtomicBool::new(false));
@@ -39,7 +49,7 @@ impl Network {
             lose_reply.clone(),
             wrong_binding.clone(),
         );
-        let app = Router::new().route(if source { "/internal/sources/{id}/review" } else { "/internal/site-checks/{id}/review" }, post(move |Path(site):Path<Uuid>, headers:HeaderMap, Json(body):Json<Value>| {
+        let app = Router::new().route(if live { "/internal/pentests/{id}/review" } else if source { "/internal/sources/{id}/review" } else { "/internal/site-checks/{id}/review" }, post(move |Path(site):Path<Uuid>, headers:HeaderMap, Json(body):Json<Value>| {
             let (seen,saved,lost,wrong)=(seen.clone(),saved.clone(),lost.clone(),wrong.clone());
             async move {
                 assert_eq!(headers["x-patchriot-role"],"member");
@@ -59,9 +69,25 @@ impl Network {
                     let mut context=reply.as_object_mut().unwrap().remove("website").unwrap();
                     context.as_object_mut().unwrap().remove("site_check_id");context["source_id"]=json!(site);reply["source"]=context;
                 }
+                if live {
+                    assert_eq!(body["accepts_provider_access"],true);
+                    assert!(body.get("snapshot_sha256").is_none());
+                    reply["scenario"]=json!("live_http_v1"); reply["mode"]=json!("pentest_agent");
+                    let old=reply.as_object_mut().unwrap().remove("website").unwrap();
+                    reply["pentest"]=json!({"pentest_id":site,"scope_sha256":body["scope_sha256"],"provider":"abliteration.ai", "reviewers":old["reviewers"], "scope":{"origins":["https://example.com"],"objective":"Owned fixture","methods":["GET","HEAD","OPTIONS"]}});
+                }
                 if lost.swap(false,Ordering::SeqCst) { return (StatusCode::SERVICE_UNAVAILABLE,Json(json!({"error":"reply_lost_after_creation"}))); }
                 if wrong.load(Ordering::SeqCst) { reply[if source {"source"} else {"website"}]["snapshot_sha256"]=json!("b".repeat(64)); }
                 (StatusCode::OK,Json(reply))
+            }
+        }));
+        let permitted = live_ready.clone();
+        let devices = live_devices.clone();
+        let app = app.route("/internal/pentests/{id}/review-plan",get(move |Path(id):Path<Uuid>| {
+            let permitted=permitted.clone(); let devices=devices.clone();
+            async move {
+                if !permitted.load(Ordering::SeqCst) { return (StatusCode::CONFLICT,Json(json!({"error":"live_scope_not_ready"}))); }
+                (StatusCode::OK,Json(json!({"pentest_id":id,"scope_sha256":"a".repeat(64),"provider":"abliteration.ai","review_timeout_seconds":2100,"recommended_device_ids":devices,"candidates":devices.iter().map(|id|json!({"device_id":id,"operator_id":Uuid::new_v4(),"operator_name":"Fixture operator","device_name":"Fixture device","declared_model":"Fixture model","compute_group":"Fixture host"})).collect::<Vec<_>>() })))
             }
         }));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -73,6 +99,8 @@ impl Network {
             reviews,
             lose_reply,
             wrong_binding,
+            live_ready,
+            live_devices,
             task,
         }
     }
@@ -538,5 +566,60 @@ async fn source_coupon_retries_keep_kind_owner_and_material_without_reusing_a_we
         .2,
         resumed.2
     );
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn live_coupon_waits_for_scope_consent_and_recovers_a_lost_reply_without_a_second_run() {
+    let network = Network::for_kind(false, true).await;
+    let test = TestApp::with_access(&network.origin, ReviewAccess::Coupons).await;
+    let issued = issue(&test.pool, "Live fixture").await.unwrap();
+    let (cookie, session) = test.login("member").await;
+    let headers = headers(&cookie, &session);
+    let id = Uuid::new_v4();
+    let path = format!("/api/pentests/{id}/review-code");
+    let mut body = json!({"code":issued.code,"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":network.live_devices,"accepts_operator_access":true,"accepts_provider_access":false}});
+    assert_ne!(
+        test.request("POST", &path, body.clone(), &headers).await.0,
+        StatusCode::OK
+    );
+    body["consent"]["accepts_provider_access"] = json!(true);
+    network.live_ready.store(false, Ordering::SeqCst);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &headers).await.0,
+        StatusCode::CONFLICT
+    );
+    let reserved: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM review_codes WHERE reserved_at IS NOT NULL")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap();
+    assert_eq!(reserved, 0);
+    assert!(network.calls.lock().unwrap().is_empty());
+    network.live_ready.store(true, Ordering::SeqCst);
+    network.lose_reply.store(true, Ordering::SeqCst);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &headers).await.0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    // A repeat reads the already-created run, even if admission has since closed.
+    network.live_ready.store(false, Ordering::SeqCst);
+    let retry = test.request("POST", &path, body.clone(), &headers).await;
+    assert_eq!(retry.0, StatusCode::OK, "{}", retry.2);
+    assert_eq!(network.reviews.lock().unwrap().len(), 1);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &headers).await.2["review_id"],
+        retry.2["review_id"]
+    );
+    body["consent"]["scope_sha256"] = json!("b".repeat(64));
+    assert_eq!(
+        test.request("POST", &path, body, &headers).await.0,
+        StatusCode::CONFLICT
+    );
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM payment_ledger")
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
     test.finish().await;
 }

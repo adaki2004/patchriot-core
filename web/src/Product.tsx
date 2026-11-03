@@ -52,7 +52,7 @@ export function RequestWork({ onWebsite, onSource, onLive }: { onWebsite: () => 
       <div className="request-option roadmap-product" aria-disabled="true"><span className="pill">02 / NEXT</span><h2>Test behind a login</h2><p>Use a dedicated test account to inspect pages a visitor cannot reach. Authenticated testing follows the website product.</p><strong>In development</strong></div>
       <div className="request-option roadmap-product" aria-disabled="true"><span className="pill">03 / ROADMAP</span><h2>Your security network</h2><p>SIaaS: your agents, infrastructure and access rules, coordinated for your business.</p><strong>Coming later</strong></div>
     </div>
-    <div className="request-path" aria-label="Audit steps"><span>1. Website URL</span><span>2. DNS proof & approval</span><span>3. Team & access</span><span>4. Tests & private report</span></div>
+    <div className="request-path" aria-label="Audit steps"><span>1. Website URL</span><span>2. DNS proof & approval</span><span>3. Team & payment or code</span><span>4. Tests & private report</span></div>
     <details className="capability-details"><summary>Existing snapshot and source tools</summary><p>These earlier tools inspect saved material. They do not run a live website test.</p><div className="request-options"><button className="request-option" onClick={onWebsite}><h2>Website snapshot</h2><p>Save the homepage and referenced scripts for an offline review.</p><strong>Set the scope →</strong></button><button className="request-option" onClick={onSource}><h2>Source excerpts</h2><p>Inspect text files without installing or executing them.</p><strong>Choose files →</strong></button></div></details>
   </section>;
 }

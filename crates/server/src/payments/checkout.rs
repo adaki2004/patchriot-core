@@ -16,6 +16,8 @@ pub struct CheckoutTerms {
     pub site_check_id: Uuid,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pentest_id: Option<Uuid>,
     pub consent: CreateWebsiteReview,
     pub payment: InvoiceTerms,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -90,7 +92,9 @@ struct Order {
 
 pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, CheckoutError> {
     let deadline = validate_quote_request(&terms.payment, Utc::now())?;
-    if ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id).is_none()
+    if ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id, terms.pentest_id)
+        .is_none()
+        || (terms.pentest_id.is_some() && !terms.consent.accepts_provider_access)
         || terms.payment.account_id.is_nil()
         || terms.consent.request_id.is_nil()
         || terms.consent.request_id != terms.payment.request_id
@@ -200,7 +204,7 @@ fn matches_admission(view: &ReviewView, terms: &CheckoutTerms, input: &AdmitWebs
 /// Funding verifies the same immutable request even after the reservation's
 /// deadline, because an earlier activation reply may have been lost.
 pub(super) fn matches_review(view: &ReviewView, terms: &CheckoutTerms, expires: i64) -> bool {
-    ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id)
+    ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id, terms.pentest_id)
         .is_some_and(|target| target.matches(view, &terms.consent))
         && view.payment.as_ref().is_some_and(|payment| {
             payment.price.asset == terms.payment.destination_asset
@@ -268,7 +272,7 @@ async fn prepare_claimed(
         reqwest::Method::POST,
         &format!(
             "{}/admit-review",
-            ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id)
+            ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id, terms.pentest_id)
                 .ok_or(CheckoutError::InvalidTerms)?
                 .path()
         ),

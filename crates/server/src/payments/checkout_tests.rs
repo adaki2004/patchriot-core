@@ -14,12 +14,14 @@ fn terms(db: &TestDb) -> (CheckoutTerms, QuoteResponse) {
         snapshot_sha256: "a".repeat(64),
         device_ids: vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()],
         accepts_operator_access: true,
+        accepts_provider_access: false,
     };
     (
         CheckoutTerms {
             presentation: None,
             site_check_id: Uuid::new_v4(),
             source_id: None,
+            pentest_id: None,
             consent,
             payment,
         },
@@ -56,6 +58,16 @@ impl AdmissionServer {
                     "expires_at":expires,"invoice_id":null,"funded_at":null}
             }),
         )));
+        if let Some(id) = terms.pentest_id {
+            let mut saved = reply.lock().unwrap();
+            let body = &mut saved.1;
+            let old = body.as_object_mut().unwrap().remove("website").unwrap();
+            body["scenario"] = json!("live_http_v1");
+            body["mode"] = json!("pentest_agent");
+            body["pentest"] = json!({"pentest_id":id,"scope_sha256":terms.consent.snapshot_sha256,
+                "scope":{"origins":["https://example.com"],"objective":"Owned fixture","methods":["GET","HEAD","OPTIONS"]},
+                "reviewers":old["reviewers"],"provider":"abliteration.ai"});
+        }
         let calls = Arc::new(Mutex::new(Vec::new()));
         let pause_next = Arc::new(AtomicBool::new(false));
         let entered = Arc::new(Notify::new());
@@ -69,7 +81,7 @@ impl AdmissionServer {
         );
         let pool = db.pool.clone();
         let account = db.account.to_string();
-        let app = Router::new().route(&format!("/internal/site-checks/{}/admit-review",terms.site_check_id),post(move |headers:HeaderMap,Json(input):Json<Value>| {
+        let app = Router::new().route(&format!("{}/admit-review",crate::review_target::ReviewTarget::from_ids(Some(terms.site_check_id),terms.source_id,terms.pentest_id).unwrap().path()),post(move |headers:HeaderMap,Json(input):Json<Value>| {
             let (output, observed, pause, arrival, gate, pool, account) = (output.clone(),observed.clone(),pause.clone(),arrival.clone(),gate.clone(),pool.clone(),account.clone());
             async move {
                 assert_eq!(headers["authorization"], "Bearer checkout-fixture-internal-service-key");
@@ -497,4 +509,54 @@ async fn late_provider_reply_cannot_publish_after_account_disable_claim_expiry_o
         task.abort();
         db.finish().await;
     }
+}
+
+#[tokio::test]
+async fn live_checkout_requires_provider_consent_and_matching_scope_before_any_quote() {
+    let db = TestDb::new().await;
+    let (mut terms, quote) = terms(&db);
+    terms.pentest_id = Some(Uuid::new_v4());
+    terms.site_check_id = Uuid::nil();
+    assert!(matches!(
+        admission(&terms),
+        Err(CheckoutError::InvalidTerms)
+    ));
+    terms.consent.accepts_provider_access = true;
+    let dispatcher = AdmissionServer::new(&db, &terms).await;
+    let provider = MockProvider::new(json!(quote)).await;
+    dispatcher.reply.lock().unwrap().1["pentest"]["scope_sha256"] = json!("b".repeat(64));
+    assert!(matches!(
+        prepare(&dispatcher.state, &provider.client, &terms).await,
+        Err(CheckoutError::InvalidAdmission)
+    ));
+    assert!(provider.quote_calls.lock().unwrap().is_empty());
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn matching_live_checkout_reuses_one_invoice_and_never_starts_free_work() {
+    let db = TestDb::new().await;
+    let (mut terms, quote) = terms(&db);
+    terms.pentest_id = Some(Uuid::new_v4());
+    terms.site_check_id = Uuid::nil();
+    terms.consent.accepts_provider_access = true;
+    let dispatcher = AdmissionServer::new(&db, &terms).await;
+    let provider = MockProvider::new(json!(quote)).await;
+    let first = prepare(&dispatcher.state, &provider.client, &terms)
+        .await
+        .unwrap();
+    let retry = prepare(&dispatcher.state, &provider.client, &terms)
+        .await
+        .unwrap();
+    assert_eq!(first.review_id, retry.review_id);
+    assert_eq!(first.invoice_id, retry.invoice_id);
+    assert_eq!(provider.quote_calls.lock().unwrap().len(), 1);
+    assert_eq!(db.counts().await, (0, 0));
+    let mut changed = terms.clone();
+    changed.source_id = Some(Uuid::new_v4());
+    assert!(matches!(
+        admission(&changed),
+        Err(CheckoutError::InvalidTerms)
+    ));
+    db.finish().await;
 }

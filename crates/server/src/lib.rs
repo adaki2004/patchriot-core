@@ -296,6 +296,14 @@ pub fn router(state: AppState) -> Router {
         .route("/api/pentests/{id}/decision", post(pentests::decide))
         .route("/api/pentests/{id}/review-plan", get(pentests::plan))
         .route("/api/pentests/{id}/review", post(pentests::start))
+        .route(
+            "/api/pentests/{id}/review-code",
+            post(review_codes::redeem_pentest),
+        )
+        .route(
+            "/api/pentests/{id}/checkout",
+            post(payments::browser_checkout::create_pentest),
+        )
         .route("/api/sources/{id}", get(sources::detail))
         .route("/api/sources/{id}/decision", post(sources::decide))
         .route("/api/sources/{id}/delete", post(sources::delete))

@@ -30,11 +30,13 @@ async fn seed(test: &TestApp, account: Uuid) -> (Uuid, Uuid, Uuid) {
         presentation: None,
         site_check_id: Uuid::new_v4(),
         source_id: None,
+        pentest_id: None,
         consent: CreateWebsiteReview {
             request_id: request,
             snapshot_sha256: "a".repeat(64),
             device_ids: (0..3).map(|_| Uuid::new_v4()).collect(),
             accepts_operator_access: true,
+            accepts_provider_access: false,
         },
         payment,
     };

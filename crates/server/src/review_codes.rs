@@ -95,6 +95,7 @@ struct Saved {
     account_id: Option<Uuid>,
     site_check_id: Option<Uuid>,
     source_id: Option<Uuid>,
+    pentest_id: Option<Uuid>,
     consent: Option<Value>,
     review_id: Option<Uuid>,
     operation_until: Option<DateTime<Utc>>,
@@ -106,6 +107,7 @@ pub(crate) struct Reservation {
     label: String,
     site_check_id: Option<Uuid>,
     source_id: Option<Uuid>,
+    pentest_id: Option<Uuid>,
     request_id: Uuid,
     consent: Value,
     reserved_at: DateTime<Utc>,
@@ -142,7 +144,8 @@ async fn reserve(
         return Err(unavailable());
     }
     let consent = &input.consent;
-    if !consent.accepts_operator_access
+    if (target.pentest_id().is_some() && !consent.accepts_provider_access)
+        || !consent.accepts_operator_access
         || consent.device_ids.len() != 3
         || consent
             .device_ids
@@ -168,7 +171,7 @@ async fn reserve(
     if enabled != Some(true) {
         return Err(ApiError::denied());
     }
-    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
+    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,pentest_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
         .bind(hash(&code)).fetch_optional(&mut *tx).await?.ok_or_else(unavailable)?;
     if saved
         .issued_to
@@ -180,7 +183,8 @@ async fn reserve(
         if owner != account {
             return Err(unavailable());
         }
-        if ReviewTarget::from_ids(saved.site_check_id, saved.source_id) != Some(target)
+        if ReviewTarget::from_ids(saved.site_check_id, saved.source_id, saved.pentest_id)
+            != Some(target)
             || saved.consent.as_ref() != Some(&terms)
         {
             return Err(ApiError::new(StatusCode::CONFLICT, "review_code_bound"));
@@ -194,8 +198,8 @@ async fn reserve(
         if occupied {
             return Err(ApiError::new(StatusCode::CONFLICT, "request_conflict"));
         }
-        sqlx::query("UPDATE review_codes SET account_id = $2,request_id = $3,site_check_id = $4,source_id = $6,consent = $5,reserved_at = now(),updated_at = now() WHERE id = $1")
-            .bind(saved.id).bind(account).bind(consent.request_id).bind(target.site_id()).bind(terms).bind(target.source_id()).execute(&mut *tx).await?;
+        sqlx::query("UPDATE review_codes SET account_id = $2,request_id = $3,site_check_id = $4,source_id = $6,pentest_id = $7,consent = $5,reserved_at = now(),updated_at = now() WHERE id = $1")
+            .bind(saved.id).bind(account).bind(consent.request_id).bind(target.site_id()).bind(terms).bind(target.source_id()).bind(target.pentest_id()).execute(&mut *tx).await?;
     }
     tx.commit().await?;
     Ok(saved.id)
@@ -211,9 +215,9 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
     if enabled != Some(true) {
         return Err(ApiError::denied());
     }
-    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,consent,review_id,operation_until FROM review_codes WHERE id = $1 AND account_id = $2 FOR UPDATE")
+    let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,pentest_id,consent,review_id,operation_until FROM review_codes WHERE id = $1 AND account_id = $2 FOR UPDATE")
         .bind(id).bind(account).fetch_optional(&mut *tx).await?.ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found"))?;
-    let target = ReviewTarget::from_ids(saved.site_check_id, saved.source_id)
+    let target = ReviewTarget::from_ids(saved.site_check_id, saved.source_id, saved.pentest_id)
         .ok_or_else(|| ApiError::bad("invalid_request"))?;
     let consent: CreateWebsiteReview = serde_json::from_value(
         saved
@@ -243,7 +247,11 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
         Method::POST,
         &format!("{}/review", target.path()),
         account,
-        Some(&consent),
+        Some(
+            &target
+                .consent_body(&consent)
+                .map_err(|_| ApiError::bad("invalid_request"))?,
+        ),
     )
     .await;
     let result = match reply {
@@ -303,6 +311,66 @@ pub(crate) async fn redeem_source(
     Ok(Json(start(&state, session.id, id).await?))
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RedeemLiveCode {
+    code: String,
+    consent: patchriot_protocol::pentests::StartPentest,
+}
+
+pub(crate) async fn redeem_pentest(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(input): Json<RedeemLiveCode>,
+) -> Result<Json<Started>, ApiError> {
+    let session = auth::require_write(&headers, &state).await?;
+    available(&state)?;
+    rate(&state.pool, session.id).await?;
+    let consent: CreateWebsiteReview = input.consent.into();
+    let target = ReviewTarget::Pentest(id);
+    // A changed/revoked scope is rejected before reserving a new coupon. A
+    // lost successful reply must still resume the same saved request.
+    let already_saved: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM review_codes WHERE account_id=$1 AND request_id=$2)",
+    )
+    .bind(session.id)
+    .bind(consent.request_id)
+    .fetch_one(&state.pool)
+    .await?;
+    if !already_saved {
+        let Json(plan): Json<patchriot_protocol::pentests::PentestPlan> =
+            gateway::request_for_account::<(), _>(
+                &state,
+                Method::GET,
+                &format!("{}/review-plan", target.path()),
+                session.id,
+                None,
+            )
+            .await?;
+        if plan.scope_sha256 != consent.snapshot_sha256
+            || !consent.accepts_provider_access
+            || consent
+                .device_ids
+                .iter()
+                .any(|id| !plan.candidates.iter().any(|c| c.device_id == *id))
+        {
+            return Err(ApiError::new(StatusCode::CONFLICT, "live_scope_not_ready"));
+        }
+    }
+    let reservation = reserve(
+        &state.pool,
+        session.id,
+        target,
+        RedeemCode {
+            code: input.code,
+            consent,
+        },
+    )
+    .await?;
+    Ok(Json(start(&state, session.id, reservation).await?))
+}
+
 pub(crate) async fn resume(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -320,7 +388,7 @@ pub(crate) async fn list(
     headers: HeaderMap,
 ) -> Result<Json<Vec<Reservation>>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    let rows = sqlx::query_as("SELECT id,label,site_check_id,source_id,request_id,consent,reserved_at,review_id,last_error FROM review_codes WHERE account_id = $1 ORDER BY (review_id IS NULL) DESC, reserved_at DESC LIMIT 50")
+    let rows = sqlx::query_as("SELECT id,label,site_check_id,source_id,pentest_id,request_id,consent,reserved_at,review_id,last_error FROM review_codes WHERE account_id = $1 ORDER BY (review_id IS NULL) DESC, reserved_at DESC LIMIT 50")
         .bind(session.id).fetch_all(&state.pool).await?;
     Ok(Json(rows))
 }

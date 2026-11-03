@@ -26,7 +26,7 @@ For a live website test:
 
 1. Enter the website URL and confirm your authority to test it. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
 2. Add the supplied TXT record for every domain. Select **Refresh DNS**; the server checks for up to five minutes. A repeated click does not extend that window.
-3. Wait for domain verification and staff approval, then confirm the named operators and disclosed model provider.
+3. Wait for domain verification and staff approval, then confirm the named operators and disclosed model provider. Use a coupon or pay the quoted fee when checkout is enabled. Work queues automatically after access is confirmed.
 4. Inspect the private report, including evidence, gaps and disagreement. Download the readable Markdown report, the original evidence JSON, or a Postman inventory of observed endpoints. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
 
 Public HTTPS websites and APIs are supported. Knowing a raw IP address or controlling reverse DNS is not proof that you own a server. General port scans and non-web services need a separate infrastructure-verification and testing policy; they are outside this product.
@@ -58,7 +58,7 @@ An investigator makes a claim, a reproducer checks it and a challenger questions
 | Access | Approved accounts; staff-only pairing; domain verification before live-test approval and execution |
 | Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
 | Agents | Isolated Hermes execution and a three-role live HTTP pilot on managed Kali machines |
-| Payments | Single-use codes, NEAR Intents checkout, 90/10 accounting and reserved operator withdrawals; live-test billing remains separate |
+| Payments | Single-use codes and NEAR Intents checkout for live, snapshot and source reviews; 90/10 accounting and reserved operator withdrawals |
 | Existing tools | Approved saved-page and source-text reviews remain accessible |
 | In development | Broader OWASP checks, clearer evidence packs and public deployment |
 | Later | Authenticated testing, recurring checks, managed private networks and confidential execution |
@@ -193,7 +193,7 @@ Choose **Request an audit → Test the running site**. Enter the exact HTTPS ori
 
 This mode makes real **GET, HEAD and OPTIONS** requests. Agents can inspect scripts, discover same-origin routes and test non-destructive hypotheses; there are no login credentials, account changes, transactions or load tests. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
-The live mode requires `PATCHRIOT_REVIEW_MODE=pilot`; paid, coupon and closed deployments refuse its start route. It does not inherit a free exception in paid mode or create operator earnings. Set up an explicitly approved pilot installation to try it. Snapshot/source payments keep their existing behavior.
+Live assessments use the same access policy as snapshot and source reviews: `pilot` is free, `coupons` requires a one-use code, `paid` accepts payment or a code, and `closed` pauses new work. The free `/api/pentests/:id/review` route remains blocked in coupon and paid modes. Use `/api/pentests/:id/review-code` or `/api/pentests/:id/checkout`, with the same live consent fields inside `consent`. Ownership, the exact scope/profile, the named team and provider consent are checked before admission. A paid reservation cannot lease agents until a matching settlement is recorded; permission and team eligibility are checked again then. Revoked or expired permission cannot be purchased back. Failed or cancelled paid work retains funds for staff review; cancellation does not automatically refund a settled payment.
 
 <details>
 <summary><strong>Deployment and API details</strong></summary>
@@ -229,7 +229,7 @@ An optional `catalogue` adds `short_name`, `qualifying`, `category`, `fix`, a `r
 
 ## Price and payments
 
-The intended beta offer is **$10 for one bounded website or source review**, or a **single-use review code**. This covers the agreed snapshot, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented. The deployment chooses whether checkout is enabled; a coupon can cover an approved pilot review.
+The intended beta offer is **$10 for one bounded live website, snapshot or source review**, or a **single-use review code**. This covers the agreed assessment, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented. The deployment chooses whether checkout is enabled; a coupon can cover an approved pilot review.
 
 Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
 
@@ -303,7 +303,7 @@ cargo run --locked -p patchriot-core -- payments-cancel-once
 
 ### Configure checkout
 
-`PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `coupons` (review codes only), `paid` (payment or a code), or `closed` (no new private reviews or deposit instructions). Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Coupon and paid modes block the free website and source review routes. Existing order reads and payment workers remain available when new checkout is closed.
+`PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `coupons` (review codes only), `paid` (payment or a code), or `closed` (no new private reviews or deposit instructions). Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Coupon and paid modes block the free live, snapshot and source review routes. Existing order reads and payment workers remain available when new checkout is closed.
 
 The configuration fixes the service price, recipient and allowed input tokens. Copy exact asset IDs, decimals and chain names from the [supported-token catalog](https://docs.near-intents.org/api-reference/oneclick/get-supported-tokens), verify the treasury destination, and replace every placeholder below. This is a format example, not a usable payment configuration.
 
