@@ -283,7 +283,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/reviews/{id}", get(gateway::review))
         .route("/api/reviews/{id}/cancel", post(gateway::cancel_review))
-        .route("/api/reviews/{id}/report", get(gateway::report))
+        .route("/api/reviews/{id}/report", post(gateway::report))
         .route(
             "/api/sources",
             get(sources::list)

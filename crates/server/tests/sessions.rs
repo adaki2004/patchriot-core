@@ -1432,7 +1432,7 @@ async fn large_private_report_survives_detail_export_and_cancellation() {
         ("origin", ORIGIN),
         ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
     ];
-    for (method, suffix) in [("GET", ""), ("GET", "/report"), ("POST", "/cancel")] {
+    for (method, suffix) in [("GET", ""), ("POST", "/report"), ("POST", "/cancel")] {
         let path = format!("/api/reviews/{id}{suffix}");
         assert_eq!(
             test.request(method, &path, json!({}), &[("origin", ORIGIN)])
@@ -1444,6 +1444,28 @@ async fn large_private_report_survives_detail_export_and_cancellation() {
         assert_eq!(response.0, StatusCode::OK, "{}", response.2);
         assert_eq!(response.2, expected);
     }
+    assert_eq!(
+        test.request(
+            "GET",
+            &format!("/api/reviews/{id}/report"),
+            json!({}),
+            &headers
+        )
+        .await
+        .0,
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            &format!("/api/reviews/{id}/report"),
+            json!({}),
+            &[("cookie", &cookie), ("origin", ORIGIN)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
     test.finish().await;
     server.abort();
     let _ = server.await;

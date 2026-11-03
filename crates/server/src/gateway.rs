@@ -169,10 +169,18 @@ async fn request_as<T: Serialize, R: DeserializeOwned>(
         {
             return Err(ApiError::new(status, code));
         }
+        if path.starts_with("/internal/reviews/")
+            && path.ends_with("/download")
+            && status == StatusCode::CONFLICT
+            && let Some(code) = public_upstream_error(&mut response, &["report_not_finished"]).await
+        {
+            return Err(ApiError::new(status, code));
+        }
         return Err(match status.as_u16() {
             400 => ApiError::bad("invalid_request"),
             403 => ApiError::new(StatusCode::FORBIDDEN, "action_not_allowed"),
             404 => ApiError::new(StatusCode::NOT_FOUND, "not_found"),
+            410 => ApiError::new(StatusCode::GONE, "report_content_deleted"),
             409 => ApiError::new(StatusCode::CONFLICT, "request_conflict"),
             429 => ApiError::new(StatusCode::TOO_MANY_REQUESTS, "try_again_later"),
             _ => ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "dispatcher_unavailable"),
@@ -399,8 +407,18 @@ pub async fn report(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
+    Json(input): Json<CancelReview>,
 ) -> Result<Response, ApiError> {
-    let Json(report) = review(State(state), headers, Path(id)).await?;
+    let session = auth::require_write(&headers, &state).await?;
+    let Json(report): Json<ReviewView> = request_with_limit(
+        &state,
+        reqwest::Method::POST,
+        &format!("/internal/reviews/{id}/download"),
+        Some(&session),
+        Some(&input),
+        patchriot_protocol::pentests::MAX_REVIEW_BYTES,
+    )
+    .await?;
     let bytes = serde_json::to_vec_pretty(&report)
         .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "report_encoding_failed"))?;
     Ok((

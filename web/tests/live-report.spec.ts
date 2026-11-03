@@ -15,16 +15,27 @@ const result: LiveResult = {
   evidence: [{ id: 1, method: 'GET', url: 'https://owned.example/debug?token=synthetic-value', status: 200, request_headers: {}, headers: { 'content-type': 'application/json' }, body_excerpt: '{"debug":"fixture"}', body_sha256: 'b'.repeat(64), observed_at: 1793640000, truncated: false, error: null }, { id: 2, method: 'GET', url: 'https://owned.example/control', status: 404, headers: {}, body_excerpt: 'Not found', truncated: false, error: null }], raw_summary: '',
 };
 
-async function setup(page: import('@playwright/test').Page, failed = false, stopped = false) {
+async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false) {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role: 'member' }, csrf_token: 'test-csrf' } }));
   await page.route('**/api/fleet', r => r.fulfill({ json: {} }));
   await page.route('**/api/review-codes', r => r.fulfill({ json: [] }));
   await page.route('**/api/devices', r => r.fulfill({ json: [] }));
-  const review = { id, mode: 'pentest_agent', state: stopped ? 'failed' : failed ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  const review = { id, mode: 'pentest_agent', state: stopped ? 'failed' : (failed || finished) ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  await mockExport(page, review);
   if (stopped) review.steps = review.steps.map((step, i) => ({ ...step, state: i ? 'cancelled' : 'failed', result: null, progress: null }));
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.goto(`/#/reviews/${id}`);
+}
+
+async function mockExport(page: import('@playwright/test').Page, review: unknown) {
+  let first: number | undefined;
+  await page.route(`**/api/reviews/${id}/report`, r => {
+    expect(r.request().method()).toBe('POST');
+    expect(r.request().headers()['x-csrf-token']).toBe('test-csrf');
+    first ??= Math.floor(Date.now() / 1000);
+    return r.fulfill({ json: { ...(review as object), retention: { first_downloaded_at: first, expires_at: first + 12 * 3600, content_deleted: false } } });
+  });
 }
 
 test('a compact report preserves the author, uncertainty and request references', async ({ page }) => {
@@ -50,7 +61,7 @@ test('a compact report preserves the author, uncertainty and request references'
 });
 
 test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }) => {
-  await setup(page);
+  await setup(page, false, false, true);
   const pdfDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download vulnerability report' }).click();
   const pdfFile = await pdfDownload;
@@ -90,7 +101,7 @@ test('large evidence stays intact while the report and PDF stay concise', async 
   const wire = JSON.stringify(review);
   expect(wire.length).toBeGreaterThan(11 * 1024 * 1024);
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ contentType: 'application/json', body: wire }));
-  await page.route(`**/api/reviews/${id}/report`, r => r.fulfill({ headers: { 'content-type': 'application/json', 'content-disposition': 'attachment; filename="evidence.json"' }, body: wire }));
+  await mockExport(page, review);
   await page.reload();
   await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -100,9 +111,11 @@ test('large evidence stays intact while the report and PDF stay concise', async 
   expect(pdfBytes.length).toBeLessThan(1024 * 1024);
   expect((await PDFDocument.load(pdfBytes)).getPageCount()).toBeGreaterThan(5);
   await page.getByText('Other downloads & test details', { exact: true }).click();
-  const href = await page.getByRole('link', { name: 'Download evidence JSON', exact: false }).getAttribute('href');
-  const body = await page.evaluate(async href => (await fetch(href!)).text(), href);
-  expect(body).toBe(wire);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download evidence JSON', exact: false }).click();
+  const body = JSON.parse(await readFile((await (await download).path())!, 'utf8'));
+  delete body.retention;
+  expect(JSON.stringify(body)).toBe(wire);
 });
 
 test('finding text and suggested code remain inert and fit mobile', async ({ page }) => {
@@ -117,6 +130,65 @@ test('finding text and suggested code remain inert and fit mobile', async ({ pag
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('.report-finding > summary').nth(1).click();
   await expect(page.locator('.report-finding').nth(1)).toContainText('Keep this incomplete example visible.');
+});
+
+test('viewing unfinished work does not start a download or deletion clock', async ({ page }) => {
+  let exports = 0;
+  page.on('request', r => { if (r.url().endsWith('/report')) exports++; });
+  await setup(page);
+  await expect(page.getByRole('button', { name: 'Download vulnerability report' })).toBeDisabled();
+  await expect(page.getByText(/Downloads become available when the test ends/)).toBeVisible();
+  await page.getByText('Other downloads & test details', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Download readable report' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Download evidence JSON' })).toBeDisabled();
+  expect(exports).toBe(0);
+});
+
+test('finished evidence stops polling and remains refreshable', async ({ page }) => {
+  await page.clock.install();
+  let reads = 0;
+  page.on('request', r => { if (r.url().endsWith(`/api/reviews/${id}`)) reads++; });
+  await setup(page, false, false, true);
+  await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible();
+  // The development server uses React StrictMode, which can start and abort
+  // an extra initial read. Check that finished work adds no polling reads.
+  const initialReads = reads;
+  expect(initialReads).toBeGreaterThanOrEqual(1);
+  expect(initialReads).toBeLessThanOrEqual(2);
+  await page.clock.fastForward(600_000);
+  expect(reads).toBe(initialReads);
+  await page.getByRole('button', { name: 'Refresh report' }).click();
+  await expect.poll(() => reads).toBe(initialReads + 1);
+});
+
+test('the first export shows a fixed deadline and the open page hides expired findings', async ({ page }) => {
+  await page.clock.install();
+  await setup(page, false, false, true);
+  await page.getByText('Other downloads & test details', { exact: true }).click();
+  const first = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download evidence JSON' }).click();
+  const firstBody = JSON.parse(await readFile((await (await first).path())!, 'utf8'));
+  const firstNotice = await page.locator('.report-retention').innerText();
+  expect(firstNotice).toContain('further downloads do not extend');
+  const second = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download evidence JSON' }).click();
+  const secondBody = JSON.parse(await readFile((await (await second).path())!, 'utf8'));
+  expect(secondBody.retention).toEqual(firstBody.retention);
+  expect(await page.locator('.report-retention').innerText()).toBe(firstNotice);
+  await page.clock.fastForward(12 * 3600 * 1000 + 1000);
+  await expect(page.getByRole('heading', { name: 'Private report deleted' })).toBeVisible();
+  await expect(page.getByText('Debug metadata exposed', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Download/ })).toHaveCount(0);
+});
+
+test('a refused export never saves stale evidence from an open page', async ({ page }) => {
+  await setup(page, false, false, true);
+  await page.route(`**/api/reviews/${id}/report`, r => r.fulfill({ status: 410, json: { error: 'report_content_deleted' } }));
+  let downloads = 0; page.on('download', () => downloads++);
+  await page.getByText('Other downloads & test details', { exact: true }).click();
+  await page.getByRole('button', { name: 'Download evidence JSON' }).click();
+  await expect(page.getByRole('alert')).toContainText('private content has been deleted');
+  expect(downloads).toBe(0);
 });
 
 test('raw tool output is hidden until requested and never interpreted as HTML', async ({ page }) => {
@@ -221,7 +293,9 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   await setup(page);
   const report = repeatedReport();
   report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
-  await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: { ...report, mode: 'pentest_agent', deadline_at: 1793643000, pentest: { scope: { origins: report.origins, methods: ['GET'] }, reviewers: [] } } }));
+  const review = { ...report, mode: 'pentest_agent', deadline_at: 1793643000, pentest: { scope: { origins: report.origins, methods: ['GET'] }, reviewers: [] } };
+  await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
+  await mockExport(page, review);
   await page.reload();
   await expect(page.getByRole('button', { name: 'Findings (2)', exact: true })).toBeVisible();
   await expect(page.getByText(/Roles differ — review needed/)).toBeVisible();

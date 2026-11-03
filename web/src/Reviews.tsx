@@ -5,7 +5,7 @@ import { useLive } from './useLive';
 import { useDialog } from './useDialog';
 import { WebsiteEvidence } from './WebsiteReview';
 import type { WebsiteContext, WebsiteResult } from './WebsiteReview';
-import { LiveEvidence, LiveProgress, LiveStatus, LiveReportDownloads, PdfReportDownload, liveRoles } from './LiveReport';
+import { LiveEvidence, LiveProgress, LiveStatus, LiveReportDownloads, PdfReportDownload, saveReportFile, liveRoles } from './LiveReport';
 import type { LiveActivity, LiveResult, LiveStep, LiveTiming } from './LiveReport';
 import type { PentestContext } from './Pentests';
 import { VulnerabilityReport } from './VulnerabilityReport';
@@ -25,14 +25,24 @@ type Step = {
   device_id: string | null; operator_id: string | null; compute_group: string | null;
   result: { runs: Run[] } | AgentResult | WebsiteResult | LiveResult | null; fixture_matches: boolean | null; evidence_complete?: boolean | null; progress?: LiveActivity | null;
 };
-type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; timing?: LiveTiming; steps: Step[]; evidence_source: string; pentest?: PentestContext; website?: WebsiteContext; source?: { source_id: string; snapshot_sha256: string; reviewers: WebsiteContext['reviewers'] }; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
+type Retention = { first_downloaded_at: number; expires_at: number; content_deleted: boolean };
+type Review = { retention?: Retention; id: string; mode: string; state: string; created_at: number; deadline_at: number; timing?: LiveTiming; steps: Step[]; evidence_source: string; pentest?: PentestContext; website?: WebsiteContext; source?: { source_id: string; snapshot_sha256: string; reviewers: WebsiteContext['reviewers'] }; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
+// Finished evidence is immutable until deletion. Recheck on export, manual
+// refresh, tab return or retention expiry instead of pulling megabytes forever.
+const pollActiveReview = (review: Review) => ['awaiting_payment', 'queued', 'running'].includes(review.state);
+
+function reportInput(review: Review): ReportInput {
+  const liveSteps: LiveStep[] = review.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, progress: s.progress, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null }));
+  const team = review.pentest?.reviewers ?? [];
+  return { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, scope_sha256: review.pentest?.scope_sha256, team };
+}
 
 const states: Record<string, string> = {
   awaiting_payment: 'Waiting for payment', queued: 'Waiting for a relay', running: 'In progress', completed: 'Example checks complete',
   needs_review: 'Needs review', cancelled: 'Cancelled', failed: 'Incomplete', leased: 'Assigned',
 };
 const label = (value: string) => states[value] ?? value.replaceAll('_', ' ');
-const reviewLabel = (review: Review) => ['website_agent', 'source_agent', 'pentest_agent'].includes(review.mode) && review.state === 'completed' ? 'Reports received' : label(review.state);
+const reviewLabel = (review: Review) => review.retention?.content_deleted ? 'Report deleted' : ['website_agent', 'source_agent', 'pentest_agent'].includes(review.mode) && review.state === 'completed' ? 'Reports received' : label(review.state);
 function stepLabel(step: Step) {
   if (step.state !== 'completed') return label(step.state);
   const result = step.result;
@@ -92,10 +102,36 @@ function Evidence({ step }: { step: Step }) {
 
 export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id: string; csrf: string; onClose: () => void; onChange: () => void; onOpenOrders?: () => void }) {
   const panel = useRef<HTMLElement>(null);
-  const detail = useLive<Review>(`/reviews/${id}`);
+  const detail = useLive<Review>(`/reviews/${id}`, true, 10_000, pollActiveReview);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const review = detail.data;
+  const [downloadRetention, setDownloadRetention] = useState<Retention>();
+  const [clockExpired, setClockExpired] = useState(false);
+  const retention = downloadRetention ?? review?.retention;
+  const deleted = clockExpired || Boolean(retention?.content_deleted);
+  const canExport = Boolean(review && !deleted && !['awaiting_payment', 'queued', 'running'].includes(review.state));
+  useEffect(() => {
+    if (!retention) return;
+    const delay = retention.expires_at * 1000 - Date.now();
+    if (delay <= 0) { setClockExpired(true); return; }
+    const timer = window.setTimeout(() => { setClockExpired(true); detail.refresh(); }, delay);
+    return () => window.clearTimeout(timer);
+  }, [retention?.expires_at, detail.refresh]);
+  async function exportReview(): Promise<Review> {
+    const latest = await write<Review>(`/reviews/${id}/report`, csrf, {});
+    if (latest.retention) setDownloadRetention(latest.retention);
+    detail.refresh();
+    return latest;
+  }
+  const loadReport = async () => reportInput(await exportReview());
+  async function exportEvidence() {
+    setBusy(true); setError('');
+    try { saveReportFile(`patchriot-review-${id}.json`, JSON.stringify(await exportReview(), null, 2), 'application/json'); }
+    catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  const retentionNotice = <p className="notice report-retention" role="status">{retention ? <>Save a copy before <strong>{new Date(retention.expires_at * 1000).toLocaleString()}</strong>. Private findings and evidence will be deleted then; further downloads do not extend this time.</> : <>{!canExport && 'Downloads become available when the test ends. '}The requester’s first download starts a 12-hour deletion timer. Save the files you need. Staff exports do not start this timer.</>}</p>;
   const material = review?.website ?? review?.source;
   const liveSteps: LiveStep[] = review?.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, progress: s.progress, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null })) ?? [];
   useEffect(() => { if (review) onChange(); }, [review?.state, onChange]);
@@ -112,23 +148,24 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   const operators = new Set(review?.steps.flatMap(step => step.operator_id ? [step.operator_id] : []));
   const groups = new Set(review?.steps.flatMap(step => step.compute_group ? [`${step.operator_id}:${step.compute_group}`] : []));
   const devices = new Set(review?.steps.flatMap(step => step.device_id ? [step.device_id] : []));
+  if (review && deleted) return <section ref={panel} tabIndex={-1} className="review-detail panel" aria-label="Review report"><div className="section-heading"><h2>Private report deleted</h2><button className="quiet" onClick={onClose}>Close report ×</button></div><p>The 12-hour download window ended. Findings, HTTP evidence and tool output are no longer available here. Your job, permission and payment records remain.</p><p>Copies you or your operator already saved are outside this deletion.</p>{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>View order →</button>}</section>;
   if (review?.mode === 'pentest_agent') {
     const team = review.pentest?.reviewers ?? [];
     const teamOperators = new Set(team.map(r => r.operator_id)).size;
     const teamGroups = new Set(team.map(r => `${r.operator_id}:${r.compute_group}`)).size;
-    const report: ReportInput = { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, scope_sha256: review.pentest?.scope_sha256, team };
+    const report = reportInput(review);
     const target = review.pentest?.scope.origins.map(origin => { try { return new URL(origin).host; } catch { return origin; } }).join(', ');
     return <section ref={panel} tabIndex={-1} className="review-detail panel live-review" aria-label="Review report">
       <div className="section-heading"><div><p className="eyebrow">PRIVATE WEBSITE ASSESSMENT</p><h2 className="review-target">{target || 'Website test'}</h2><p className="fine">Requested {new Date(review.created_at * 1000).toLocaleString()}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
       {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} <button className="inline" onClick={detail.refresh}>Retry report</button></div>}
       {!['completed', 'needs_review'].includes(review.state) && <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} timing={review.timing} />}
       {['awaiting_payment', 'queued', 'running'].includes(review.state) && <LiveProgress steps={liveSteps} state={review.state} />}
-      <PdfReportDownload report={report} />
+      {retentionNotice}<PdfReportDownload report={report} loadReport={loadReport} disabled={!canExport} />
       <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a website ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
       <VulnerabilityReport report={report} />
       <details className="assessment-disclosure report-technical"><summary>Other downloads & test details</summary>
-        <LiveReportDownloads id={review.id} steps={liveSteps} origins={review.pentest?.scope.origins ?? []} />
-        <a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a>
+        <LiveReportDownloads id={review.id} steps={liveSteps} loadReport={loadReport} disabled={!canExport} />
+        <button className="quiet" disabled={!canExport || busy} onClick={() => void exportEvidence()}>Download evidence JSON ↓</button>
         <dl><dt>Reference</dt><dd>{id}</dd><dt>Website</dt><dd>{review.pentest?.scope.origins.join(', ')}</dd><dt>Test plan</dt><dd>{review.pentest?.scope.objective}</dd><dt>Model provider</dt><dd>{review.pentest?.provider}</dd><dt>Selected team</dt><dd>{team.length} agents · {teamOperators} operator(s) · {teamGroups} machine group(s). Shared machines and models are not independent reviewers.</dd></dl>
         <ol>{team.map((r, i) => <li key={r.device_id}>{Object.values(liveRoles)[i]} · {r.device_name} · {r.declared_model}</li>)}</ol>
       </details>
@@ -139,9 +176,10 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
     <div className="section-heading"><div><p className="eyebrow">{!review ? 'PRIVATE REVIEW' : review.mode === 'pentest_agent' ? 'LIVE WEBSITE / PRIVATE REPORT' : review.mode === 'source_agent' ? 'SOURCE CODE / PRIVATE AGENT REVIEW' : review.mode === 'website_agent' ? 'WEBSITE SNAPSHOT / PRIVATE AGENT REVIEW' : `ACCESS CONTROL / ${review.mode === 'owned_agent' ? 'LOCAL AGENT CHECK' : 'OWNED FIXTURE'}`}</p><h2>{review ? reviewLabel(review) : detail.error ? 'Review unavailable' : 'Loading review…'}</h2><p className="fine">{id}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
     {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} {detail.error && <button className="inline" onClick={detail.refresh}>Retry report</button>}</div>}
     {review && <>
-      <div className="review-actions"><a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a><button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel review</button>}</div>
+      {retentionNotice}
+      <div className="review-actions"><button className="quiet" disabled={!canExport || busy} onClick={() => void exportEvidence()}>Download evidence JSON ↓</button><button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel review</button>}</div>
       {review.payment && <p className="fine">This review has a payment record. Manage cancellation in Orders.{onOpenOrders && <button className="inline" onClick={onOpenOrders}>Open orders →</button>}</p>}
-      {review.mode === 'pentest_agent' && <><LiveProgress steps={liveSteps} state={review.state} /><LiveReportDownloads id={review.id} steps={liveSteps} origins={review.pentest?.scope.origins ?? []} /></>}
+      {review.mode === 'pentest_agent' && <><LiveProgress steps={liveSteps} state={review.state} /><LiveReportDownloads id={review.id} steps={liveSteps} loadReport={loadReport} disabled={!canExport} /></>}
       {review.mode !== 'pentest_agent' && ['queued', 'running'].includes(review.state) && <p className="fine">{review.steps.filter(step => step.state === 'completed').length} of 3 reports received · Ends at {new Date(review.deadline_at * 1000).toLocaleTimeString()}</p>}
       <div className="notice">{devices.size} {devices.size === 1 ? 'device' : 'devices'} · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. {review.mode === 'pentest_agent' ? 'These agents make approved live HTTP probes and retain request evidence. Coverage is limited to the approved methods and account access.' : review.mode === 'source_agent' ? 'These agents inspect source excerpts. This mode does not build or execute the code.' : review.mode === 'website_agent' ? 'These agents review saved text. No browser execution or live exploit reproduction was performed.' : 'These are operator-reported checks of our owned example.'} Shared machines and models are not independent reviewers.</div>
       {review.pentest && <details className="execution-details"><summary>Approved scope and review team</summary><p>{review.pentest.scope.origins.join(', ')}</p><p>{review.pentest.scope.objective}</p><p>Model provider: {review.pentest.provider}</p><ol>{review.pentest.reviewers.map(r => <li key={r.device_id}>{r.device_name} · {r.operator_name} · {r.declared_model} · {r.compute_group}</li>)}</ol></details>}

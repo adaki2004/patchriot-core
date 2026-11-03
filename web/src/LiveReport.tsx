@@ -40,7 +40,7 @@ export function LiveStatus({ steps, state, deadline, timing }: { steps: LiveStep
   </div>;
 }
 
-function save(filename: string, content: string, mime: string) {
+export function saveReportFile(filename: string, content: string, mime: string) {
   const url = URL.createObjectURL(new Blob([content], { type: mime }));
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -91,29 +91,38 @@ function inventory(steps: LiveStep[]) {
   return [...rows.values()];
 }
 
-export function PdfReportDownload({ report }: { report: ReportInput }) {
+export function PdfReportDownload({ report, loadReport, disabled }: { report: ReportInput; loadReport: () => Promise<ReportInput>; disabled: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   async function download() {
     setBusy(true); setError('');
     try {
       const { createReportPdf } = await import('./reportPdf');
-      const bytes = await createReportPdf(report);
+      const latest = await loadReport();
+      const bytes = await createReportPdf(latest);
       const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'application/pdf' }));
       const a = document.createElement('a'); a.href = url; a.download = `patchriot-${report.id}-report.pdf`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch { setError('The PDF could not be generated. Please retry; your saved evidence is unchanged.'); }
+    } catch (e) { setError(e instanceof Error ? e.message : 'The PDF could not be prepared. Retry before the report expires.'); }
     finally { setBusy(false); }
   }
-  return <><div className="report-download-main"><button className="primary" disabled={busy} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download vulnerability report ↓'}</button><p>Summary, findings, evidence & recommended fixes.</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
+  return <><div className="report-download-main"><button className="primary" disabled={busy || disabled} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download vulnerability report ↓'}</button><p>Summary, findings, evidence & recommended fixes.</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
 }
 
-export function LiveReportDownloads({ id, steps, origins }: { id: string; steps: LiveStep[]; origins: string[] }) {
+export function LiveReportDownloads({ id, steps, loadReport, disabled }: { id: string; steps: LiveStep[]; loadReport: () => Promise<ReportInput>; disabled: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const endpoints = inventory(steps);
-  function exportPostman() {
-    save(`patchriot-${id}-endpoints.postman.json`, JSON.stringify({ info: { name: 'Patchriot observed endpoints', _postman_id: id, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json', description: 'Observed requests, not a complete API specification. Query values and headers are omitted. These observations do not establish authorization or BOLA. Review scope before sending any request.' }, item: endpoints.map(e => ({ name: `${e.method} ${e.url}`, request: { method: e.method, url: { raw: e.url, query: e.query.map(key => ({ key, value: '', disabled: true, description: 'Observed name; value omitted from export.' })) }, description: `Observed HTTP status: ${[...e.statuses].join(', ') || 'No response'}. References: ${e.refs.join(', ')}. Credentials and request bodies are omitted; see the private report for account-access evidence.` }, response: [] })) }, null, 2), 'application/json');
+  async function exportFile(kind: 'markdown' | 'postman') {
+    setBusy(true); setError('');
+    try {
+      const latest = await loadReport();
+      if (kind === 'markdown') saveReportFile(`patchriot-${id}-report.md`, reportMarkdown(id, latest.steps, latest.origins), 'text/markdown');
+      else saveReportFile(`patchriot-${id}-endpoints.postman.json`, JSON.stringify({ info: { name: 'Patchriot observed endpoints', _postman_id: id, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json', description: 'Observed requests, not a complete API specification. Query values and headers are omitted. These observations do not establish authorization or BOLA. Review scope before sending any request.' }, item: inventory(latest.steps).map(e => ({ name: `${e.method} ${e.url}`, request: { method: e.method, url: { raw: e.url, query: e.query.map(key => ({ key, value: '', disabled: true, description: 'Observed name; value omitted from export.' })) }, description: `Observed HTTP status: ${[...e.statuses].join(', ') || 'No response'}. References: ${e.refs.join(', ')}. Credentials and request bodies are omitted; see the private report for account-access evidence.` }, response: [] })) }, null, 2), 'application/json');
+    } catch (e) { setError(e instanceof Error ? e.message : 'The export could not be prepared.'); }
+    finally { setBusy(false); }
   }
-  return <section className="report-exports"><div className="review-actions"><button className="quiet" onClick={() => save(`patchriot-${id}-report.md`, reportMarkdown(id, steps, origins), 'text/markdown')}>Download readable report ↓</button><button className="quiet" disabled={!endpoints.length} onClick={exportPostman}>Export observed endpoints ↓</button></div><details><summary>What is in the endpoint export?</summary><p>A Postman collection of the URLs and methods actually requested, with response codes and evidence references. Query values and headers are omitted. It is not a complete API specification. A publicly reachable route alone does not prove broken authorization.</p></details></section>;
+  return <section className="report-exports"><div className="review-actions"><button className="quiet" disabled={disabled || busy} onClick={() => void exportFile('markdown')}>Download readable report ↓</button><button className="quiet" disabled={disabled || busy || !endpoints.length} onClick={() => void exportFile('postman')}>Export observed endpoints ↓</button></div>{error && <p className="notice error" role="alert">{error}</p>}<details><summary>What is in the endpoint export?</summary><p>A Postman collection of the URLs and methods actually requested, with response codes and evidence references. Query values and headers are omitted. It is not a complete API specification. A publicly reachable route alone does not prove broken authorization.</p></details></section>;
 }
 
 function RequestEvidence({ entry }: { entry: HttpRecord }) {

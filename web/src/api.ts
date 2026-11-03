@@ -29,6 +29,8 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  report_content_deleted: "The report’s download window ended and its private content has been deleted.",
+  report_not_finished: "Wait for the test to end before downloading its report.",
   invalid_inquiry: 'Add your name, company or team, email and a message of 20–3,000 characters.',
   inquiry_changed: 'This inquiry changed after being saved. Refresh the page before sending another.',
   inquiry_not_found: 'This inquiry is no longer available. Refresh the inbox.',

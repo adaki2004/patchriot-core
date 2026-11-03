@@ -112,7 +112,7 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
                 if view
                     .pentest
                     .as_ref()
-                    .is_some_and(|c| r.evidence_complete(&c.scope))
+                    .is_some_and(|c| r.evidence_complete_for_role(&c.scope, role))
                     && r.scope_sha256 == *hash =>
             {
                 let run = &r.execution;
@@ -124,6 +124,24 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
                     run.inference_calls,
                     0,
                     run.http_requests,
+                )
+            }
+            None if view.retention.as_ref().is_some_and(|r| r.content_deleted) => {
+                // The authenticated dispatcher saved this bounded receipt when
+                // it accepted the result. Findings can expire while accounting
+                // is offline; deleting them must not delete earned work.
+                let receipt = step.receipt.as_ref().ok_or("earning_receipt_missing")?;
+                if !receipt.valid_for(&view.mode, hash) {
+                    return Err("earning_receipt_mismatch");
+                }
+                (
+                    receipt.state,
+                    receipt.cleanup_confirmed,
+                    receipt.duration_ms,
+                    &receipt.model,
+                    receipt.inference_calls,
+                    receipt.terminal_calls,
+                    receipt.http_requests,
                 )
             }
             _ => return Err("earning_result_mismatch"),

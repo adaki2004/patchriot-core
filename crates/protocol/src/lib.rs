@@ -6,6 +6,7 @@
 //! A recent signature alone does not make an operation idempotent or authorized.
 
 pub mod pentests;
+pub mod reports;
 pub mod sources;
 pub mod website_reviews;
 pub mod websites;
@@ -676,6 +677,8 @@ pub struct ReviewStepView {
     pub evidence_complete: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub progress: Option<pentests::LiveProgressView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<reports::WorkReceipt>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -699,6 +702,8 @@ pub struct ReviewView {
     pub payment: Option<website_reviews::ReviewPayment>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timing: Option<ReviewTiming>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention: Option<reports::ReportRetention>,
 }
 
 /// Queue counts reveal no other request, target or account. Waiting is bounded
