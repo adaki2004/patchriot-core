@@ -5,7 +5,7 @@ import { AuditRows, auditActive, useAudits } from './Audits';
 import { AgentList } from './Pairing';
 import { money } from './Earnings';
 import { orderLabel, paymentLabel } from './Orders';
-import type { Order } from './Orders';
+import { useOrderHistory } from './orderHistory';
 import { UIIcon } from './UIIcon';
 
 type Earnings = { balance: { available: string } };
@@ -16,7 +16,8 @@ const workPriority = (state: string) => needsAction(state) ? 0 : auditActive(sta
 
 export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet | null; onOpen: (view: View, id?: string | null) => void }) {
   const audits = useAudits();
-  const orders = useLive<Order[]>('/orders', true, 30_000);
+  const history = useOrderHistory();
+  const { orders, coupons } = history;
   const earnings = useLive<Earnings>('/withdrawals', true, 60_000);
   const ready = audits.ready && !audits.error;
   const complete = audits.items.filter(item => item.state === 'completed').length;
@@ -46,9 +47,10 @@ export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet
     <div className="workspace-cards">
       <section className="work-card workspace-orders"><div className="card-title"><h2>Orders & payments</h2><button onClick={() => onOpen('orders')}>View all <span aria-hidden="true">↗</span></button></div>
         {orders.error && <p className="notice error" role="alert">Orders could not refresh. <button className="inline" onClick={orders.refresh}>Retry orders</button></p>}
-        {!orders.data && !orders.error && <p role="status">Loading orders…</p>}
-        {orders.data?.length === 0 && <div className="orders-empty"><UIIcon name="wallet" /><p>No paid orders yet.<br /><small>Your payment records will live here.</small></p></div>}
-        {orders.data?.slice(0, 2).map(order => <button className="dashboard-order" key={order.id} onClick={() => onOpen('orders', order.id)}><UIIcon name="file" /><span><strong>Audit · {order.id.slice(0, 8)}</strong><small>{paymentLabel(order)}</small></span><span className={`status-chip ${order.requires_attention ? 'state-needs_review' : ''}`}>{orderLabel(order)}</span></button>)}
+        {coupons.error && <p className="notice error" role="alert">Coupon history could not refresh. <button className="inline" onClick={coupons.refresh}>Retry coupon history</button></p>}
+        {!history.ready && !orders.error && !coupons.error && <p role="status">Loading orders…</p>}
+        {history.ready && !orders.error && !coupons.error && history.entries.length === 0 && <div className="orders-empty"><UIIcon name="wallet" /><p>No orders yet.<br /><small>Paid and coupon assessments will appear here.</small></p></div>}
+        {history.entries.slice(0, 2).map(entry => <button className="dashboard-order" key={`${entry.kind}-${entry.record.id}`} onClick={() => onOpen('orders', entry.record.id)}><UIIcon name="file" /><span><strong>Audit · {entry.record.id.slice(0, 8)}</strong><small>{entry.kind === 'coupon' ? 'Covered by coupon · $0 charged' : paymentLabel(entry.record)}</small></span><span className={`status-chip ${entry.kind === 'payment' && entry.record.requires_attention ? 'state-needs_review' : ''}`}>{entry.kind === 'coupon' ? (entry.record.review_id ? 'Open assessment' : 'Start not confirmed') : orderLabel(entry.record)}</span></button>)}
         {earnings.error && <p className="notice error" role="alert">Earnings could not refresh. <button className="inline" onClick={earnings.refresh}>Retry earnings</button></p>}
         <button className="dashboard-earnings" aria-label="Your available earnings" onClick={() => onOpen('earnings')}><span>Available earnings <strong>{earnings.data?.balance && !earnings.error ? money(earnings.data.balance.available) : '—'} USDC</strong></span><UIIcon name="arrow" /></button>
       </section>

@@ -91,7 +91,7 @@ export function AgentList({ compact = false, onAll }: { compact?: boolean; onAll
         <dt>Runner version</dt><dd>{agent.runtime_version}</dd>
         {agent.system && <><dt>Architecture</dt><dd>{agent.system.architecture}</dd><dt>Relay version</dt><dd>{agent.system.relay_version}</dd></>}
         <dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.includes('artex_engine_v1') ? 'ARTEX + standard checks' : 'Standard checks') : 'Not enabled'}</dd>
-        <dt>Reports received</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd>
+        {agent.live_tests && <><dt>Supported roles</dt><dd>Investigation, reproduction and evidence review. Assigned per assessment.</dd></>}<dt>Reports received</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd>
         <dt>Last heartbeat</dt><dd>{agent.last_seen_at ? new Date(agent.last_seen_at * 1000).toLocaleString() : 'None yet'}</dd></>}</dl>
       {!compact && <small className="subtle">Device {agent.id.slice(0, 8)}</small>}
     </article>)}</div>

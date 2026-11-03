@@ -44,7 +44,7 @@ test('order history is private navigation and an empty pilot is not a checkout',
   await page.route('**/api/orders', route => route.fulfill({ json: [] }));
   await page.reload();
   await page.evaluate(() => { location.hash = '/orders'; });
-  await expect(page.getByRole('heading', { name: 'No paid orders yet.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No orders yet.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Order history' })).toContainText('Paid checkout is not enabled');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -123,7 +123,7 @@ test('an outage preserves the last order while session expiry clears it', async 
   await expect(detail.getByRole('alert')).toContainText('may be out of date');
   await expect(detail.getByRole('heading', { name: 'Waiting for payment', exact: true })).toBeVisible();
   await expect(detail.getByRole('button', { name: 'Request cancellation', exact: true })).toBeDisabled();
-  await expect(page.getByRole('heading', { name: 'No paid orders yet.' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'No orders yet.' })).toHaveCount(0);
   failure = 401;
   await detail.getByRole('button', { name: 'Refresh order ↻', exact: true }).click();
   await expect(page.getByRole('button', { name: 'App', exact: true })).toBeVisible();
@@ -152,4 +152,59 @@ test('finished work is preserved and paid reports direct cancellation to the sav
   await report.getByRole('button', { name: 'Open orders →', exact: true }).click();
   await expect(report).toHaveCount(0);
   await expect(detail).toBeVisible();
+});
+
+test('coupon purchases appear on the dashboard and Orders without payment instructions', async ({ page }) => {
+  await setup(page);
+  const couponId = '00000000-0000-4000-8000-000000000091';
+  const coupon = { id: couponId, label: 'Owned website assessment', request_id: reviewId, reserved_at: new Date().toISOString(), review_id: reviewId, last_error: null, consent: { snapshot_sha256: 'a'.repeat(64), device_ids: [account.id, orderId, reviewId] } };
+  await page.route('**/api/review-codes', route => route.fulfill({ json: [coupon] }));
+  const paymentReads: string[] = [];
+  await page.route('**/api/orders/*', route => { paymentReads.push(route.request().url()); return route.fulfill({ status: 404, json: { error: 'not_a_paid_order' } }); });
+  await page.goto('/#/overview');
+  const card = page.locator('.workspace-orders');
+  await expect(card).toContainText('Covered by coupon · $0 charged');
+  await expect(card.getByText('No orders yet.')).toHaveCount(0);
+  await card.locator('.dashboard-order').click();
+  await expect(page).toHaveURL(new RegExp('#/orders/' + couponId + '$'));
+  await expect(page.getByRole('region', { name: 'Coupon assessments' })).toContainText('Owned website assessment');
+  await expect(page.getByRole('region', { name: 'Order history' })).toContainText('Covered by coupon · $0 charged');
+  await expect(page.getByRole('button', { name: 'Show current payment instructions →' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Open assessment →', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('#/reviews/' + reviewId + '$'));
+  expect(paymentReads).toEqual([]);
+});
+
+test('an unconfirmed coupon order resumes its reservation without charging again', async ({ page }) => {
+  await setup(page);
+  const couponId = '00000000-0000-4000-8000-000000000092';
+  const coupon = { id: couponId, label: 'Saved coupon request', request_id: orderId, reserved_at: new Date().toISOString(), review_id: null, last_error: 'unavailable', consent: { snapshot_sha256: 'b'.repeat(64), device_ids: [account.id, orderId, reviewId] } };
+  await page.route('**/api/review-codes', route => route.fulfill({ json: [coupon] }));
+  let resumed = 0;
+  await page.route(`**/api/review-codes/${couponId}/resume`, route => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
+    expect(route.request().postDataJSON()).toEqual({});
+    resumed++;
+    return route.fulfill({ json: { redemption_id: couponId, request_id: orderId, review_id: reviewId } });
+  });
+  await page.goto('/#/orders/' + couponId);
+  await expect(page.getByRole('region', { name: 'Order history' })).toContainText('Start not confirmed');
+  await page.getByRole('button', { name: 'Resume saved request →', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp('#/reviews/' + reviewId + '$'));
+  expect(resumed).toBe(1);
+});
+
+test('coupon history failure cannot imply empty purchase history', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/orders', route => route.fulfill({ json: [example()] }));
+  let unavailable = true;
+  await page.route('**/api/review-codes', route => route.fulfill(unavailable ? { status: 503, json: { error: 'database_unavailable' } } : { json: [] }));
+  await page.goto('/#/overview');
+  await expect(page.locator('.workspace-orders')).toContainText('Coupon history could not refresh');
+  await expect(page.locator('.dashboard-order')).toHaveCount(1);
+  await expect(page.getByText('No orders yet.', { exact: true })).toHaveCount(0);
+  unavailable = false;
+  await page.getByRole('button', { name: 'Retry coupon history', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Coupon history' })).toHaveCount(0);
 });

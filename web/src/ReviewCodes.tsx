@@ -3,7 +3,7 @@ import { write } from './api';
 import { useLive } from './useLive';
 
 export type CodeStart = { redemption_id: string; request_id: string; review_id: string };
-type Reservation = {
+export type Reservation = {
   id: string; label: string; site_check_id: string; request_id: string; reserved_at: string;
   consent: { snapshot_sha256: string; device_ids: string[] }; review_id: string | null; last_error: string | null;
 };
@@ -18,7 +18,7 @@ export function checkedCodeStart(value: CodeStart, requestId: string, redemption
 }
 
 /** Saved requests are recoverable without putting the secret code in a URL or browser storage. */
-export function SponsoredReviews({ csrf, onOpen }: { csrf: string; onOpen: (id: string) => void }) {
+export function SponsoredReviews({ csrf, onOpen, selectedId }: { csrf: string; onOpen: (id: string) => void; selectedId?: string }) {
   const records = useLive<Reservation[]>('/review-codes');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -35,9 +35,9 @@ export function SponsoredReviews({ csrf, onOpen }: { csrf: string; onOpen: (id: 
   if (!records.error && !records.data?.length) return null;
   return <section className="panel" aria-label="Coupon assessments">
     <div className="table-toolbar"><strong>Coupon assessments</strong><button className="quiet" onClick={records.refresh}>Refresh coupon assessments ↻</button></div>
-    <p className="fine">A coupon covers one request. It is not a payment or cash balance. Retrying keeps the same assessment and selected agents.</p>
+    <p className="fine">Covered by coupon · $0 charged. One coupon covers one assessment. Resume checks the saved request without using another coupon.</p>
     {(records.error || error) && <div className="notice error" role="alert">{error || `Could not load coupon assessments. ${records.error}`}</div>}
-    <div className="review-list">{records.data?.map(record => <article className="sponsored-review" key={record.id}>
+    <div className="review-list">{records.data?.filter(record => !selectedId || record.id === selectedId).map(record => <article className="sponsored-review" key={record.id}>
       <div><strong>{record.label}</strong><p className="fine">{new Date(record.reserved_at).toLocaleString()} · {record.review_id ? 'Review created' : 'Start not confirmed'}</p>
         {!record.review_id && <p className="fine">The code is reserved for this request. Resume it to check whether the review started. If the selected agents remain unavailable, contact the operator.</p>}
         <details className="execution-details"><summary>Saved sharing permission</summary><p>Permission applies to these three devices and this assessment. Resume cannot replace them.</p><ol>{record.consent.device_ids.map((id, index) => <li key={id}>{['Investigator', 'Reproducer', 'Challenger'][index]}: <code>{id}</code></li>)}</ol><p className="fine">Scope or material hash: <code>{record.consent.snapshot_sha256}</code></p></details>

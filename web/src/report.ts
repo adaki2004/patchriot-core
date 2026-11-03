@@ -2,6 +2,12 @@ import type { LiveFinding, LiveResult, LiveRole, LiveStep } from './LiveReport';
 
 export const reportRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export const roleDuties = { investigator: 'Find leads and record what the website returned.', reproducer: 'Repeat the checks and challenge the initial findings.', challenger: 'Review the evidence, impact and proposed fixes.' };
+/** Assigned methods describe the role prompt, not proof that a test ran. */
+export const roleMethods = {
+  investigator: ['Website and API mapping', 'Configuration and input checks', 'Evidence collection'],
+  reproducer: ['Repeat reported probes', 'Compare positive and negative controls', 'Challenge false positives'],
+  challenger: ['Retest material claims', 'Assess impact and severity', 'Review proposed fixes and gaps'],
+} as const;
 export const severities = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export const supportLabels: Record<string, string> = { observed: 'Observed', reproduced: 'Reproduction reported', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
 export type ReportInput = { id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };

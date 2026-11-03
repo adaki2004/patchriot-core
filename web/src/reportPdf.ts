@@ -1,7 +1,7 @@
 import { coverageChecks, checkLabels } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { reportSummary, reportRoles, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
+import { reportSummary, reportRoles, roleMethods, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
 
 const ink = rgb(.09, .12, .19), muted = rgb(.36, .40, .48), blue = rgb(.25, .40, .75), red = rgb(.82, .26, .27);
 const width = 595.28, height = 841.89, margin = 48, lineWidth = width - margin * 2;
@@ -159,8 +159,10 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     else p.paragraph(roleOutcome(s).detail);
   }
   p.begin('06 / Tool register & record');
+  p.paragraph('Roles share baseline tools. Their assigned methods differ; a listed method is not proof that a check ran. Compare their own request references and limitations.', 9, muted);
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);
+    p.paragraph('Assigned methods: ' + roleMethods[s.role].join('; '), 9, muted);
     if (!s.result?.tool_runs?.length) p.paragraph('No tool execution records were received.');
     for (const t of s.result?.tool_runs ?? []) {
       p.paragraph(`${t.tool} / ${t.version}`, 11, blue);

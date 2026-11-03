@@ -93,7 +93,7 @@ export function PdfReportDownload({ report }: { report: ReportInput }) {
     } catch { setError('The PDF could not be generated. Please retry; your saved evidence is unchanged.'); }
     finally { setBusy(false); }
   }
-  return <><div className="report-download-main"><button className="primary" disabled={busy} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download vulnerability report ↓'}</button><p>Branded PDF · summary, findings, evidence references & limitations</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
+  return <><div className="report-download-main"><button className="primary" disabled={busy} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download vulnerability report ↓'}</button><p>Summary, findings, evidence & recommended fixes.</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
 }
 
 export function LiveReportDownloads({ id, steps, origins }: { id: string; steps: LiveStep[]; origins: string[] }) {
