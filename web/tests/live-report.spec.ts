@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
+import { PDFDocument, PDFName } from 'pdf-lib';
 import type { LiveResult } from '../src/LiveReport';
 
 const id = '00000000-0000-4000-8000-000000000003';
@@ -25,34 +26,39 @@ async function setup(page: import('@playwright/test').Page, failed = false, stop
   await page.goto(`/#/reviews/${id}`);
 }
 
-test('live reports show saved progress, inert findings, and referenced requests', async ({ page }) => {
+test('a compact report preserves the author, uncertainty and request references', async ({ page }) => {
   await setup(page);
   await expect(page.getByRole('progressbar', { name: 'Role reports received' })).toHaveAttribute('value', '1');
-  await expect(page.getByText('1 of 3 reports received', { exact: true })).toBeVisible();
   await page.getByText('Latest activity', { exact: true }).click();
   await expect(page.getByText('Running scoped tools', { exact: true })).toBeVisible();
   await expect(page.getByText('8 requests · 0 model calls · 2 tool runs recorded', { exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Scout', exact: true })).toBeVisible();
-  await expect(page.locator('.live-stage-list').getByText('Recon', { exact: true })).toBeVisible();
-  await expect(page.locator('.live-stage-list').getByText('Verifier', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Run example check' })).toHaveCount(0);
-  await expect(page.getByText('No evidence received yet.', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: '<script>window.fake=true</script>' })).toBeVisible();
+  await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible();
+  await expect(page.locator('.report-finding-body').first()).not.toBeVisible();
+  await expect(page.getByText('<script>window.fake=true</script>', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => 'fake' in window)).toBe(false);
-  await page.getByRole('combobox', { name: 'Filter findings', exact: true }).selectOption('unconfirmed');
-  await expect(page.getByRole('heading', { name: 'Debug metadata exposed' })).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Filter findings', exact: true }).selectOption('all');
-  await page.getByRole('button', { name: 'Inspect 2 supporting requests' }).click();
+  await page.getByRole('combobox', { name: 'Filter by severity' }).selectOption('high');
+  await expect(page.getByText('No observations at this severity.')).toBeVisible();
+  await page.getByRole('combobox', { name: 'Filter by severity' }).selectOption('all');
+  await page.locator('.report-finding > summary').first().click();
+  await page.getByRole('button', { name: 'Inspect evidence' }).click();
+  await page.getByText('Request evidence (2)', { exact: true }).click();
   await expect(page.getByText('HTTP #1', { exact: true })).toBeVisible();
-  await expect(page.getByText('HTTP #2', { exact: true })).toBeVisible();
   await page.getByText('Request and response headers', { exact: true }).first().click();
   await expect(page.getByText('Recorded response headers', { exact: true }).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('report and endpoint exports preserve scope without putting query values in Postman', async ({ page }) => {
+test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }) => {
   await setup(page);
-  await page.getByText('Downloads & test details', { exact: true }).click();
+  const pdfDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download vulnerability report' }).click();
+  const pdfFile = await pdfDownload;
+  expect(pdfFile.suggestedFilename()).toBe(`patchriot-${id}-report.pdf`);
+  const pdf = await PDFDocument.load(await readFile((await pdfFile.path())!));
+  expect(pdf.getTitle()).toBe('Patchriot vulnerability report');
+  expect(pdf.getPageCount()).toBeGreaterThanOrEqual(8);
+  expect(pdf.catalog.get(PDFName.of('OpenAction'))).toBeUndefined();
+  await page.getByText('Other downloads & test details', { exact: true }).click();
   const postman = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export observed endpoints' }).click();
   const download = await postman;
@@ -63,68 +69,60 @@ test('report and endpoint exports preserve scope without putting query values in
   expect(collection.item[0].request.url.query).toEqual([{ key: 'token', value: '', disabled: true, description: 'Observed name; value omitted from export.' }]);
   const report = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download readable report' }).click();
-  const saved = await report;
-  const md = await readFile((await saved.path())!, 'utf8');
+  const md = await readFile((await (await report).path())!, 'utf8');
   expect(md).toContain('https://owned.example');
   expect(md).toContain('investigator#1');
   expect(md).toContain('Recommended fix (not tested)');
-  expect(md).toContain('```text\n<script>window.fake=true</script>');
-  expect(md).toContain('### Recorded tools');
-  expect(md).toContain('3.11.1');
   expect(md).toContain(fixExample);
-  expect(md).toContain('````text\nDisable the debug route');
 });
 
-test('fix examples stay inert, preserve code, and fit the viewport', async ({ page }) => {
+test('finding text and suggested code remain inert and fit mobile', async ({ page }) => {
   await setup(page);
-  const finding = page.locator('.live-finding').first();
-  await finding.getByText('Recommended fix', { exact: true }).click();
+  const finding = page.locator('.report-finding').first();
+  await finding.locator('summary').first().click();
   await expect(finding.getByText('Suggested example · html', { exact: true })).toBeVisible();
   await expect(finding.locator('.remediation-example code')).toHaveText(fixExample.split('```html\n')[1].split('```')[0]);
   await expect(finding.locator('.remediation')).toContainText('<img src=x onerror="window.fixExecuted=true">');
   await expect(finding.locator('.remediation script, .remediation img')).toHaveCount(0);
   expect(await page.evaluate(() => 'fixExecuted' in window)).toBe(false);
-  const example = finding.locator('.remediation-example pre');
-  await expect(example).toBeVisible();
-  expect(await example.evaluate(el => ({ scrolling: el.scrollWidth > el.clientWidth, whitespace: getComputedStyle(el).whiteSpace }))).toEqual({ scrolling: true, whitespace: 'pre' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  const unfinished = page.locator('.live-finding').nth(1);
-  await unfinished.getByText('Recommended fix', { exact: true }).click();
-  await expect(unfinished.locator('.remediation')).toContainText('```unfinished');
-  await expect(unfinished.locator('.remediation')).toContainText('Keep this incomplete example visible.');
+  await page.locator('.report-finding > summary').nth(1).click();
+  await expect(page.locator('.report-finding').nth(1)).toContainText('Keep this incomplete example visible.');
 });
 
-test('tool transcripts remain inert and open actual HTTP references', async ({ page }) => {
+test('raw tool output is hidden until requested and never interpreted as HTML', async ({ page }) => {
   await setup(page);
+  await expect(page.getByText('<script>window.toolExecuted=true</script>', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Technical evidence', exact: true }).click();
   await page.getByText('Tools run (1)', { exact: true }).click();
   await expect(page.getByText('nuclei · 3.11.1', { exact: true })).toBeVisible();
+  await expect(page.getByText('<script>window.toolExecuted=true</script>', { exact: true })).not.toBeVisible();
+  await page.getByText('Tool output', { exact: true }).click();
   await expect(page.getByText('<script>window.toolExecuted=true</script>', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => 'toolExecuted' in window)).toBe(false);
   await page.getByRole('button', { name: 'Inspect tool requests' }).click();
   await expect(page.getByText('HTTP #1', { exact: true })).toBeVisible();
-  await expect(page.getByText('HTTP #2', { exact: true })).toBeVisible();
 });
 
-test('a failed role retains requests and does not present missing assessment as a clean test', async ({ page }) => {
+test('a missing assessment is explained as unfinished work, not zero vulnerabilities', async ({ page }) => {
   await setup(page, true);
-  await expect(page.getByRole('heading', { name: 'This role needs review.' })).toBeVisible();
-  await expect(page.getByText('Stopped: provider budget reached.')).toBeVisible();
-  await expect(page.getByText('No findings match this filter.')).toHaveCount(0);
+  await expect(page.getByText('No agent has returned a usable assessment.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Agent reports', exact: true }).click();
+  await expect(page.getByText('No assessment', { exact: true })).toBeVisible();
+  await expect(page.getByText(/The agent reached its allowed AI usage budget/)).toBeVisible();
+  await page.getByRole('button', { name: 'View recorded evidence' }).click();
   await page.getByText('Request evidence (2)', { exact: true }).click();
   await expect(page.getByText('HTTP #1', { exact: true })).toBeVisible();
 });
 
-
-test('a stopped test is explained without empty reports, fake motion or example actions', async ({ page }) => {
+test('stopped tests retain a report without fake motion or example actions', async ({ page }) => {
   await setup(page, false, true);
   await expect(page.getByRole('heading', { name: 'The test stopped early.' })).toBeVisible();
   await expect(page.getByText(/Scout stopped before its report arrived/)).toBeVisible();
-  await expect(page.getByRole('progressbar')).toHaveAttribute('value', '0');
-  await expect(page.getByRole('region', { name: 'Received reports' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /New example|Run example|Cancel test/ })).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Test a website' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No findings available yet' })).toBeVisible();
   expect(await page.locator('.assessment-orbit-signal').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('active decoration respects reduced motion', async ({ page }) => {

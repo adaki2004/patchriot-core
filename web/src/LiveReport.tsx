@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import './assessment.css';
+import { stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
@@ -26,7 +27,7 @@ export function LiveStatus({ steps, state, deadline }: { steps: LiveStep[]; stat
   const stopped = steps.find(s => s.state === 'failed');
   const working = state === 'running' && !!active;
   const title = state === 'awaiting_payment' ? 'Waiting for payment.' : state === 'failed' ? 'The test stopped early.' : state === 'cancelled' ? 'Test cancelled.' : state === 'needs_review' ? 'Some checks need a closer look.' : state === 'completed' ? 'Your reports are ready.' : working ? `${liveRoles[active.role]} is on the case.` : 'Your test is in the queue.';
-  const description = state === 'awaiting_payment' ? 'Testing starts after payment is confirmed. Check your order for the current payment status.' : state === 'failed' ? `${stopped && !stopped.result ? `${liveRoles[stopped.role]} stopped before its report arrived. ` : ''}The assessment did not finish. This is not a clean bill of health for your website.` : state === 'cancelled' ? 'No further stages will start. You can still read any reports already received.' : state === 'needs_review' ? 'The agents returned their reports, but some work or evidence is incomplete. Read the flagged results below.' : state === 'completed' ? 'Read what the agents found and the suggested fixes below. Findings still need your review.' : working ? `${roleDuty[active.role]} This page updates automatically.` : 'Your place is saved. Testing starts when an assigned agent is available.';
+  const description = state === 'awaiting_payment' ? 'Testing starts after payment is confirmed. Check your order for the current payment status.' : state === 'failed' ? `${stopped && !stopped.result ? `${liveRoles[stopped.role]} stopped before its report arrived. ` : ''}The assessment did not finish. This is not a clean bill of health for your website.` : state === 'cancelled' ? 'No further stages will start. You can still read any reports already received.' : state === 'needs_review' ? 'Some agents could not finish their assessments. Saved findings and unfinished work are listed below.' : state === 'completed' ? 'Read what the agents found and the suggested fixes below. Findings still need your review.' : working ? `${roleDuty[active.role]} This page updates automatically.` : 'Your place is saved. Testing starts when an assigned agent is available.';
   return <div className="assessment-status" data-active={working} data-state={state}>
     <div className="assessment-status-copy"><span className="assessment-kicker">{state === 'failed' ? 'INCOMPLETE ASSESSMENT' : state === 'cancelled' ? 'STOPPED' : state === 'completed' ? 'REPORTS RECEIVED' : state === 'needs_review' ? 'NEEDS ATTENTION' : working ? 'TEST IN PROGRESS' : 'WAITING TO START'}</span><h2>{title}</h2><p>{description}</p>{['queued', 'running'].includes(state) && <small>Run window ends at {new Date(deadline * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. The run may finish earlier.</small>}</div>
     <div className="assessment-orbit" aria-hidden="true"><img src="/brand/review-orbit.png" alt="" width="1536" height="1024" /><span className="assessment-orbit-signal" /></div>
@@ -78,6 +79,23 @@ function inventory(steps: LiveStep[]) {
   return [...rows.values()];
 }
 
+export function PdfReportDownload({ report }: { report: ReportInput }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function download() {
+    setBusy(true); setError('');
+    try {
+      const { createReportPdf } = await import('./reportPdf');
+      const bytes = await createReportPdf(report);
+      const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'application/pdf' }));
+      const a = document.createElement('a'); a.href = url; a.download = `patchriot-${report.id}-report.pdf`; a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { setError('The PDF could not be generated. Please retry; your saved evidence is unchanged.'); }
+    finally { setBusy(false); }
+  }
+  return <><div className="report-download-main"><button className="primary" disabled={busy} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download vulnerability report ↓'}</button><p>Branded PDF · summary, findings, evidence references & limitations</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
+}
+
 export function LiveReportDownloads({ id, steps, origins }: { id: string; steps: LiveStep[]; origins: string[] }) {
   const endpoints = inventory(steps);
   function exportPostman() {
@@ -91,13 +109,13 @@ function RequestEvidence({ entry }: { entry: HttpRecord }) {
     {entry.error && <p className="notice">Request did not complete: {entry.error.replaceAll('_', ' ')}.</p>}
     {entry.observed_at && <p className="fine">Recorded {new Date(entry.observed_at * 1000).toLocaleString()}</p>}
     <details><summary>Request and response headers</summary><h5>Request</h5><pre>{JSON.stringify(entry.request_headers ?? {}, null, 2)}</pre><h5>Recorded response headers</h5><pre>{JSON.stringify(entry.headers, null, 2)}</pre></details>
-    <h5>Response excerpt</h5><pre>{entry.body_excerpt || 'No text excerpt recorded.'}</pre>
+    <details><summary>Response excerpt</summary><pre>{entry.body_excerpt || 'No text excerpt recorded.'}</pre></details>
     {entry.truncated && <p className="fine">Shortened excerpt; it does not show the complete response.</p>}
     {entry.body_sha256 && <details><summary>Response fingerprint</summary><p className="fine">SHA-256 of the bytes retained by the relay. It helps compare responses; it is not a vulnerability verdict.</p><code className="evidence-url">{entry.body_sha256}</code></details>}
   </article>;
 }
 
-function Remediation({ text }: { text: string }) {
+export function Remediation({ text }: { text: string }) {
   // Recognize fenced examples only. Model prose, HTML and links stay literal
   // React text; a security report must never execute the payload it describes.
   const parts: ReactNode[] = [];
@@ -112,7 +130,7 @@ function Remediation({ text }: { text: string }) {
   return <div className="remediation">{parts}</div>;
 }
 
-export function LiveEvidence({ result, complete }: { result: LiveResult; complete?: boolean | null }) {
+export function LiveEvidence({ result, complete, technicalOnly = false }: { result: LiveResult; complete?: boolean | null; technicalOnly?: boolean }) {
   const evidence = useRef<HTMLDetailsElement>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [filter, setFilter] = useState('all');
@@ -121,17 +139,17 @@ export function LiveEvidence({ result, complete }: { result: LiveResult; complet
   function inspect(ids: number[]) { setSelected(ids); if (evidence.current) { evidence.current.open = true; evidence.current.scrollIntoView({ behavior: 'auto', block: 'start' }); evidence.current.querySelector('summary')?.focus(); } }
   return <div className="live-assessment">
     <div className={`role-summary ${complete ? 'received' : 'incomplete'}`}><h4>{complete ? 'Report and requests received.' : 'This role needs review.'}</h4><p>{complete ? 'Read the finding, the claimed impact and the requests behind it.' : result.assessment ? 'An assessment arrived, but the run or supporting evidence did not finish cleanly. Treat these findings as incomplete.' : 'The agent did not return a usable assessment. Any requests it recorded are still available below.'}</p>
-      {result.execution.failure_reason && <p>Stopped: {result.execution.failure_reason.replaceAll('_', ' ')}.</p>}
+      {result.execution.failure_reason && <p>{stopExplanation(result.execution.failure_reason)}</p>}
       <details><summary>What does this status mean?</summary><p>“Received” means the server accepted a structured report and recorded requests. It does not mean the findings are correct. Missing evidence, interrupted execution or unconfirmed cleanup keep a role marked for review.</p></details>
     </div>
     <dl className="role-metrics"><div><dt>Requests recorded</dt><dd>{result.execution.http_requests}</dd></div><div><dt>Model calls</dt><dd>{result.execution.inference_calls}</dd></div><div><dt>Run time</dt><dd>{Math.round(result.execution.duration_ms / 1000)}s</dd></div></dl>
-    {!!result.tool_runs?.length && <details className="tool-evidence"><summary>Tools run ({result.tool_runs.length})</summary><p>The pinned runner recorded these checks before the agent investigated their output. Matches are leads, not confirmed vulnerabilities. Open the referenced requests to see what the target actually returned.</p>{result.tool_runs.map((run, i) => <article className="request-evidence" key={i}><div className="section-heading"><strong>{run.tool} · {run.version}</strong><span className="pill">{run.failure ? run.failure.replaceAll('_', ' ') : run.exit_code === 0 ? 'Finished' : 'Tool error'}</span></div><p className="fine">{new Date(run.started_at * 1000).toLocaleString()} · {Math.round(run.duration_ms / 1000)}s · {run.evidence_ids.length} recorded requests</p><details><summary>Command arguments</summary><pre>{JSON.stringify(run.arguments, null, 2)}</pre></details><pre>{run.output_excerpt || (run.exit_code === 0 && !run.failure ? 'No matching observations were printed. This does not prove the site is safe.' : 'No tool output was retained.')}</pre>{run.output_truncated && <p className="fine">Output was shortened; inspect the request evidence for the recorded response excerpts.</p>}{run.evidence_ids.length > 0 && <button className="text-button" onClick={() => inspect(run.evidence_ids)}>Inspect tool requests →</button>}</article>)}</details>}
-    {result.assessment && <><p className="assessment-summary">{result.assessment.summary}</p>
+    {!!result.tool_runs?.length && <details className="tool-evidence"><summary>Tools run ({result.tool_runs.length})</summary><p>The pinned runner recorded these checks before the agent investigated their output. Matches are leads, not confirmed vulnerabilities. Open the referenced requests to see what the target actually returned.</p>{result.tool_runs.map((run, i) => <article className="request-evidence" key={i}><div className="section-heading"><strong>{run.tool} · {run.version}</strong><span className="pill">{run.failure ? run.failure.replaceAll('_', ' ') : run.exit_code === 0 ? 'Finished' : 'Tool error'}</span></div><p className="fine">{new Date(run.started_at * 1000).toLocaleString()} · {Math.round(run.duration_ms / 1000)}s · {run.evidence_ids.length} recorded requests</p><details><summary>Command arguments</summary><pre>{JSON.stringify(run.arguments, null, 2)}</pre></details><details><summary>Tool output</summary><pre>{run.output_excerpt || (run.exit_code === 0 && !run.failure ? 'No matching observations were printed. This does not prove the site is safe.' : 'No tool output was retained.')}</pre></details>{run.output_truncated && <p className="fine">Output was shortened; inspect the request evidence for the recorded response excerpts.</p>}{run.evidence_ids.length > 0 && <button className="text-button" onClick={() => inspect(run.evidence_ids)}>Inspect tool requests →</button>}</article>)}</details>}
+    {!technicalOnly && result.assessment && <><p className="assessment-summary">{result.assessment.summary}</p>
       {findings.length > 0 ? <><div className="finding-controls"><h4>Findings from this role</h4><label>Show<select aria-label="Filter findings" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All claims ({findings.length})</option><option value="reproduced">Reported reproduced</option><option value="unconfirmed">Unconfirmed or not reproduced</option></select></label></div>
       {shown.map((f, i) => <article className="live-finding" data-severity={f.severity} key={`${f.title}:${i}`}><div className="finding-heading"><h4>{f.title}</h4><span className="pill">{f.severity} severity</span></div><p className="finding-support">{support[f.support] ?? f.support}</p><h5>Why it matters / what was observed</h5><p className="finding-prose">{f.explanation}</p><details><summary>Reproduce the observation</summary><p>These are the agent’s instructions. Inspect the scope and evidence before running them.</p><pre>{f.reproduction}</pre></details><details><summary>Recommended fix</summary><p className="fine">A recommendation based on the observed behavior. No production patch was tested.</p><Remediation text={f.suggested_action} /></details><button className="text-button" onClick={() => inspect(f.evidence_ids)}>Inspect {f.evidence_ids.length} supporting request{f.evidence_ids.length === 1 ? '' : 's'} →</button></article>)}
       {shown.length === 0 && <p>No findings match this filter.</p>}
       <p className="fine">Severity and reproduction labels are the agent’s assessment. Other roles may disagree. Review every role before deciding what to fix.</p></> : <p className="notice">This role reported no findings. That is not proof the site has no vulnerabilities.</p>}
-      <details className="coverage-limits" open><summary>What this role could not check</summary><ul>{result.assessment.limitations.map((v, i) => <li key={i}>{v}</li>)}</ul></details>
+      <details className="coverage-limits"><summary>What this role could not check</summary><ul>{result.assessment.limitations.map((v, i) => <li key={i}>{v}</li>)}</ul></details>
     </>}
     <details className="http-evidence" ref={evidence}><summary>Request evidence ({result.evidence.length})</summary><p>These are the requests made to your website and the responses retained by the relay. They let you check a claim against what actually came back. The operator reports these records; a response code alone does not prove a vulnerability.</p>{selected.length > 0 && <p className="notice">Showing references {selected.join(', ')}. <button className="inline" onClick={() => setSelected([])}>Show every request</button></p>}{result.evidence.filter(e => !selected.length || selected.includes(e.id)).map(e => <RequestEvidence key={e.id} entry={e} />)}</details>
     <details className="execution-details"><summary>Agent and execution details</summary><dl><dt>Provider / model</dt><dd>{result.execution.provider} / {result.execution.model}</dd><dt>Container cleanup</dt><dd>{result.execution.cleanup_confirmed ? 'Reported complete by relay' : 'Not confirmed'}</dd>{result.execution.image_digest && <><dt>Runtime image</dt><dd><code>{result.execution.image_digest}</code></dd></>}</dl></details>

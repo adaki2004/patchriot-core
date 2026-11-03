@@ -5,9 +5,11 @@ import { useLive } from './useLive';
 import { useDialog } from './useDialog';
 import { WebsiteEvidence } from './WebsiteReview';
 import type { WebsiteContext, WebsiteResult } from './WebsiteReview';
-import { LiveEvidence, LiveProgress, LiveStatus, LiveReportDownloads, liveRoles } from './LiveReport';
+import { LiveEvidence, LiveProgress, LiveStatus, LiveReportDownloads, PdfReportDownload, liveRoles } from './LiveReport';
 import type { LiveActivity, LiveResult, LiveStep } from './LiveReport';
 import type { PentestContext } from './Pentests';
+import { VulnerabilityReport } from './VulnerabilityReport';
+import type { ReportInput } from './report';
 import { SponsoredReviews } from './ReviewCodes';
 
 type Check = { name: string; expected: boolean; actual: boolean };
@@ -114,16 +116,17 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
     const team = review.pentest?.reviewers ?? [];
     const teamOperators = new Set(team.map(r => r.operator_id)).size;
     const teamGroups = new Set(team.map(r => `${r.operator_id}:${r.compute_group}`)).size;
-    const reports = review.steps.filter(s => s.result);
+    const report: ReportInput = { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, scope_sha256: review.pentest?.scope_sha256, team };
     const target = review.pentest?.scope.origins.map(origin => { try { return new URL(origin).host; } catch { return origin; } }).join(', ');
     return <section ref={panel} tabIndex={-1} className="review-detail panel live-review" aria-label="Review report">
       <div className="section-heading"><div><p className="eyebrow">PRIVATE WEBSITE ASSESSMENT</p><h2 className="review-target">{target || 'Website test'}</h2><p className="fine">Started {new Date(review.created_at * 1000).toLocaleString()}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
       {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} <button className="inline" onClick={detail.refresh}>Retry report</button></div>}
-      <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} />
-      <LiveProgress steps={liveSteps} state={review.state} />
+      {!['completed', 'needs_review'].includes(review.state) && <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} />}
+      {['awaiting_payment', 'queued', 'running'].includes(review.state) && <LiveProgress steps={liveSteps} state={review.state} />}
+      <PdfReportDownload report={report} />
       <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a website ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
-      {!!reports.length && <section className="received-reports" aria-label="Received reports"><h2>What the agents found</h2><div className="review-steps">{reports.map(step => <article className="review-step" key={step.role}><div className="step-title"><h3>{liveRoles[step.role]}</h3><span className="pill">{step.evidence_complete ? 'Report received' : 'Incomplete report'}</span></div><Evidence step={step} /></article>)}</div></section>}
-      <details className="assessment-disclosure report-technical"><summary>Downloads & test details</summary>
+      <VulnerabilityReport report={report} />
+      <details className="assessment-disclosure report-technical"><summary>Other downloads & test details</summary>
         <LiveReportDownloads id={review.id} steps={liveSteps} origins={review.pentest?.scope.origins ?? []} />
         <a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a>
         <dl><dt>Reference</dt><dd>{id}</dd><dt>Website</dt><dd>{review.pentest?.scope.origins.join(', ')}</dd><dt>Test plan</dt><dd>{review.pentest?.scope.objective}</dd><dt>Model provider</dt><dd>{review.pentest?.provider}</dd><dt>Selected team</dt><dd>{team.length} agents · {teamOperators} operator(s) · {teamGroups} machine group(s). Shared machines and models are not independent reviewers.</dd></dl>
