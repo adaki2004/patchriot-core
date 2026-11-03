@@ -5,8 +5,9 @@ import { useLive } from './useLive';
 import { useDialog } from './useDialog';
 import { WebsiteEvidence } from './WebsiteReview';
 import type { WebsiteContext, WebsiteResult } from './WebsiteReview';
-import { LiveEvidence } from './Pentests';
-import type { LiveResult, PentestContext } from './Pentests';
+import { LiveEvidence, LiveProgress, LiveReportDownloads, liveRoles } from './LiveReport';
+import type { LiveActivity, LiveResult, LiveStep } from './LiveReport';
+import type { PentestContext } from './Pentests';
 import { SponsoredReviews } from './ReviewCodes';
 
 type Check = { name: string; expected: boolean; actual: boolean };
@@ -20,7 +21,7 @@ type AgentResult = {
 type Step = {
   role: 'investigator' | 'reproducer' | 'challenger'; state: string; attempts: number;
   device_id: string | null; operator_id: string | null; compute_group: string | null;
-  result: { runs: Run[] } | AgentResult | WebsiteResult | LiveResult | null; fixture_matches: boolean | null; evidence_complete?: boolean | null;
+  result: { runs: Run[] } | AgentResult | WebsiteResult | LiveResult | null; fixture_matches: boolean | null; evidence_complete?: boolean | null; progress?: LiveActivity | null;
 };
 type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; steps: Step[]; evidence_source: string; pentest?: PentestContext; website?: WebsiteContext; source?: { source_id: string; snapshot_sha256: string; reviewers: WebsiteContext['reviewers'] }; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
 
@@ -94,6 +95,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
   const [busy, setBusy] = useState(false);
   const review = detail.data;
   const material = review?.website ?? review?.source;
+  const liveSteps: LiveStep[] = review?.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, progress: s.progress, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null })) ?? [];
   useEffect(() => { if (review) onChange(); }, [review?.state, onChange]);
   useEffect(() => {
     panel.current?.focus({ preventScroll: true });
@@ -114,12 +116,13 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
     {review && <>
       <div className="review-actions"><a className="text-button" href={`/api/reviews/${id}/report`} download>Download evidence JSON ↓</a><button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel review</button>}</div>
       {review.payment && <p className="fine">This review has a payment record. Manage cancellation in Orders.{onOpenOrders && <button className="inline" onClick={onOpenOrders}>Open orders →</button>}</p>}
-      {['queued', 'running'].includes(review.state) && <p className="fine">{review.steps.filter(step => step.state === 'completed').length} of 3 reports received · Ends at {new Date(review.deadline_at * 1000).toLocaleTimeString()}</p>}
+      {review.mode === 'pentest_agent' && <><LiveProgress steps={liveSteps} state={review.state} /><LiveReportDownloads id={review.id} steps={liveSteps} origins={review.pentest?.scope.origins ?? []} /></>}
+      {review.mode !== 'pentest_agent' && ['queued', 'running'].includes(review.state) && <p className="fine">{review.steps.filter(step => step.state === 'completed').length} of 3 reports received · Ends at {new Date(review.deadline_at * 1000).toLocaleTimeString()}</p>}
       <div className="notice">{devices.size} {devices.size === 1 ? 'device' : 'devices'} · {operators.size} {operators.size === 1 ? 'operator' : 'operators'} · {groups.size} declared compute {groups.size === 1 ? 'group' : 'groups'}. {review.mode === 'pentest_agent' ? 'These agents make approved live HTTP probes and retain request evidence. This is an unauthenticated test, not complete coverage.' : review.mode === 'source_agent' ? 'These agents inspect source excerpts. This mode does not build or execute the code.' : review.mode === 'website_agent' ? 'These agents review saved text. No browser execution or live exploit reproduction was performed.' : 'These are operator-reported checks of our owned example.'} Shared machines and models are not independent reviewers.</div>
       {review.pentest && <details className="execution-details"><summary>Approved scope and review team</summary><p>{review.pentest.scope.origins.join(', ')}</p><p>{review.pentest.scope.objective}</p><p>Model provider: {review.pentest.provider}</p><ol>{review.pentest.reviewers.map(r => <li key={r.device_id}>{r.device_name} · {r.operator_name} · {r.declared_model} · {r.compute_group}</li>)}</ol></details>}
       {material && <details className="execution-details"><summary>Who received permission?</summary><ol>{material.reviewers.map((device, i) => <li key={device.device_id}><strong>{['Investigator', 'Reproducer', 'Challenger'][i]}:</strong> {device.device_name} · {device.operator_name}<br /><span className="fine">{device.declared_model} · {device.compute_group} · {device.device_id}</span></li>)}</ol><p className="fine">Consent applies to this snapshot: <code>{material.snapshot_sha256}</code></p></details>}
       <div className="review-steps">{review.steps.map(step => <article key={step.role} className="review-step">
-        <div className="step-title"><h3>{step.role}</h3><span className={`badge ${step.state === 'completed' && step.fixture_matches ? 'approved' : step.state === 'failed' ? 'revoked' : 'pending'}`}>{stepLabel(step)}</span></div>
+        <div className="step-title"><h3>{review.mode === 'pentest_agent' ? liveRoles[step.role] : step.role}</h3><span className={`badge ${step.state === 'completed' && step.fixture_matches ? 'approved' : step.state === 'failed' ? 'revoked' : 'pending'}`}>{stepLabel(step)}</span></div>
         <p className="fine">Attempt {step.attempts} / {review.mode === 'pentest_agent' ? 1 : 3}{step.compute_group ? ` · ${step.compute_group}` : ' · awaiting capacity'}</p>
         <Evidence step={step} />
       </article>)}</div>

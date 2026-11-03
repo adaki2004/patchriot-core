@@ -4,6 +4,7 @@
 
 mod access;
 mod auth;
+mod contact;
 mod diagnostics;
 mod gateway;
 mod incidents;
@@ -49,10 +50,18 @@ pub struct Config {
     pub internal_key: String,
     pub web_root: Option<PathBuf>,
     pub secure_cookies: bool,
+    /// Optional public contact address. Inquiry delivery is the private inbox.
+    pub contact_email: Option<String>,
 }
 
 impl Config {
-    fn origin(value: &str) -> Result<url::Url, &'static str> {
+    pub fn with_contact_email(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        self.contact_email = value
+            .map(|value| access::contact(&value).map_err(|_| "invalid PATCHRIOT_CONTACT_EMAIL"))
+            .transpose()?;
+        Ok(self)
+    }
+    fn origin(value: &str, railway_internal: bool) -> Result<url::Url, &'static str> {
         let url = url::Url::parse(value).map_err(|_| "invalid service URL")?;
         let local = match url.host() {
             Some(url::Host::Domain("localhost")) => true,
@@ -60,7 +69,22 @@ impl Config {
             Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
             _ => false,
         };
-        if !(url.scheme() == "https" || url.scheme() == "http" && local)
+        // An operator may select Railway's encrypted private network for the
+        // dispatcher hop. Never apply this exception to browser/relay origins.
+        let railway = railway_internal
+            && url
+                .host_str()
+                .and_then(|h| h.strip_suffix(".railway.internal"))
+                .is_some_and(|label| {
+                    !label.is_empty()
+                        && label.len() <= 63
+                        && !label.starts_with('-')
+                        && !label.ends_with('-')
+                        && label
+                            .bytes()
+                            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                });
+        if !(url.scheme() == "https" || url.scheme() == "http" && (local || railway))
             || url.host().is_none()
             || !url.username().is_empty()
             || url.password().is_some()
@@ -77,7 +101,7 @@ impl Config {
 
     pub fn with_relay_origin(mut self, value: Option<String>) -> Result<Self, &'static str> {
         self.relay_origin = value
-            .map(|value| Self::origin(&value).map(|url| url.origin().ascii_serialization()))
+            .map(|value| Self::origin(&value, false).map(|url| url.origin().ascii_serialization()))
             .transpose()?;
         Ok(self)
     }
@@ -88,8 +112,8 @@ impl Config {
         internal_key: String,
         web_root: Option<PathBuf>,
     ) -> Result<Self, &'static str> {
-        let public = Self::origin(&public_origin)?;
-        let dispatcher = Self::origin(&dispatcher_url)?;
+        let public = Self::origin(&public_origin, false)?;
+        let dispatcher = Self::origin(&dispatcher_url, true)?;
         if internal_key.len() < 32
             || internal_key.len() > 256
             || internal_key.chars().any(char::is_whitespace)
@@ -101,6 +125,7 @@ impl Config {
             public_origin: public.origin().ascii_serialization(),
             dispatcher_url: dispatcher.origin().ascii_serialization(),
             relay_origin: None,
+            contact_email: None,
             internal_key,
             web_root,
         })
@@ -184,6 +209,9 @@ pub fn router(state: AppState) -> Router {
             }),
         )
         .route("/api/session", get(auth::session))
+        .route("/api/contact", get(contact::details).post(contact::create))
+        .route("/api/admin/inquiries", get(contact::inbox))
+        .route("/api/admin/inquiries/{id}", post(contact::decide))
         .route("/api/payments", get(payments::summary))
         .route("/api/earnings", get(payments::earnings::list))
         .route(
@@ -243,6 +271,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/agents", get(gateway::agents))
         .route("/api/pairing-info", get(gateway::pairing_info))
         .route("/api/pairings/claim", post(gateway::claim))
+        .route("/api/pentests/{id}/ownership", get(pentests::ownership))
+        .route(
+            "/api/pentests/{id}/ownership/refresh",
+            post(pentests::refresh_ownership),
+        )
         .route("/api/devices/{id}/decision", post(gateway::decision))
         .route(
             "/api/reviews",

@@ -27,6 +27,9 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  invalid_inquiry: 'Add your name, company or team, email and a message of 20–3,000 characters.',
+  inquiry_changed: 'This inquiry changed after being saved. Refresh the page before sending another.',
+  inquiry_not_found: 'This inquiry is no longer available. Refresh the inbox.',
   withdrawals_unavailable: 'Withdrawals are not enabled on this installation.',
   invalid_withdrawal: 'Check the amount, receiving network and wallet address. The minimum is 10 USDC.',
   insufficient_earnings: 'There are not enough available earnings for this withdrawal.',
@@ -44,6 +47,10 @@ const messages: Record<string, string> = {
 
   live_test_pilot_only: 'Live tests are available only in the approved pilot; paid and coupon checkout for live tests is not enabled.',
   pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
+  public_pairing_disabled: 'Public pairing is not open yet. Patchriot operates the agents in this beta.',
+  domain_ownership_required: 'Verify every domain with the supplied DNS TXT records before requesting approval.',
+  ownership_refresh_limit: 'This request has used its six DNS refresh windows. Check your DNS records before creating a new request.',
+  scope_changed_or_expired: 'This scope has changed or expired. Open the current request before continuing.',
   invalid_credentials: 'The username or password is incorrect, or this account is unavailable.',
   invalid_username: 'Use 3–40 letters, numbers, dots, hyphens or underscores. Start with a letter or number.',
   username_unavailable: 'That username is already taken. Choose another.',
@@ -100,7 +107,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const method = (options.method ?? 'GET').toUpperCase();
   // Only these GET responses contain no account-specific data. An old write
   // may already have completed on the server; discard its reply, not the work.
-  const publicRead = method === 'GET' && ['/fleet', '/incidents'].includes(path);
+  const publicRead = method === 'GET' && ['/fleet', '/incidents', '/contact'].includes(path);
   const checkSession = () => { if (!publicRead && revision !== sessionRevision) throw new SessionChangedError(); };
   const signal = options.signal ?? AbortSignal.timeout(12_000);
   let response: Response;

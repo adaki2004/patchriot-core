@@ -55,11 +55,11 @@ test('a review bookmark survives reload and browser history without submitting w
   await page.goForward();
   await expect(page).toHaveURL(/#\/incidents$/);
   await expect(report).toHaveCount(0);
-  await page.getByRole('navigation', { name: 'Website' }).getByRole('button', { name: 'Dashboard', exact: true }).click();
-  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Pair an agent', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Website' }).getByRole('button', { name: 'App', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Audits', exact: true }).click();
   const skip = page.getByRole('link', { name: 'Skip to content', exact: true });
   await skip.focus(); await skip.click();
-  await expect(page).toHaveURL(/#\/guide$/);
+  await expect(page).toHaveURL(/#\/audits$/);
   await expect(page.locator('main')).toBeFocused();
   expect(calls.writes).toEqual([]);
 });

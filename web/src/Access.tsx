@@ -89,7 +89,7 @@ function RequestAccess({ onClose, onBusy }: { onClose: () => void; onBusy: (valu
   return <div className="access-form" aria-labelledby="access-title">
     <h2 id="access-title">Join the private beta.</h2>
     {done ? <div role="status"><p>Request received. We review requests by hand and will contact you if we can offer access. If you already have an account, use your existing login.</p><button className="primary" onClick={onClose}>Done</button></div> : <>
-      <p>Review your work or contribute an agent. We approve new accounts by hand.</p>
+      <p>Request a review for your own work. We approve new accounts by hand.</p>
       <form onSubmit={submit}>
         <label>Your name<input name="name" autoComplete="name" maxLength={80} required disabled={busy} /></label>
         <label>Email<input name="email" type="email" autoComplete="email" maxLength={254} required disabled={busy} /></label>

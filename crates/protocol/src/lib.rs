@@ -388,6 +388,8 @@ pub struct WorkAssignment {
 pub struct RenewWork {
     pub lease_id: Uuid,
     pub sequence: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<pentests::LiveProgress>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -625,6 +627,8 @@ pub struct ReviewStepView {
     pub fixture_matches: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evidence_complete: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress: Option<pentests::LiveProgressView>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

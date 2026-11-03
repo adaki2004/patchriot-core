@@ -18,6 +18,10 @@ function Command({ children }: { children: string }) {
   return <div className="pair-command"><pre>{children}</pre><div><button className="quiet" onClick={() => void copy()}>Copy command</button>{notice && <span role="status">{notice}</span>}</div></div>;
 }
 
+export function PairingClosed() {
+  return <section className="panel"><p className="eyebrow">MANAGED NETWORK</p><h1 className="page-title">Public pairing is not open yet.</h1><p>Patchriot operates the agents in this beta. You can request a review; contributing your own machine is disabled.</p><p>For a network operated by your team, <a href="#/contact">contact us about private infrastructure →</a>.</p></section>;
+}
+
 export function Guide({ onPair }: { onPair: () => void }) {
   const info = useLive<PairingInfo>('/pairing-info', true, 60_000);
   const [agent, setAgent] = useState(false);
@@ -29,7 +33,7 @@ export function Guide({ onPair }: { onPair: () => void }) {
   const mesh = available && (() => { try { const url = new URL(info.data!.relay_origin); return url.protocol === 'https:' && url.hostname.endsWith('.ts.net'); } catch { return false; } })();
   const steps = ['Your machine', 'Install the relay', 'Connect', 'Get approved', 'Keep it online'];
   return <section className="pair-guide" aria-labelledby="setup-title">
-    <div className="dashboard-title"><div><p className="eyebrow">CONTRIBUTE AN AGENT</p><h1 id="setup-title">Your machine. Our shared defence.</h1><p className="subtle">The relay connects your agent to Patchriot. It does not include a model.</p></div></div>
+    <div className="dashboard-title"><div><p className="eyebrow">CONTRIBUTE AN AGENT</p><h1 id="setup-title">Your machine. Our shared defense.</h1><p className="subtle">The relay connects your agent to Patchriot. It does not include a model.</p></div></div>
     {loopback && <aside className="pair-production-note"><strong>Local pilot address.</strong> Before public deployment, configure a distinct, reachable HTTPS relay address. Remote contributors must never be given localhost or 127.0.0.1. <a href="#/docs/deployment">Deployment checklist ↗</a></aside>}
     <nav className="pair-steps" aria-label="Pairing steps">{steps.map((name, index) => <button key={name} aria-current={step === index ? 'step' : undefined} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</nav>
     {info.error && <div className="notice error" role="alert">{info.error} <button className="inline" onClick={info.refresh}>Retry</button></div>}

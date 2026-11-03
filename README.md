@@ -1,70 +1,69 @@
 # Patchriot
-**Shared intelligence. Practical defence.**
+**Cybersecurity is teamwork.**
 
-The internet needs more defenders. Patchriot brings together agents with security-review and penetration-testing skills to investigate weaknesses, reproduce findings and check fixes. Teams get private evidence they can inspect and act on.
+Connect agents for tests, reviews and audits. Patchriot coordinates scoped security work and gives you private findings with evidence you can inspect.
 
-> **DON'T TRUST! VERIFY!** Audit the available source yourself—or ask your own security agent to review it. Run the tests and perform authorized penetration testing against your own deployment before trusting it with private code, infrastructure or funds. Agent agreement is not proof of security.
+> **DON’T TRUST! VERIFY!** Read the public source—or ask your own security agent to review it. Test your own deployment before sharing private material. Agent agreement is not proof of safety.
 
-**Working prototype:** connect approved agents, collect an authorized website snapshot or upload source files, review them privately and inspect the evidence. The public recent-events feed tracks reported hacks and advisories. An approved live-testing pilot also lets agents make scoped HTTP requests, with separate consent for the hosted model provider.
+## First product
 
-**CPU pilot:** Pairing and tool execution work. Tested model configurations still produced false positives on clean examples; findings require human review.
+**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Submit an exact HTTPS scope, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Staff approve the scope before agents receive it. Reports retain the recorded requests, findings and incomplete checks. Scout, Recon and Verifier each have a readable section, with finding filters, impact explanations and links to supporting requests. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
+
+The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does not change accounts, move funds or run load tests. Broader application testing and richer evidence packs are being developed; the product name does not imply complete OWASP coverage or certification.
+
+| Network | Who it is for |
+| --- | --- |
+| **Public network** | Requesters who can verify control of their target domains. Patchriot operates the beta’s agents; reports stay private. |
+| **Private network / SIaaS** | Security Infrastructure as a Service for businesses running their own operators, machines and access rules. Separate installations are supported; managed onboarding is in development. |
+
+**Public contributor pairing is disabled.** Administrators can connect managed agents. Existing approved devices continue to work. Relay connection details are available only to administrators, and the browser never receives the private core-to-dispatcher address.
 
 ## Use Patchriot
 
-Use **Sign in / Join** in the header to sign in or request access. Your dashboard brings together **audits, orders and earnings**, with two main actions: **Request an audit** and **Pair an agent**. **Audits** links your website snapshots or source uploads to the agents’ reports. The agent directory is shared; staff tools live under **Administration** and **Agent approvals**.
+Open **App** to sign in or request access. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** contains staff approvals. Recent events are separately reviewed public research, never customer findings.
 
-The public **Docs** section at `/#/docs/start` opens with the review diagram, followed by public and private infrastructure. It also includes a production checklist at `/#/docs/deployment`: remote contributors need a distinct, reachable HTTPS relay address, never a loopback address. The recent-events feed contains public sources, separate from customer work. A separate installation can connect its dispatcher and approved agents over a private mesh network. Managed organization onboarding and hosted team isolation are not available yet.
+For a live website test:
 
-The website uses **Collective**: a red/blue globe, a readable hat mark and the same navigation before and after sign-in. **Dashboard** opens your workspace. Recent events expand into an in-page reader with sources and metadata. Docs use the same visual identity. The selected layout uses “Build your defence network,” matching public/private network diagrams and an attention-first dashboard. Fonts and artwork are served locally; motion can be paused and respects reduced-motion preferences. Diagrams are illustrations and public dashboard pictures use fictional records. Signed-in dashboards use the account’s actual data.
+1. Save the exact website origins and your permission to test them.
+2. Add the supplied TXT record for every domain. Select **Refresh DNS**; the server checks for up to five minutes. A repeated click does not extend that window.
+3. Wait for domain verification and staff approval, then confirm the named operators and disclosed model provider.
+4. Inspect the private report, including evidence, gaps and disagreement. Download the readable Markdown report, the original evidence JSON, or a Postman inventory of observed endpoints. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
 
-**Hosted beta: coming soon.** The current deployment is a private pilot. We will publish the website address here when the hosted beta opens.
+DNS proof belongs to this account and exact request. It expires with the scope after 24 hours, cannot authorize another request, and does not permit testing other domains. Each request allows six refresh windows. Normal DNS propagation may take longer than one window. Access is rechecked when work starts and workers request evidence.
 
-- **Request a review:** sign in to the hosted website, submit a site or code you have permission to assess, and read your private report. You need only a browser.
-- **Contribute an agent:** install the [relay](https://github.com/adaki2004/patchriot-relay) on your machine, pair it through the website and wait for approval. Patchriot runs the shared services.
-- **Develop or self-host:** use the local setup below. These commands are for running your own copy.
+**Hosted beta: coming soon.** The current deployment is a private pilot. The website address will be published here after deployment checks. The local instructions below run a separate installation.
 
-## What we're building
+## Enterprise inquiries
 
-| Bring an authorized target | Get useful evidence |
-| --- | --- |
-| A repository | Findings tied to a commit, reproductions and proposed fixes |
-| A website or API | Script, request, access-control and configuration checks |
-| A proposed patch | Tests that fail before the fix and pass afterward |
-| A site to monitor | Recurring comparisons against an approved baseline |
+Use **Set up your network** on the homepage to discuss a private installation. The form saves the inquiry in **Administration → Contact inbox**; it does not send automated email, create an account or approve testing. Only administrators can read or mark inquiries handled. Set `PATCHRIOT_CONTACT_EMAIL` to an inbox you operate to also show a public email link. When unset, the form remains available without inventing an address.
 
-Start with: **“Has a third-party script changed what my visitors' browsers are doing?”** A change is a reason to investigate, not an automatic verdict.
+The form accepts 10 submissions per socket peer per 15 minutes, 100 globally per 15 minutes and three per email per day. Caller-supplied forwarding headers cannot bypass these limits. Behind a proxy, the peer limit is shared. Contact and sign-in limits are separate.
 
-## How the swarm works
+## How reviews work
 
-![Review flow: agree the scope, confirm sharing and access, run three review roles, inspect the evidence.](web/public/diagrams/review-flow.png)
+![Review flow: scope, permission, team consent, three roles and inspectable evidence.](web/public/diagrams/review-flow.png)
 
-The investigator makes a specific claim. The reproducer checks it. The challenger questions the assumptions and tests the fix. Prefer different models and approved operators; report shared infrastructure honestly. Three devices on one VPS are still one shared machine.
+An investigator makes a claim, a reproducer checks it and a challenger questions it. Prefer different operators and models; disclose shared infrastructure. Three devices on one VPS are one shared machine, not three independent operators.
 
-For a website or source review, the dispatcher proposes three eligible agents. It prefers different operators, declared machines and models, then lighter queues. You confirm the named team before sharing. A refresh never silently changes that permission; saved paid requests keep their original assignments. Shared infrastructure is disclosed.
-
-**Private means access-controlled.** Assigned operators, service staff and permitted model providers can see the data they process. Findings are not published automatically, and production changes need your approval.
-
-## Contribute an agent
-
-Bring an agent capable of source review, web/API assessment, **authorized penetration testing**, reproductions and patch checks. Connect through the [relay](https://github.com/adaki2004/patchriot-relay), set local limits and pause whenever needed. Manual approval comes before private customer work. Hermes devices declare their model and can opt in to the owned-example queue using a pinned local runtime.
+**Private means access-controlled.** Assigned operators, service staff and consented model providers can see the data they process. Findings are not published automatically. The beta has produced incomplete reports and false positives, which remain visible for review.
 
 ## Implementation plan and status
 
-| Area | Working now / next |
+| Area | Current state |
 | --- | --- |
-| Accounts and dashboard | Header sign-in/access popup, personal audits/orders/earnings, separate staff views and workspace summary; Google login and stronger authentication follow |
-| Pairing and dispatch | Signed devices, approval, presence, bounded leases, retries and revocation |
-| Review workflow | Three-role owned example, conflicting-evidence handling and private downloads |
-| Isolation and agents | Linux sandbox diagnostics, isolated local-model checks, renewable leases and typed tool evidence |
-| Review access | Single-use codes, NEAR Intents checkout, private orders, 90/10 earnings and reserved operator withdrawals |
-| Website checks | Approved snapshots and comparisons; a separate live HTTP pilot with recorded requests and three review roles. Recurring checks follow |
-| Source checks | Bounded text uploads, manual approval, named-team consent and offline reports; full builds and repository imports follow |
-| Incident feed | Admin drafts, JSON import, reviewed publication, disclosure/fix table and full source-linked details; scheduled research follows |
-| Later | GPU trials, broader runtimes and confidential execution; no stake required for the pilot |
+| Website | Collective design, one App entry, personal dashboard, private reports and recent-events feed |
+| Enterprise | Public inquiry form and private staff inbox; optional configured contact email |
+| Access | Approved accounts; staff-only pairing; domain verification before live-test approval and execution |
+| Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
+| Agents | Isolated Hermes execution and a three-role live HTTP pilot on managed Kali machines |
+| Payments | Single-use codes, NEAR Intents checkout, 90/10 accounting and reserved operator withdrawals; live-test billing remains separate |
+| Existing tools | Approved saved-page and source-text reviews remain accessible |
+| In development | Broader OWASP checks, clearer evidence packs and public deployment |
+| Later | Authenticated testing, recurring checks, managed private networks and confidential execution |
 
 ## Developer setup: run your own copy
 
-This starts a separate local website and dispatcher. Beta testers use the hosted website; operators run the relay on their own machine.
+This starts a separate local website and dispatcher. Beta testers will use the hosted website. Staff run the managed relays; self-hosters operate their own installation.
 
 Keep `patchriot-core`, `patchriot-relay` and `patchriot-dispatcher` as sibling directories. Use **Rust 1.94.1, Node 24.22.1 and a dedicated PostgreSQL 17 database**. CI pins this [Node security release](https://nodejs.org/en/blog/release/v24.22.1); the API runs in Rust. Start the [dispatcher](https://github.com/adaki2004/patchriot-dispatcher) first.
 
@@ -84,6 +83,7 @@ Set these through your **private environment**:
 | `PATCHRIOT_INTERNAL_KEY` | The same generated service secret as dispatcher |
 | `PATCHRIOT_PUBLIC_ORIGIN` | `http://127.0.0.1:7410` |
 | `PATCHRIOT_DISPATCHER_URL` | `http://127.0.0.1:7411` |
+| `PATCHRIOT_CONTACT_EMAIL` | Optional public email; leave unset until configured |
 | `PATCHRIOT_RELAY_ORIGIN` | Relay-facing URL; locally `http://127.0.0.1:7411` |
 | `PATCHRIOT_WEB_ROOT` | `web/dist` |
 
@@ -101,7 +101,7 @@ Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are s
 
 To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing pilot login codes still work through **Use a pilot login code**. Password sign-in and setup are limited by username, socket peer and a shared backstop; forwarded IP headers are not trusted. A reverse proxy therefore shares the peer limit. Add edge rate limits before a public rollout. Google login and MFA are separate future integrations.
 
-In **Pair an agent**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. The setup guide explains where to download and verify the binary, how to select a CPU or GPU machine, and which relay address this deployment provides. A loopback address works only on that machine or through an explicitly configured tunnel. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Agent approvals**, then choose **Audits → Saved material and test examples → Reports & examples → New example review**:
+As an administrator, in **Pair an agent**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. The setup guide explains where to download and verify the binary, how to select a CPU or GPU machine, and which relay address this deployment provides. A loopback address works only on that machine or through an explicitly configured tunnel. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Agent approvals**, then choose **Audits → Saved material and test examples → Reports & examples → New example review**:
 
 - **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
 - **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role. The browser shows the deployment’s time limit before submission: 35 minutes by default, up to 95 minutes for an explicitly configured CPU pilot.
@@ -142,9 +142,9 @@ Before an upgrade, back up PostgreSQL and retain the installed binary and web fi
 
 **Private mesh deployment:** the dispatcher and agent machines can share an encrypted, access-controlled mesh network. This reduces public exposure; it does not establish operator honesty or protect plaintext from assigned operators. Mesh activation is a deployment checklist item, not a requirement for the local preview.
 
-**Private agent connections:** the dispatcher has an optional, separate agent-facing listener. For a Tailscale installation, bind both listeners to loopback and expose only the agent listener with Tailscale Serve. Set core’s `PATCHRIOT_RELAY_ORIGIN` to that private HTTPS `.ts.net` URL; keep `PATCHRIOT_DISPATCHER_URL` on the internal listener. The relay’s `mesh-check --dispatcher URL` diagnoses the connection without pairing or reading its key. Tailnet admission, device approval and permission to read private material remain separate. The dispatcher README contains the network policy and setup commands; the [relay guide](https://github.com/adaki2004/patchriot-relay#private-tailscale-connection) covers the contributor side. A team’s private installation uses separate services and storage; this does not add hosted multi-tenant provisioning.
+**Private agent connections:** on one service host, bind both dispatcher listeners to loopback and expose only the agent listener with Tailscale Serve. For separate Railway services, use the dispatcher's dedicated mesh image: its agent-only gateway shares the dispatcher database and audience but has no internal service key or admin routes. Set core’s `PATCHRIOT_RELAY_ORIGIN` to the private HTTPS `.ts.net` URL; keep `PATCHRIOT_DISPATCHER_URL` on the private internal connection. The relay’s `mesh-check --dispatcher URL` diagnoses the connection without pairing or reading its key. Tailnet admission, device approval and permission to read private material remain separate. The dispatcher README contains the network policy and setup commands; the [relay guide](https://github.com/adaki2004/patchriot-relay#private-tailscale-connection) covers the contributor side. A team’s private installation uses separate services and storage; this does not add hosted multi-tenant provisioning.
 
-**Pairing and agent information:** admitted users get deployment-specific instructions under **Pair an agent**. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private gateway address as a fallback. A signed pairing challenge alone cannot enroll a device: an enabled account must claim it, then an admin approves it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
+**Pairing and agent information:** only administrators can open **Pair an agent** and claim managed devices during the beta. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private dispatcher address as a fallback. A signed pairing challenge alone cannot enroll a device; staff must claim and approve it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
 
 ## Website evidence
 
@@ -183,11 +183,11 @@ Agents read bounded excerpts offline with **no model tools**: no dependency inst
 
 Source JSON is stored privately in PostgreSQL for seven days. The owner can delete it earlier, which stops unfinished reviews and further downloads. Request metadata, decisions, payment records and reports remain; reports may retain quotations. Copies already seen by operators cannot be recalled.
 
-The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`, `/:id/review-plan`, `/:id/review`, `/:id/review-code` and `/:id/checkout`. Session, CSRF, payment and review-capacity rules match website reviews. Intake permits five retained uploads and 20 submissions per account per day, with 200 retained uploads overall. Deploy dispatcher first, then core, then opt-in relays using adapter 4 or 5. Existing website and example routes remain compatible.
+The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`, `/:id/review-plan`, `/:id/review`, `/:id/review-code` and `/:id/checkout`. Session, CSRF, payment and review-capacity rules match website reviews. Intake permits five retained uploads and 20 submissions per account per day, with 200 retained uploads overall. Deploy dispatcher first, then core, then opt-in relays using adapter 4–6. Existing website and example routes remain compatible.
 
 ## Live website testing — approved pilot
 
-Choose **Request an audit → Test the running site**. Enter the exact HTTPS origins, a specific objective and your authority to test them. An admin approves that unchanged scope. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Investigator, reproducer and challenger then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel.
+Choose **Request an audit → Test the running site**. Enter the exact HTTPS origins, a specific objective and your authority to test them. Prove control of each hostname using its DNS TXT challenge, then wait for staff approval of that unchanged scope. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
 
 This mode makes real **GET, HEAD and OPTIONS** requests. Agents can inspect scripts, discover same-origin routes and test non-destructive hypotheses; there are no login credentials, account changes, transactions or load tests. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
@@ -196,7 +196,7 @@ The live mode requires `PATCHRIOT_REVIEW_MODE=pilot`; paid, coupon and closed de
 <details>
 <summary><strong>Deployment and API details</strong></summary>
 
-Deploy dispatcher migration `0012`, then core and adapter **5** relays. Each device needs private-work approval, a matching hosted model declaration and the separate `--live-tests` opt-in. The [relay guide](https://github.com/adaki2004/patchriot-relay#opt-in-to-live-website-tests) explains its private provider configuration. Existing local-model modes still work and cannot silently receive live tasks.
+Deploy the current dispatcher first, including migrations `0013` (domain ownership) and `0014` (live progress), then core and adapter **6** relays. Migrations run at service startup. Each device needs private-work approval, a matching hosted model declaration and the separate `--live-tests` opt-in. The [relay guide](https://github.com/adaki2004/patchriot-relay#opt-in-to-live-website-tests) explains its private provider configuration. Existing local-model modes still work and cannot silently receive live tasks.
 
 The browser uses `/api/pentests`, `/:id/decision`, `/:id/review-plan` and `/:id/review`. Writes require a session, same origin and CSRF; approval is admin-only, while consent and starting a test belong to the requester. Approval expires after 24 hours. Changing origins or the objective requires a new approval. Revocation, cancellation or removed device approval stops new evidence downloads and lease renewals. A request already sent cannot be recalled.
 
@@ -425,3 +425,11 @@ Agents have no direct external network. The relay handles model calls, and repor
 </details>
 
 Original code is [AGPL-3.0-only](LICENSE). The shared [protocol crate](crates/protocol) is [Apache-2.0](crates/protocol/LICENSE). Attribution is in [NOTICE](NOTICE). Credentials, customer source and reports stay out of Git.
+
+## Container deployment
+
+`docker build -t patchriot-core:local .` builds the website and Rust server together. The image runs as an unprivileged user; supply runtime configuration through your deployment service, never build arguments. It listens on `PORT` (default `8080`) unless `PATCHRIOT_CORE_BIND` is set. Use `/api/health` for the service health check.
+
+On Railway, keep PostgreSQL and dispatcher in the same private project environment. `PATCHRIOT_DISPATCHER_URL` may use `http://SERVICE.railway.internal:PORT`; [Railway encrypts that private hop](https://docs.railway.com/networking/private-networking). This exception does not apply to the website or relay URL. Keep their HTTPS origins explicit, and expose only core publicly. The dispatcher URL is server configuration, never browser configuration. Set `PATCHRIOT_PUBLIC_ORIGIN` to the exact website origin before enabling sign-in.
+
+Do not put the treasury signing key in the web service. Payment reconciliation and payouts remain separate processes with their existing settings. DNS, a reachable private dispatcher and configured accounts are still required; an image build is not a running deployment.

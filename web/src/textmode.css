@@ -4,10 +4,6 @@
 /* Public pages get a small workspace bar, not the application's sidebar. */
 .public-workspace-nav { display: flex; gap: 28px; align-items: center; min-height: 52px; padding: 8px 0; overflow-x: auto; }
 .public-workspace-nav > button { flex-shrink: 0; padding: 8px 0; white-space: nowrap; }
-.previous-designs { margin-left: auto; position: relative; font-size: 10px; }
-.previous-designs summary { cursor: pointer; padding: 8px; white-space: nowrap; }
-.previous-designs > div { position: absolute; top: 100%; right: 0; min-width: 180px; background: #f5f5f5; border: 1px solid #aaa; padding: 8px; display: grid; box-shadow: 0 5px 16px #0002; }
-.previous-designs button { text-align: left; min-height: 36px; }
 
 .textmode-ui {
   --paper: #080a0b; --surface: #101314; --ink: #ecefe6; --muted: #a1aaa6; --line: #343b39; --accent: #ff6c51; --tint: #1b2220;
@@ -23,7 +19,6 @@
 .textmode-ui .primary { background: var(--ink); border: 1px solid var(--ink); color: var(--paper); min-height: 48px; font: 500 11px/1.4 var(--body-font); letter-spacing: .03em; padding: 16px 20px; gap: 26px; }
 .textmode-ui .primary:hover { background: var(--accent); border-color: var(--accent); color: var(--paper); }
 .textmode-ui .quiet:hover { background: var(--tint); color: var(--ink); }
-.textmode-ui .previous-designs > div { background: var(--surface); border-color: var(--line); }
 .textmode-ui header, .textmode-ui main, .textmode-ui footer { width: min(1320px, calc(100% - 80px)); }
 .textmode-ui header { min-height: 80px; border-color: var(--line); }
 .textmode-ui .brand { font: 44px/1 'Monogram', monospace; letter-spacing: 0; gap: 12px; }
@@ -215,7 +210,7 @@
   .textmode-ui .recent-work { grid-column: 1 / -1; }.textmode-ui .network-work { grid-column: 1 / -1; grid-row: 3; }.textmode-ui .workspace-orders { grid-column: 2; grid-row: 2; }.textmode-ui .workspace-contribute { grid-column: 1 / -1; grid-row: 4; flex-direction: row; align-items: center; }.textmode-ui .review-overview { grid-column: 1; grid-row: 2; }
   .textmode-ui .app-main ~ footer { padding-left: 202px; }
 }
-@media (max-width: 800px) {.previous-designs { font-size: 9px; }
+@media (max-width: 800px) {
   .tm-section { padding-top: 70px; }.tm-section-title { align-items: start; }.tm-section-title > p { max-width: 220px; font-size: 10px; }.tm-section-title h2 { font-size: 60px; }
   .tm-status-strip { gap: 18px; padding: 12px 0; }.tm-status-strip > span:nth-child(3) { display: none; }
   .method-tabs button { padding: 20px 16px; font-size: 24px; gap: 12px; }.method-content { padding: 22px; }.method-content h3 { font-size: 42px; }.role-symbol { font-size: 140px; }
@@ -224,7 +219,7 @@
   .textmode-ui .admin-navigation { flex-basis: 100%; margin: 4px 0 0; padding: 8px 0 0; border-top: 1px solid var(--line); }.textmode-ui .admin-navigation summary { margin: 0; padding: 8px; min-height: 34px; }.textmode-ui .admin-navigation[open] button { display: inline-flex; margin: 3px 0; }.textmode-ui .app-main ~ footer { padding-left: 22px; }
   .textmode-ui .workspace-heading h1 { font-size: 44px; }.textmode-ui .workspace-heading .primary { font-size: 9px; padding: 12px; gap: 10px; }
 }
-@media (max-width: 560px) {.previous-designs summary { font-size: 0; padding: 10px 5px; }.previous-designs summary::after { content: 'Archive'; font-size: 8px; }
+@media (max-width: 560px) {
   .textmode-ui header, .textmode-ui main, .textmode-ui footer { width: calc(100% - 32px); }.textmode-ui header { min-height: 70px; gap: 15px; }.textmode-ui .brand { font-size: 34px; gap: 8px; }
   .textmode-ui .header-links { gap: 14px; }.textmode-ui .header-links button { font-size: 9px; }.textmode-ui .header-right { gap: 10px; }.textmode-ui .account-name { display: none; }.textmode-ui .header-right > button { font-size: 9px; }
   .textmode-ui .public-workspace-nav { gap: 24px; }.textmode-ui .public-workspace-nav > button { font-size: 10px; }

@@ -48,39 +48,37 @@ test('public catalogue supports keyboard selection and reads source text without
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('catalogue text remains readable when idle, hovered or keyboard-focused in each theme', async ({ page }) => {
+test('catalogue text remains readable when idle, hovered or keyboard-focused', async ({ page }) => {
   await setup(page);
-  for (const design of ['collective']) {
-    await page.goto(`/?design=${design}#/incidents`);
+  await page.goto('/#/incidents');
     const table = page.getByRole('table', { name: 'Published incidents' });
-    await expect(table.getByRole('button')).toHaveCount(2);
-    for (const state of ['initial', 'hover', 'focused']) {
-      if (state === 'hover') await table.getByRole('button').nth(1).hover();
-      if (state === 'focused') {
-        await table.getByRole('button').first().focus();
-        await page.keyboard.press('ArrowDown');
-        await expect(table.getByRole('button').nth(1)).toBeFocused();
-      }
-      const ratios = await table.locator('strong, td > span').evaluateAll(elements => {
-        function luminance(color: string) {
-          const rgb = color.match(/[\d.]+/g)!.slice(0, 3).map(value => {
-            const channel = Number(value) / 255;
-            return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
-          });
-          return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
-        }
-        return elements.map(element => {
-          let background = element.parentElement!;
-          while (getComputedStyle(background).backgroundColor === 'rgba(0, 0, 0, 0)' && background.parentElement) background = background.parentElement;
-          const ink = luminance(getComputedStyle(element).color);
-          const paper = luminance(getComputedStyle(background).backgroundColor);
-          return (Math.max(ink, paper) + .05) / (Math.min(ink, paper) + .05);
-        });
-      });
-      for (const ratio of ratios) expect(ratio, `${design} / ${state}: text needs 4.5:1 contrast`).toBeGreaterThanOrEqual(4.5);
+  await expect(table.getByRole('button')).toHaveCount(2);
+  for (const state of ['initial', 'hover', 'focused']) {
+    if (state === 'hover') await table.getByRole('button').nth(1).hover();
+    if (state === 'focused') {
+      await table.getByRole('button').first().focus();
+      await page.keyboard.press('ArrowDown');
+      await expect(table.getByRole('button').nth(1)).toBeFocused();
     }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const ratios = await table.locator('strong, td > span').evaluateAll(elements => {
+      function luminance(color: string) {
+        const rgb = color.match(/[\d.]+/g)!.slice(0, 3).map(value => {
+          const channel = Number(value) / 255;
+          return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+        });
+        return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+      }
+      return elements.map(element => {
+        let background = element.parentElement!;
+        while (getComputedStyle(background).backgroundColor === 'rgba(0, 0, 0, 0)' && background.parentElement) background = background.parentElement;
+        const ink = luminance(getComputedStyle(element).color);
+        const paper = luminance(getComputedStyle(background).backgroundColor);
+        return (Math.max(ink, paper) + .05) / (Math.min(ink, paper) + .05);
+      });
+    });
+    for (const ratio of ratios) expect(ratio, `${state}: text needs 4.5:1 contrast`).toBeGreaterThanOrEqual(4.5);
   }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('a failed refresh keeps previous entries and explicitly marks them stale', async ({ page }) => {
@@ -108,7 +106,7 @@ test('a catalogue row opens all report sections, full remediation and attributed
     sections: [{ label: 'Impact and limits', body: 'Downloads do not establish infections.' }, { label: 'Unknown', body: '<script>untrusted source text</script>' }],
   };
   await page.route('**/api/incidents', route => route.fulfill({ json: [{ ...entries[0], content: { ...content, catalogue } }] }));
-  await page.goto('/?design=collective#/incidents');
+  await page.goto('/#/incidents');
   const table = page.getByRole('table', { name: 'Published incidents' });
   await expect(table.getByRole('columnheader')).toHaveText(['Short name', 'Qualifying disclosure / investigation', 'Category', 'Fix / status']);
   await expect(table).toContainText(catalogue.fix);

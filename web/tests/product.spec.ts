@@ -38,25 +38,27 @@ test('public documentation is bookmarkable and never requests private records', 
   await expect(page.getByRole('heading', { name: 'Don’t trust. Verify.', exact: true })).toBeVisible();
   expect(calls.every(path => ['/api/session', '/api/fleet', '/api/incidents'].includes(path))).toBe(true);
   await page.goto('/#/docs/../../admin');
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENCE NETWORK.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
 });
 
 test('workspace separates requests and pairing from the public introduction', async ({ page }) => {
   await setup(page, true);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENCE NETWORK.' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'What needs checking?' })).toBeVisible();
+  await page.getByText('Existing snapshot and source tools', { exact: true }).click();
   await page.getByRole('button', { name: 'Set the scope →', exact: false }).click();
   await expect(page).toHaveURL(/#\/sites$/);
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Pair an agent', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Your machine. Our shared defence.' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
+  await page.goto('/#/guide');
+  await expect(page.getByRole('heading', { name: 'Public pairing is not open yet.' })).toBeVisible();
   await page.getByRole('button', { name: 'Patchriot home' }).click();
   await expect(page).toHaveURL(/#\/home$/);
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENCE NETWORK.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
   await page.getByRole('button', { name: 'OPEN DASHBOARD', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -68,22 +70,22 @@ test('public page uses the supplied logo and access requests remain a deliberate
   const logo = page.locator('img.brand-mark');
   await expect.poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   await expect(page.getByRole('heading', { name: 'Recent hacks & incidents.' })).toBeVisible();
-  await page.locator('header').getByRole('button', { name: 'Sign in or request access' }).click();
+  await page.locator('header').getByRole('button', { name: 'App' }).click();
   const dialog = page.getByRole('dialog', { name: 'Sign in or request access' });
   await dialog.getByRole('button', { name: 'Request access', exact: true }).click();
   await expect(dialog.getByLabel('Your name')).toBeVisible();
   expect(calls).not.toContain('/api/access-requests');
   await page.keyboard.press('Escape');
-  await expect(page.locator('header').getByRole('button', { name: 'Sign in or request access' })).toBeFocused();
+  await expect(page.locator('header').getByRole('button', { name: 'App' })).toBeFocused();
   await expect(logo).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('the contribution link reopens account access after closing the sign-in popup', async ({ page }) => {
+test('the access link reopens account access after closing the sign-in popup', async ({ page }) => {
   await setup(page);
   await page.goto('/');
   const access = page.getByRole('region', { name: 'Account access' });
-  const contribute = page.getByRole('button', { name: 'PUT YOUR AGENT TO WORK', exact: false });
+  const contribute = page.locator('.access-invitation').getByRole('button', { name: 'Request access', exact: false });
   await contribute.click();
   await expect(access.getByLabel('Your name')).toBeVisible();
   await access.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -92,4 +94,16 @@ test('the contribution link reopens account access after closing the sign-in pop
   await contribute.click();
   await expect(access.getByLabel('Your name')).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Sign in or request access' })).toBeVisible();
+});
+
+test('members cannot load connection details or open a pairing dialog', async ({ page }) => {
+  const calls = await setup(page, true);
+  await page.goto('/#/guide');
+  await expect(page.getByRole('heading', { name: 'Public pairing is not open yet.' })).toBeVisible();
+  expect(calls).not.toContain('/api/pairing-info');
+  expect(calls).not.toContain('/api/pairings/claim');
+  await page.goto('/#/devices');
+  await expect(page.getByRole('button', { name: 'Pair a relay +', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(calls).not.toContain('/api/pairing-info');
 });
