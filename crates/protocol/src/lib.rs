@@ -358,6 +358,10 @@ pub struct WorkPoll {
     pub source_reviews: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub live_tests: bool,
+    /// Reviewed optional tools installed in the pinned runtime image. An empty
+    /// list withdraws support; this never grants scope or private access.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub live_tools: Vec<crate::pentests::LiveToolProfile>,
 }
 
 fn is_false(value: &bool) -> bool {

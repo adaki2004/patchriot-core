@@ -295,6 +295,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/pentests", get(pentests::list).post(pentests::create))
         .route("/api/pentests/{id}/decision", post(pentests::decide))
         .route("/api/pentests/{id}/review-plan", get(pentests::plan))
+        .route("/api/pentest-tools", get(pentests::tools))
         .route("/api/pentests/{id}/review", post(pentests::start))
         .route(
             "/api/pentests/{id}/review-code",

@@ -11,6 +11,17 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does not change accounts, move funds or run load tests. Broader application testing and richer evidence packs are being developed; the product name does not imply complete OWASP coverage or certification.
 
+| Assessment | What you provide | Status |
+| --- | --- | --- |
+| **Black box** | A website or API URL and proof of control | First product |
+| **Grey box** | The URL, a dedicated test account and application context | In development |
+| **White box** | Source code plus an approved test environment | Planned; existing source-text review is a separate, limited tool |
+| **SIaaS** | Your own agents, infrastructure and access rules | Roadmap |
+
+Private repository access is planned through a GitHub App installed on selected repositories, with read-only source access and a fixed commit for each assessment. Repository access does not authorize testing a deployed site. Source-assisted testing still needs explicit target scope and consent to share code with the selected operators and model provider.
+
+When a compatible team is available, **ARTEX** can be selected before domain proof. The pinned full engine runs inside the task container and shares the assessment's existing budgets. It plans checks and uses installed tools; only the approved HTTP methods can reach the target. The report records its version, requests, output and early stops. This does not run every upstream skill or optional tool. An interrupted engine run keeps its evidence and leaves the overall assessment marked for review.
+
 | Network | Who it is for |
 | --- | --- |
 | **Public network** | Requesters who can verify control of their target domains. Patchriot operates the beta’s agents; reports stay private. |
@@ -33,7 +44,7 @@ Public HTTPS websites and APIs are supported. Knowing a raw IP address or contro
 
 DNS proof belongs to this account and exact request. It expires with the scope after 24 hours, cannot authorize another request, and does not permit testing other domains. Each request allows six refresh windows. Normal DNS propagation may take longer than one window. Access is rechecked when work starts and workers request evidence.
 
-**Hosted beta: coming soon.** The current deployment is a private pilot. The website address will be published here after deployment checks. The local instructions below run a separate installation.
+**Hosted pilot:** [patchriot.tech](https://patchriot.tech). Accounts require approval. Features on a development branch may not be deployed yet; the website shows the options currently available. The local instructions below run a separate installation.
 
 ## Enterprise inquiries
 
