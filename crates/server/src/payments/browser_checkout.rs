@@ -96,6 +96,7 @@ fn terms(
     let terms = CheckoutTerms {
         site_check_id: target.site_id().unwrap_or_default(),
         source_id: target.source_id(),
+        pentest_id: target.pentest_id(),
         consent: input.consent.clone(),
         payment: InvoiceTerms {
             account_id: account,
@@ -128,13 +129,15 @@ fn matches(
     target: ReviewTarget,
     input: &CreateCheckout,
 ) -> bool {
-    ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id) == Some(target)
+    ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id, terms.pentest_id)
+        == Some(target)
         && terms.payment.account_id == account
         && terms.payment.request_id == input.consent.request_id
         && terms.consent.request_id == input.consent.request_id
         && terms.consent.snapshot_sha256 == input.consent.snapshot_sha256
         && terms.consent.device_ids == input.consent.device_ids
         && terms.consent.accepts_operator_access == input.consent.accepts_operator_access
+        && terms.consent.accepts_provider_access == input.consent.accepts_provider_access
         && terms.payment.quote_request["originAsset"] == input.origin_asset
         && terms.payment.quote_request["refundTo"] == input.refund_address
         && terms
@@ -307,6 +310,45 @@ pub(crate) async fn create_source(
         &input,
     )
     .await?;
+    let quote = checkout::prepare(&state, &service.provider, &terms)
+        .await
+        .map_err(error)?;
+    view(terms, quote).map(Json)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CreateLiveCheckout {
+    consent: patchriot_protocol::pentests::StartPentest,
+    offer_id: String,
+    origin_asset: String,
+    refund_address: String,
+}
+
+pub(crate) async fn create_pentest(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(input): Json<CreateLiveCheckout>,
+) -> Result<Json<DepositView>, ApiError> {
+    let account = auth::require_write(&headers, &state).await?.id;
+    let service = service(&state)?;
+    let input = CreateCheckout {
+        consent: input.consent.into(),
+        offer_id: input.offer_id,
+        origin_asset: input.origin_asset,
+        refund_address: input.refund_address,
+    };
+    let terms = save(
+        &state.pool,
+        &service.policy,
+        account,
+        ReviewTarget::Pentest(id),
+        &input,
+    )
+    .await?;
+    // Admission verifies ownership, scope, team and capacity before a payment
+    // provider is called or deposit instructions become visible.
     let quote = checkout::prepare(&state, &service.provider, &terms)
         .await
         .map_err(error)?;

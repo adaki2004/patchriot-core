@@ -70,11 +70,15 @@ test('late history loading cannot move a bookmarked report below the screen', as
     await new Promise(resolve => setTimeout(resolve, 250));
     await route.fulfill({ json: Array.from({ length: 30 }, (_, index) => ({ id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`, mode: 'website_agent', state: 'needs_review', created_at: 1793448000, deadline_at: 1793450100, steps: [] })) });
   });
+  const history = page.waitForResponse(r => new URL(r.url()).pathname === '/api/reviews');
   await page.goto(`/#/reviews/${reviewId}`);
   const heading = page.getByRole('region', { name: 'Review report' }).getByRole('heading', { name: 'Needs review', exact: true });
   await expect(heading).toBeInViewport();
-  await expect(page.getByText('30 reviews', { exact: true })).toBeVisible();
+  await history;
+  await expect(page.locator('.review-list')).toHaveCount(0);
   await expect(heading).toBeInViewport();
+  await page.getByRole('button', { name: 'Close report ×', exact: true }).click();
+  await expect(page.getByText('30 reports', { exact: true })).toBeVisible();
 });
 
 test('an anonymous bookmark waits for sign-in and a denied read exposes no report', async ({ page }) => {
@@ -133,6 +137,6 @@ test('invalid paths cannot become API paths and member links cannot open admin d
     await page.goto(`/#/${view}`);
     await expect(page.getByRole('heading', { name: 'Administrator access required.', exact: true })).toBeVisible();
   }
-  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/withdrawals', '/api/agents', '/api/pentests'].includes(path))).toBe(true);
+  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/withdrawals', '/api/agents', '/api/pentests'].includes(path))).toBe(true);
   expect(calls.writes).toEqual([]);
 });

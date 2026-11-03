@@ -47,7 +47,7 @@ test('workspace separates requests and pairing from the public introduction', as
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
-  await expect(page.getByRole('heading', { name: 'What needs checking?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'A first check. With evidence.' })).toBeVisible();
   await page.getByText('Existing snapshot and source tools', { exact: true }).click();
   await page.getByRole('button', { name: 'Set the scope →', exact: false }).click();
   await expect(page).toHaveURL(/#\/sites$/);

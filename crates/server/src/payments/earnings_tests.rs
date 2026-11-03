@@ -34,12 +34,14 @@ async fn completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
     let terms = checkout::CheckoutTerms {
         site_check_id: site,
         source_id: None,
+        pentest_id: None,
         presentation: None,
         consent: patchriot_protocol::website_reviews::CreateWebsiteReview {
             request_id: payment.request_id,
             snapshot_sha256: "a".repeat(64),
             device_ids: devices.to_vec(),
             accepts_operator_access: true,
+            accepts_provider_access: false,
         },
         payment,
     };
@@ -172,5 +174,49 @@ async fn database_rejects_partial_or_unbacked_allocation() {
         .await
         .unwrap();
     assert_eq!(count, 0);
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unpaid() {
+    use patchriot_protocol::pentests::{LiveScope, PentestContext, PentestResult};
+    let db = TestDb::new().await;
+    let (mut candidate, mut view) = completed(&db, 10_000_000).await;
+    let scope: LiveScope = serde_json::from_value(json!({"origins":["https://example.com"],"objective":"Owned fixture","methods":["GET","HEAD","OPTIONS"]})).unwrap();
+    let hash = scope.hash().unwrap();
+    let website = view.website.take().unwrap();
+    candidate
+        .terms
+        .as_object_mut()
+        .unwrap()
+        .remove("site_check_id");
+    candidate.terms["pentest_id"] = json!(website.site_check_id);
+    candidate.terms["consent"]["snapshot_sha256"] = json!(hash);
+    candidate.terms["consent"]["accepts_provider_access"] = json!(true);
+    view.mode = "pentest_agent".into();
+    view.scenario = patchriot_protocol::FixtureScenario::LiveHttpV1;
+    view.pentest = Some(PentestContext {
+        pentest_id: website.site_check_id,
+        scope: scope.clone(),
+        scope_sha256: hash.clone(),
+        reviewers: website.reviewers,
+        provider: "abliteration.ai".into(),
+    });
+    let result: PentestResult=serde_json::from_value(json!({"kind":"pentest_agent_v1","scope_sha256":hash,
+        "execution":{"state":"completed","provider":"abliteration.ai","model":"abliterated-model-large-v2","image_digest":format!("sha256:{}","c".repeat(64)),"duration_ms":1000,"inference_calls":12,"http_requests":1,"cost_upper_microusd":10,"cleanup_confirmed":true},
+        "assessment":{"summary":"Owned fixture inspected","findings":[],"limitations":["One fixture request"]},
+        "evidence":[{"id":1,"method":"GET","url":"https://example.com/","request_headers":{},"status":200,"headers":{},"body_excerpt":"fixture","body_sha256":"d".repeat(64),"truncated":false,"error":null,"observed_at":Utc::now().timestamp()}],"raw_summary":""})).unwrap();
+    assert!(result.evidence_complete(&scope));
+    for step in &mut view.steps {
+        step.result = Some(WorkResult::Pentest(result.clone()));
+    }
+    let mut incomplete = view.clone();
+    incomplete.steps[0].evidence_complete = Some(false);
+    assert!(allocate(&db.pool, &candidate, &incomplete).await.is_err());
+    assert!(allocate(&db.pool, &candidate, &view).await.unwrap());
+    assert!(!allocate(&db.pool, &candidate, &view).await.unwrap());
+    let totals:(i64,i64,i64,i64)=sqlx::query_as("SELECT sum(amount)::bigint,sum(inference_calls)::bigint,sum(terminal_calls)::bigint,sum(http_requests)::bigint FROM operator_earnings")
+        .fetch_one(&db.pool).await.unwrap();
+    assert_eq!(totals, (9_000_000, 36, 0, 3));
     db.finish().await;
 }

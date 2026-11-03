@@ -7,9 +7,20 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 ## First product
 
-**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Submit an exact HTTPS scope, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Staff approve the scope before agents receive it. Reports retain the recorded requests, findings and incomplete checks. Scout, Recon and Verifier each have a readable section, with finding filters, impact explanations and links to supporting requests. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
+**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Enter a public HTTPS website URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Successful DNS verification opens checkout automatically; staff can still block a request. Reports retain the recorded requests, findings and incomplete checks. The report separates numbered findings, each agent’s contribution, coverage and technical evidence. Missing assessments and execution limits stay visible; agent agreement is not presented as independent confirmation. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
 
-The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does not change accounts, move funds or run load tests. Broader application testing and richer evidence packs are being developed; the product name does not imply complete OWASP coverage or certification.
+The pilot is read-only by default. Dedicated HTTP Basic accounts and bearer API tokens can extend access. An explicit disposable-environment option permits bounded POST submissions. Browser login forms, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
+
+| Assessment | What you provide | Status |
+| --- | --- | --- |
+| **Black box** | A website or API URL and proof of control | First product |
+| **Grey box** | The URL and a dedicated HTTP Basic account or bearer API token | Managed pilot; no browser login |
+| **White box** | Source code plus an approved test environment | Planned; existing source-text review is a separate, limited tool |
+| **SIaaS** | Your own agents, infrastructure and access rules | Roadmap |
+
+Private repository access is planned through a GitHub App installed on selected repositories, with read-only source access and a fixed commit for each assessment. Repository access does not authorize testing a deployed site. Source-assisted testing still needs explicit target scope and consent to share code with the selected operators and model provider.
+
+**ARTEX** is included in every new website request made through the UI. Checkout requires a team of three compatible agents; older saved requests keep their original tool selection. The pinned full engine runs inside the task container and shares the assessment's existing budgets. It plans checks and uses installed tools; only the approved HTTP methods can reach the target. The report records its version, requests, output and early stops. This does not run every upstream skill or optional tool. An interrupted engine run keeps its evidence and leaves the overall assessment marked for review.
 
 | Network | Who it is for |
 | --- | --- |
@@ -20,18 +31,20 @@ The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does
 
 ## Use Patchriot
 
-Open **App** to sign in or request access. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** contains staff approvals. Recent events are separately reviewed public research, never customer findings.
+Open **App** to sign in or request access. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** shows network activity and staff controls. Recent events are separately reviewed public research, never customer findings.
 
 For a live website test:
 
-1. Save the exact website origins and your permission to test them.
-2. Add the supplied TXT record for every domain. Select **Refresh DNS**; the server checks for up to five minutes. A repeated click does not extend that window.
-3. Wait for domain verification and staff approval, then confirm the named operators and disclosed model provider.
-4. Inspect the private report, including evidence, gaps and disagreement. Download the readable Markdown report, the original evidence JSON, or a Postman inventory of observed endpoints. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
+1. Enter the website URL and confirm your authority to test it. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
+2. Add the supplied TXT record for every domain. Select **Check DNS record**; the server checks for up to five minutes. The page shows the last lookup and remaining time, then offers a retry if no match was found. Returning from your DNS provider’s tab refreshes the status. A repeated click does not extend the window.
+3. Wait for domain verification, then confirm the named operators and disclosed model provider. Use a coupon or pay the quoted fee when checkout is enabled. Work queues automatically after access is confirmed.
+4. Inspect the private report, including evidence, gaps and disagreement. Download a PDF with a summary, scope, findings, recommendations, coverage limits and tool register. The PDF is generated in your browser without sending the report elsewhere. Markdown, original evidence JSON and a Postman inventory remain available under other downloads. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
+
+Public HTTPS websites and APIs are supported. Knowing a raw IP address or controlling reverse DNS is not proof that you own a server. General port scans and non-web services need a separate infrastructure-verification and testing policy; they are outside this product.
 
 DNS proof belongs to this account and exact request. It expires with the scope after 24 hours, cannot authorize another request, and does not permit testing other domains. Each request allows six refresh windows. Normal DNS propagation may take longer than one window. Access is rechecked when work starts and workers request evidence.
 
-**Hosted beta: coming soon.** The current deployment is a private pilot. The website address will be published here after deployment checks. The local instructions below run a separate installation.
+**Hosted pilot:** [patchriot.tech](https://patchriot.tech). Accounts require approval. Features on a development branch may not be deployed yet; the website shows the options currently available. The local instructions below run a separate installation.
 
 ## Enterprise inquiries
 
@@ -56,10 +69,10 @@ An investigator makes a claim, a reproducer checks it and a challenger questions
 | Access | Approved accounts; staff-only pairing; domain verification before live-test approval and execution |
 | Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
 | Agents | Isolated Hermes execution and a three-role live HTTP pilot on managed Kali machines |
-| Payments | Single-use codes, NEAR Intents checkout, 90/10 accounting and reserved operator withdrawals; live-test billing remains separate |
+| Payments | Single-use codes and NEAR Intents checkout for live, snapshot and source reviews; 90/10 accounting and reserved operator withdrawals |
 | Existing tools | Approved saved-page and source-text reviews remain accessible |
 | In development | Broader OWASP checks, clearer evidence packs and public deployment |
-| Later | Authenticated testing, recurring checks, managed private networks and confidential execution |
+| Later | Browser login flows, recurring checks, managed private networks and confidential execution |
 
 ## Developer setup: run your own copy
 
@@ -101,10 +114,10 @@ Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are s
 
 To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing pilot login codes still work through **Use a pilot login code**. Password sign-in and setup are limited by username, socket peer and a shared backstop; forwarded IP headers are not trusted. A reverse proxy therefore shares the peer limit. Add edge rate limits before a public rollout. Google login and MFA are separate future integrations.
 
-As an administrator, in **Pair an agent**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. The setup guide explains where to download and verify the binary, how to select a CPU or GPU machine, and which relay address this deployment provides. A loopback address works only on that machine or through an explicitly configured tunnel. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Agent approvals**, then choose **Audits → Saved material and test examples → Reports & examples → New example review**:
+As an administrator, in **Pair an agent**, choose the fixture or local-agent walkthrough. The commands use the binary you just built and separate state directories for the two modes. The setup guide explains where to download and verify the binary, how to select a CPU or GPU machine, and which relay address this deployment provides. A loopback address works only on that machine or through an explicitly configured tunnel. Pairing opens your relay list so you can check approval and connection status. Pair three distinct devices and approve them under **Agent approvals**, then choose **Audits → Saved material and test examples → Reports → Developer checks · staff only → Run example check**:
 
 - **Quick fixture check:** connect with `--fixtures`. Inspect the original failure, patched result and clean control. No model calls.
-- **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role. The browser shows the deployment’s time limit before submission: 35 minutes by default, up to 95 minutes for an explicitly configured CPU pilot.
+- **Local agent check:** follow the relay's isolated-runtime setup and connect with `--agents --agent-config PATH`. Three agents inspect the supplied bug and fix, sequentially on shared machines. CPU models can take several minutes per role. The browser shows the deployment’s time limit before submission: 35 minutes by default, up to 185 minutes for an explicitly configured pilot (three one-hour roles plus cleanup).
 
 If a pairing code expires, run `pair` again with the same `--state-dir` and enter its new code. Keep the existing state: it contains the device key. A code claimed by another account requires that account or a separate device identity; refreshing the page cannot transfer it.
 
@@ -187,11 +200,11 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 ## Live website testing — approved pilot
 
-Choose **Request an audit → Test the running site**. Enter the exact HTTPS origins, a specific objective and your authority to test them. Prove control of each hostname using its DNS TXT challenge, then wait for staff approval of that unchanged scope. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
+Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. ARTEX is included by default. Verification lets the requester proceed to checkout without a staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff gave your account a coupon. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
 
-This mode makes real **GET, HEAD and OPTIONS** requests. Agents can inspect scripts, discover same-origin routes and test non-destructive hypotheses; there are no login credentials, account changes, transactions or load tests. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
+This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v1** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes stay read-only. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
-The live mode requires `PATCHRIOT_REVIEW_MODE=pilot`; paid, coupon and closed deployments refuse its start route. It does not inherit a free exception in paid mode or create operator earnings. Set up an explicitly approved pilot installation to try it. Snapshot/source payments keep their existing behavior.
+Live assessments use the same access policy as snapshot and source reviews: `pilot` is free, `coupons` requires a one-use code, `paid` accepts payment or a code, and `closed` pauses new work. The free `/api/pentests/:id/review` route remains blocked in coupon and paid modes. Use `/api/pentests/:id/review-code` or `/api/pentests/:id/checkout`, with the same live consent fields inside `consent`. Ownership, the exact scope/profile, the named team and provider consent are checked before admission. A paid reservation cannot lease agents until a matching settlement is recorded; permission and team eligibility are checked again then. Revoked or expired permission cannot be purchased back. Failed or cancelled paid work retains funds for staff review; cancellation does not automatically refund a settled payment.
 
 <details>
 <summary><strong>Deployment and API details</strong></summary>
@@ -227,7 +240,7 @@ An optional `catalogue` adds `short_name`, `qualifying`, `category`, `fix`, a `r
 
 ## Price and payments
 
-The intended beta offer is **$10 for one bounded website or source review**, or a **single-use review code**. This covers the agreed snapshot, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented. The deployment chooses whether checkout is enabled; a coupon can cover an approved pilot review.
+The intended beta offer is **$10 for one bounded live website, snapshot or source review**, or a **single-use coupon**. This covers the agreed assessment, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented. The deployment chooses whether checkout is enabled; a coupon can cover an approved pilot review.
 
 Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
 
@@ -251,7 +264,7 @@ target/debug/patchriot-core revoke-review-code <code-uuid>
 
 Issuance prints the ID, secret code and expiry once. Share the code privately with an invited account. The database stores its hash; unused codes expire after seven days and can be revoked. The label appears in the recipient's review history, so avoid private administrative notes.
 
-The tester opens a saved snapshot, chooses three agents, accepts sharing and enters the code. Once reserved, it stays tied to that account, snapshot, selected agents and request. If the reply is lost, open **Audits → Saved material and test examples → Reports & examples → Sponsored reviews** to recover it. This uses the saved request without entering the code again. Cancellation does not restore the code. If admission keeps failing, the operator must investigate before issuing a replacement.
+The tester opens a saved snapshot, chooses three agents, accepts sharing and enters the code. Once reserved, it stays tied to that account, snapshot, selected agents and request. If the reply is lost, open **Audits → Saved material and test examples → Reports → Coupon history & interrupted checkouts** to recover it. This uses the saved request without entering the code again. Cancellation does not restore the code. If admission keeps failing, the operator must investigate before issuing a replacement.
 
 `POST /api/site-checks/:id/review-code` accepts `{code, consent}`. `GET /api/review-codes` returns the owner's latest reservations; `POST /api/review-codes/:id/resume` accepts `{}`. Writes require the session, same origin and CSRF token. Codes create no invoice, cash balance or earnings. `closed` mode pauses new and resumed starts while preserving history.
 
@@ -301,7 +314,7 @@ cargo run --locked -p patchriot-core -- payments-cancel-once
 
 ### Configure checkout
 
-`PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `coupons` (review codes only), `paid` (payment or a code), or `closed` (no new private reviews or deposit instructions). Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Coupon and paid modes block the free website and source review routes. Existing order reads and payment workers remain available when new checkout is closed.
+`PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `coupons` (coupons only), `paid` (payment or a code), or `closed` (no new private reviews or deposit instructions). Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Coupon and paid modes block the free live, snapshot and source review routes. Existing order reads and payment workers remain available when new checkout is closed.
 
 The configuration fixes the service price, recipient and allowed input tokens. Copy exact asset IDs, decimals and chain names from the [supported-token catalog](https://docs.near-intents.org/api-reference/oneclick/get-supported-tokens), verify the treasury destination, and replace every placeholder below. This is a format example, not a usable payment configuration.
 
@@ -433,3 +446,13 @@ Original code is [AGPL-3.0-only](LICENSE). The shared [protocol crate](crates/pr
 On Railway, keep PostgreSQL and dispatcher in the same private project environment. `PATCHRIOT_DISPATCHER_URL` may use `http://SERVICE.railway.internal:PORT`; [Railway encrypts that private hop](https://docs.railway.com/networking/private-networking). This exception does not apply to the website or relay URL. Keep their HTTPS origins explicit. Core and the separate agent-only gateway may receive public domains; the internal dispatcher and database must stay private. The dispatcher URL is server configuration, never browser configuration. Set `PATCHRIOT_PUBLIC_ORIGIN` to the exact website origin before enabling sign-in.
 
 Do not put the treasury signing key in the web service. Payment reconciliation and payouts remain separate processes with their existing settings. DNS, a reachable private dispatcher and configured accounts are still required; an image build is not a running deployment.
+
+### Test accounts and recorded coverage
+
+In **New website test → Test accounts & form submissions**, choose HTTP Basic or a bearer API token and a protected GET path on the same host. The path must return 2xx with the account and 401/403 without it. Use a disposable, low-privilege account. Unsupported browser login, SSO, MFA and CAPTCHA cannot be selected. Availability requires three approved agents with the matching capabilities before checkout.
+
+Credentials are encrypted in the dispatcher, delivered only to the assigned relay's active lease and removed from container/model input. The relay adds them to approved requests and redacts known credentials and session values from retained text. Assigned operators can still access plaintext. Each credential set serves one assessment and is deleted when work ends, permission is revoked or its 24-hour lifetime expires. Revoke the test account afterwards; deletion cannot recall data already received by an operator.
+
+The **Coverage & tools** tab and PDF include versioned check results: completed, potential issue, inconclusive, skipped or unsupported. Configuration-file probes use a random-path control; query reflection alone is not called XSS. Authenticated coverage requires both a successful account request and a denied anonymous control. Older reports keep their original evidence and do not gain invented checks.
+
+**Upgrade order:** deploy core first, then dispatcher and its gateway, then adapter 8 relays. Core can read older agents and keeps baseline request fields compatible with the older dispatcher. Older core versions cannot decode the new capability names; do not advertise them until core has updated. Keep advanced options unavailable until the server and all three selected agents support them.

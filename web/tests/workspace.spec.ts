@@ -40,7 +40,7 @@ test('personal audits join material to its latest report while staff records sta
   await expect(page.locator('.audit-row')).toHaveCount(1);
   await expect(page.getByText('My payment module', { exact: true })).toBeVisible();
   await page.getByText('Administration', { exact: true }).click();
-  await page.getByRole('button', { name: 'Audit approvals', exact: true }).click();
+  await page.getByRole('button', { name: 'Audit activity', exact: true }).click();
   await expect(page.getByText('https://staff-only.example/', { exact: true })).toBeVisible();
   expect(reads.some(path => path.endsWith('?scope=all'))).toBe(true);
   await page.getByRole('button', { name: 'App', exact: true }).click();
@@ -49,7 +49,7 @@ test('personal audits join material to its latest report while staff records sta
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('dashboard puts older decisions ahead of ready reports and newer running work', async ({ page }) => {
+test('dashboard keeps decisions and active work ahead of finished reports', async ({ page }) => {
   await setup(page);
   const rows = [
     { id: 'running', state: 'running', created_at: timestamp + 30 },
@@ -62,9 +62,9 @@ test('dashboard puts older decisions ahead of ready reports and newer running wo
   await page.route('**/api/reviews?scope=mine', route => route.fulfill({ json: rows }));
   await page.goto('/#/overview');
   const work = page.locator('.recent-work');
-  await expect(work.getByRole('heading', { name: 'What needs your attention?' })).toBeVisible();
-  await expect(work.locator('.audit-state .status-chip')).toHaveText(['Needs attention', 'Awaiting payment', 'Incomplete', 'Report ready', 'Agents working']);
-  await expect(page.getByLabel('Workspace summary')).toHaveText('3Need attention1Reports ready1In progress');
+  await expect(work.getByRole('heading', { name: 'Work in progress.' })).toBeVisible();
+  await expect(work.locator('.audit-state .status-chip')).toHaveText(['Needs attention', 'Awaiting payment', 'Incomplete', 'Agents working', 'Report ready']);
+  await expect(page.getByLabel('Workspace summary')).toHaveText('3Need attention0Queued1Running1Reports ready');
   expect((await work.boundingBox())!.y).toBeLessThan((await page.getByLabel('Workspace summary').boundingBox())!.y);
   await work.locator('.audit-title').first().click();
   await expect(page).toHaveURL(/#\/reviews\/needs-review$/);
@@ -86,6 +86,20 @@ test('unavailable personal data is not reported as zero earnings or an empty aud
   await expect(page.getByRole('button', { name: 'Your available earnings' })).toContainText('12.5');
   await expect(page.getByText('A fresh pair of eyes.', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('queued work stays visible and can be found in the activity filter', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/reviews?scope=mine', route => route.fulfill({ json: [{ id: runId, mode: 'pentest_agent', state: 'queued', created_at: timestamp, steps: [{state:'waiting'},{state:'waiting'},{state:'waiting'}] }] }));
+  await page.goto('/#/overview');
+  await expect(page.getByLabel('Workspace summary')).toContainText('1Queued');
+  await expect(page.getByText('Waiting for agents. Check back later.', { exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Audits', exact: true }).click();
+  await page.getByRole('button', { name: 'Queued', exact: true }).click();
+  await expect(page.locator('.audit-row')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Running', exact: true }).click();
+  await expect(page.locator('.audit-row')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'No running requests.' })).toBeVisible();
 });
 
 test('pairing uses the configured address, warns for loopback and shell-quotes its audience', async ({ page }) => {

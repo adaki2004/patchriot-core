@@ -25,7 +25,7 @@ pub const SIGNATURE_MAX_FUTURE_SECONDS: i64 = 30;
 /// Both deployment and operator limits are explicit. Renewal cannot extend a
 /// saved attempt, and the relay reserves one minute for cleanup/reporting.
 pub const DEFAULT_AGENT_ATTEMPT_SECONDS: u64 = 600;
-pub const MAX_AGENT_ATTEMPT_SECONDS: u64 = 1800;
+pub const MAX_AGENT_ATTEMPT_SECONDS: u64 = 3600;
 pub const AGENT_CLEANUP_SECONDS: u64 = 60;
 pub const MAX_AGENT_RESULT_DURATION_MS: u64 = (MAX_AGENT_ATTEMPT_SECONDS + 60) * 1000;
 
@@ -208,6 +208,38 @@ pub struct Heartbeat {
     pub sequence: u64,
     pub paused: bool,
     pub running: u16,
+    /// Optional to preserve the signed bytes sent by older relays.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<AgentSystem>,
+}
+
+/// Self-reported software details, not attestation. No host address or machine ID.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct AgentSystem {
+    pub os_name: String,
+    pub os_version: Option<String>,
+    pub architecture: String,
+    pub relay_version: String,
+}
+
+impl AgentSystem {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        for value in [
+            Some(&self.os_name),
+            self.os_version.as_ref(),
+            Some(&self.architecture),
+            Some(&self.relay_version),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if value.trim().is_empty() || value.len() > 80 || value.chars().any(char::is_control) {
+                return Err("invalid_system_details");
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -228,6 +260,8 @@ pub struct DeviceView {
     pub declared_model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reported_os: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<AgentSystem>,
     pub compute_group: String,
     pub approval: String,
     #[serde(default)]
@@ -256,6 +290,15 @@ pub struct AgentSummary {
     pub declared_model: Option<String>,
     pub state: String,
     pub last_seen_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system: Option<AgentSystem>,
+    #[serde(default)]
+    pub live_tests: bool,
+    #[serde(default)]
+    pub live_tools: Vec<pentests::LiveToolProfile>,
+    /// Accepted role reports, including incomplete reports. Not verified findings.
+    #[serde(default)]
+    pub reports_received: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -358,6 +401,10 @@ pub struct WorkPoll {
     pub source_reviews: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub live_tests: bool,
+    /// Reviewed optional tools installed in the pinned runtime image. An empty
+    /// list withdraws support; this never grants scope or private access.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub live_tools: Vec<crate::pentests::LiveToolProfile>,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -658,6 +705,17 @@ pub struct CancelReview {}
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn legacy_heartbeat_keeps_its_signed_shape() {
+        let old = serde_json::json!({"sequence": 7, "paused": false, "running": 0});
+        let heartbeat: Heartbeat = serde_json::from_value(old.clone()).unwrap();
+        assert!(heartbeat.system.is_none());
+        assert_eq!(serde_json::to_value(&heartbeat).unwrap(), old);
+        assert_eq!(
+            payload_hash(&heartbeat).unwrap(),
+            payload_hash(&old).unwrap()
+        );
+    }
     use super::*;
 
     #[test]
@@ -709,6 +767,7 @@ mod tests {
             "/heartbeat",
             1000,
             Heartbeat {
+                system: None,
                 sequence: 1,
                 paused: false,
                 running: 0,

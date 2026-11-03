@@ -7,6 +7,7 @@ export type Account = {
 
 export type Session = { account: Account | null; csrf_token: string | null };
 export type Fleet = { online_devices: number; online_operators: number; online_compute_groups: number };
+export type AgentSystem = { os_name: string; os_version: string | null; architecture: string; relay_version: string };
 export type Device = {
   id: string;
   operator_id: string;
@@ -16,6 +17,7 @@ export type Device = {
   runtime_version: string;
   declared_model: string | null;
   reported_os?: string | null;
+  system?: AgentSystem | null;
   compute_group: string;
   approval: 'pending' | 'approved' | 'revoked';
   private_work_approved?: boolean;
@@ -45,6 +47,13 @@ const messages: Record<string, string> = {
   conflicting_source_request: 'This upload changed. Start a fresh request or open the saved upload.',
   source_already_decided: 'This upload was already decided or has expired. Refresh its status.',
 
+  unsupported_or_missing_test_credentials: 'Check the test-account type and credentials. Only HTTP Basic and bearer tokens are supported, and the service must have account testing enabled.',
+  state_change_permission_required: 'Confirm that the agents may change disposable test data before enabling form submissions.',
+  test_credentials_unavailable: 'Test-account access is unavailable or has expired. Open the saved assessment, or create a fresh request when the service is available.',
+  test_credentials_expired_or_used: 'This test account has expired or is already attached to an assessment. Open that assessment from Audits, or start a new request.',
+  conflicting_test_credentials: 'These credentials differ from the saved request. Create a new request to change the test account.',
+  invalid_live_scope: 'Check the website and protected URL path. Use one HTTPS host for account tests and a path without a query or fragment.',
+  live_scope_not_ready: 'This request is not ready to start. Check domain verification, expiry and any existing assessment in Audits.',
   live_test_pilot_only: 'Live tests are available only in the approved pilot; paid and coupon checkout for live tests is not enabled.',
   pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
   public_pairing_disabled: 'Public pairing is not open yet. Patchriot operates the agents in this beta.',
@@ -75,11 +84,11 @@ const messages: Record<string, string> = {
   checkout_offer_changed: 'The review price or payment settings changed. Refresh and check the new offer before continuing.',
   invalid_payment_details: 'Select an available payment token and enter a valid refund address on that network.',
   payment_required: 'This review now requires payment. Reopen the agent selection to see the current offer.',
-  review_code_required: 'This review requires a single-use review code. Reopen the agent selection to enter it.',
-  invalid_or_used_review_code: 'This review code is invalid, expired, revoked or already claimed. Check the code or contact the operator.',
+  review_code_required: 'This review requires a single-use coupon. Reopen the agent selection to enter it.',
+  invalid_or_used_review_code: 'This coupon is invalid, expired, revoked or already claimed. Check the code or contact the operator.',
   review_codes_unavailable: 'New reviews with codes are paused or unavailable in this mode. Existing reports remain available.',
-  review_code_preparing: 'This saved request is still being checked. Wait a moment, then resume it from Sponsored reviews.',
-  review_code_bound: 'This code is already attached to a saved request. Open Sponsored reviews under Reviews to resume that request.',
+  review_code_preparing: 'This saved request is still being checked. Wait a moment, then resume it from Coupon assessments.',
+  review_code_bound: 'This code is already attached to a saved request. Open Coupon assessments under Reviews to resume that request.',
   invalid_dispatcher_response: 'The review reply could not be verified. Check the saved request before starting another.',
   not_found: 'This item is unavailable, expired or not shared with your account.',
   invalid_request: 'Check the entered details and the limits shown in the form, then try again.',

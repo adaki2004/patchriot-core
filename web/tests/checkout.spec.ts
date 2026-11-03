@@ -75,10 +75,10 @@ async function setup(page: Page) {
 test('a code covers one consented review without payment instructions or browser storage', async ({ page }, info) => {
   const state = await setup(page); state.settings = { mode: 'coupons', offer: null };
   await choose(page);
-  const submit = page.getByRole('button', { name: 'Use code & start review →', exact: true });
+  const submit = page.getByRole('button', { name: 'Use coupon & start review →', exact: true });
   await expect(submit).toBeDisabled();
   const code = `pr-${'a'.repeat(64)}`;
-  await page.getByLabel('Review code', { exact: true }).fill(code);
+  await page.getByLabel('Free-test coupon', { exact: true }).fill(code);
   await expect(page.getByRole('dialog')).toContainText('Cancellation does not restore the code');
   await page.getByRole('dialog').screenshot({ path: info.outputPath('review-code-consent.png') });
   await submit.click();
@@ -92,12 +92,12 @@ test('a code covers one consented review without payment instructions or browser
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('paid mode offers a review code alongside the unchanged payment route', async ({ page }) => {
+test('paid mode offers a coupon alongside the unchanged payment route', async ({ page }) => {
   const state = await setup(page);
   await choose(page);
-  await page.getByLabel('Use a review code instead of payment', { exact: true }).check();
-  await page.getByLabel('Review code', { exact: true }).fill(`pr-${'b'.repeat(64)}`);
-  await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
+  await page.getByLabel('Use a free-test coupon instead of payment', { exact: true }).check();
+  await page.getByLabel('Free-test coupon', { exact: true }).fill(`pr-${'b'.repeat(64)}`);
+  await page.getByRole('button', { name: 'Use coupon & start review →', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Review report' })).toBeVisible();
   expect(state.codeSubmissions).toHaveLength(1); expect(state.submissions).toHaveLength(0); expect(state.freeSubmissions).toBe(0);
 });
@@ -105,14 +105,15 @@ test('paid mode offers a review code alongside the unchanged payment route', asy
 test('a lost code reply survives refresh and resumes only the saved request', async ({ page }, info) => {
   const state = await setup(page); state.settings = { mode: 'coupons', offer: null }; state.codeError = true;
   await choose(page);
-  await page.getByLabel('Review code', { exact: true }).fill(`pr-${'c'.repeat(64)}`);
-  await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
+  await page.getByLabel('Free-test coupon', { exact: true }).fill(`pr-${'c'.repeat(64)}`);
+  await page.getByRole('button', { name: 'Use coupon & start review →', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('you will not need the code again');
   const original = state.codeSubmissions[0];
   await page.getByRole('button', { name: 'Close review setup', exact: true }).click();
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.reload();
-  const history = page.getByRole('region', { name: 'Sponsored reviews', exact: true });
+  await page.getByText('Coupon history & interrupted checkouts', { exact: true }).click();
+  const history = page.getByRole('region', { name: 'Coupon assessments', exact: true });
   await expect(history).toContainText('Start not confirmed');
   await history.getByText('Saved sharing permission', { exact: true }).click();
   await expect(history).toContainText(original.consent.snapshot_sha256);
@@ -128,8 +129,8 @@ test('a lost code reply survives refresh and resumes only the saved request', as
 test('a mismatched code reply never opens another review', async ({ page }) => {
   const state = await setup(page); state.settings = { mode: 'coupons', offer: null }; state.codeWrongBinding = true;
   await choose(page);
-  await page.getByLabel('Review code', { exact: true }).fill(`pr-${'d'.repeat(64)}`);
-  await page.getByRole('button', { name: 'Use code & start review →', exact: true }).click();
+  await page.getByLabel('Free-test coupon', { exact: true }).fill(`pr-${'d'.repeat(64)}`);
+  await page.getByRole('button', { name: 'Use coupon & start review →', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('could not be matched');
   await expect(page.getByRole('region', { name: 'Review report' })).toHaveCount(0);
   expect(state.codeSubmissions).toHaveLength(1);
@@ -141,9 +142,9 @@ test('switching to codes-only access exposes the code field even from the paymen
   await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
   state.settings = { mode: 'coupons', offer: null };
   await page.getByRole('button', { name: 'Refresh review team ↻', exact: true }).click();
-  await expect(page.getByLabel('Review code', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Free-test coupon', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Pay with', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Use code & start review →', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Use coupon & start review →', exact: true })).toBeDisabled();
   expect(state.submissions).toHaveLength(0); expect(state.codeSubmissions).toHaveLength(0);
 });
 

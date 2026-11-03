@@ -44,8 +44,8 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
-  await expect(page.locator('.tm-footnote')).toContainText('scoped HTTP testing');
-  await expect(page.locator('.tm-footnote')).toContainText('Agent agreement is not a security guarantee.');
+  await expect(page.locator('.tm-footnote')).toContainText('An automated first check, before a human penetration test.');
+  await expect(page.locator('.tm-footnote')).toContainText('It cannot discover every vulnerability or certify a website as safe.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
@@ -104,6 +104,19 @@ test('an outage keeps the previous count and displays the failure', async ({ pag
   failing = false;
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('members can see agent software versions, tools and report counts without host details', async ({ page }) => {
+  await setup(page, true);
+  await page.route('**/api/agents', route => route.fulfill({ json: [{ id: '00000000-0000-4000-8000-000000000002', reported_os: 'linux', runtime: 'hermes', runtime_version: 'runner-v3', declared_model: 'local-model', state: 'online', last_seen_at: 1793692800, system: { os_name: 'Kali GNU/Linux', os_version: '2026.3', architecture: 'x86_64', relay_version: '0.0.1' }, live_tests: true, live_tools: ['artex_engine_v1'], reports_received: 12, compute_group: 'private-host', operator_name: 'private-operator' }] }));
+  await page.goto('/#/agents');
+  await expect(page.getByText('Kali GNU/Linux 2026.3', { exact: true })).toBeVisible();
+  await expect(page.getByText('ARTEX + standard checks', { exact: true })).toBeVisible();
+  await expect(page.getByText('runner-v3', { exact: true })).toBeVisible();
+  await expect(page.getByText('0.0.1', { exact: true })).toBeVisible();
+  await expect(page.locator('.agent-entry')).toContainText('Reports received12');
+  await expect(page.getByText(/private-host|private-operator/)).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
 test('setup does not invent a deployment endpoint and the agent directory shows only safe fields', async ({ page }) => {
@@ -397,9 +410,8 @@ for (const [code, status, guidance] of [
     accepted = true;
     return route.fulfill({ json: { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' } });
   });
-  await page.goto('/');
-  await page.evaluate(() => { location.hash = '/guide'; });
-    await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
+  await page.goto('/#/guide');
+  await page.getByRole('button', { name: 'I already have a pairing code →', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Pairing code', { exact: true }).fill('ABCD-EF01-2345');
   await dialog.getByLabel('Operator name', { exact: true }).fill('My operator profile');
@@ -487,7 +499,7 @@ test('shows the declared Hermes model without treating presence as model verific
   await page.goto('/');
   await page.getByRole('button', { name: 'My agents', exact: true }).click();
   const row = page.getByRole('row').filter({ hasText: 'Hermes contributor' });
-  await expect(row).toContainText('Version 0.22.2');
+  await expect(row).toContainText('Runner 0.22.2');
   await expect(row).toContainText('Reports received: 7');
   await expect(row).toContainText('Declared model: publisher/model:<img src=x onerror=alert(1)>');
   await expect(row.locator('img')).toHaveCount(0);
@@ -506,7 +518,7 @@ test('keeps conflicting evidence visible without presenting it as a successful r
   await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
   await page.goto('/');
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.getByRole('button', { name: 'Access-control example', exact: false }).click();
   const report = page.getByRole('region', { name: 'Review report' });
   await expect(report).toBeFocused();
@@ -517,8 +529,8 @@ test('keeps conflicting evidence visible without presenting it as a successful r
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test('agent checks are an explicit choice and a retry keeps the same request identity', async ({ page }) => {
-  await setup(page, true);
+test('staff example checks are explicit and a retry keeps the same request identity', async ({ page }) => {
+  await setup(page, true, 'admin');
   await page.route('**/api/fleet', route => route.fulfill({ json: { ...fleet, agent_review_timeout_seconds: 5700 } }));
   const submitted: Record<string, unknown>[] = [];
   let release!: () => void;
@@ -532,8 +544,9 @@ test('agent checks are an explicit choice and a retry keeps the same request ide
   });
   try {
     await page.goto('/');
-    await openAuditTool(page, 'Reports & examples');
-    await page.getByRole('button', { name: 'New example review +' }).click();
+    await openAuditTool(page, 'Reports');
+    await page.getByText('Developer checks · staff only', { exact: true }).click();
+    await page.getByRole('button', { name: 'Run example check' }).click();
     await expect(page.getByRole('radio', { name: 'Quick fixture check', exact: false })).toBeChecked();
     await page.getByRole('radio', { name: 'Local agent check', exact: false }).check();
     await expect(page.getByText('Expires after 95 minutes', { exact: false })).toBeVisible();
@@ -566,7 +579,7 @@ test('agent reports preserve missing evidence and render model prose as inert te
   await page.route('**/api/reviews{,?scope=mine}', route => route.fulfill({ json: [review] }));
   await page.route(`**/api/reviews/${review.id}`, route => route.fulfill({ json: review }));
   await page.goto('/');
-  await openAuditTool(page, 'Reports & examples');
+  await openAuditTool(page, 'Reports');
   await page.getByRole('button', { name: 'Access-control example', exact: false }).click();
   const report = page.getByRole('region', { name: 'Review report' });
   await expect(report.getByRole('heading', { name: 'Needs review' })).toBeVisible();

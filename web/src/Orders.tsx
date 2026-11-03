@@ -4,6 +4,8 @@ import { useLive } from './useLive';
 import { ReviewDetail } from './Reviews';
 import { DepositInstructions, checkedDeposit, useNow } from './Checkout';
 import type { CheckoutSettings, Deposit } from './Checkout';
+import { SponsoredReviews } from './ReviewCodes';
+import { useOrderHistory } from './orderHistory';
 
 export type Order = {
   id: string; review_id: string | null; state: string;
@@ -92,23 +94,37 @@ function OrderDetail({ id, csrf, initialQuote, paymentEnabled, report, onReport,
   </>;
 }
 
-export function Orders({ csrf, selected, onSelect, report, onReport, initialQuote, onClearQuote }: { csrf: string; selected: string | null; onSelect: (id: string | null) => void; report: boolean; onReport: (open: boolean) => void; initialQuote?: Deposit | null; onClearQuote: () => void }) {
-  const orders = useLive<Order[]>('/orders');
+export function Orders({ csrf, selected, onSelect, report, onReport, onOpenReview, initialQuote, onClearQuote }: { csrf: string; selected: string | null; onSelect: (id: string | null) => void; report: boolean; onReport: (open: boolean) => void; onOpenReview: (id: string) => void; initialQuote?: Deposit | null; onClearQuote: () => void }) {
+  const history = useOrderHistory();
+  const { orders, coupons } = history;
+  const selectedCoupon = coupons.data?.find(c => c.id === selected);
+  // Mount a freshly paid checkout immediately. Waiting for coupon history
+  // would discard its one-use quote before OrderDetail can retain it.
+  const checkoutOrder = useRef<string | null>(null);
+  if (initialQuote) checkoutOrder.current = initialQuote.order_id;
+  else if (checkoutOrder.current !== selected) checkoutOrder.current = null;
+  const showPaidOrder = selected && !selectedCoupon && (checkoutOrder.current === selected || orders.data?.some(o => o.id === selected) || coupons.data && !coupons.error);
   const checkout = useLive<CheckoutSettings>('/checkout');
   // The fresh response is consumed once. Returning to Orders must recheck the
   // saved quote explicitly, especially after the customer says they sent it.
   useEffect(() => { if (initialQuote) onClearQuote(); }, [initialQuote, onClearQuote]);
   return <>
-    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your orders</h1><p className="subtle">Track payment and work separately. A received payment is not a completed review.</p></div><button className="quiet" onClick={orders.refresh}>Refresh orders ↻</button></section>
+    <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your orders</h1><p className="subtle">Paid and coupon assessments, together. Open an assessment to see its progress and findings.</p></div><button className="quiet" onClick={() => { orders.refresh(); coupons.refresh(); }}>Refresh orders ↻</button></section>
     {orders.error && <div className="notice error" role="alert">{orders.error}<br />The last saved list remains visible; it may be out of date.</div>}
+    {coupons.error && <div className="notice error" role="alert">Coupon history could not refresh. Saved entries may be out of date. <button className="inline" onClick={coupons.refresh}>Retry coupon history</button></div>}
     {checkout.error && <div className="notice error" role="alert">Payment instructions are unavailable. Your saved order records remain visible.</div>}
     {checkout.data?.mode === 'closed' && <p className="notice">New payments are paused. Do not send a transfer using an earlier quote.</p>}
-    {selected && <OrderDetail key={selected} id={selected} csrf={csrf} initialQuote={initialQuote?.order_id === selected ? initialQuote : null} paymentEnabled={checkout.data?.mode === 'paid' && !checkout.error} report={report} onReport={onReport} onClose={() => { onSelect(null); onClearQuote(); }} onChange={orders.refresh} />}
+    {selectedCoupon && <><button className="text-button" onClick={() => onSelect(null)}>Close coupon order ×</button><SponsoredReviews csrf={csrf} selectedId={selectedCoupon.id} onOpen={onOpenReview} /></>}
+    {selected && showPaidOrder && <OrderDetail key={selected} id={selected} csrf={csrf} initialQuote={initialQuote?.order_id === selected ? initialQuote : null} paymentEnabled={checkout.data?.mode === 'paid' && !checkout.error} report={report} onReport={onReport} onClose={() => { onSelect(null); onClearQuote(); }} onChange={orders.refresh} />}
     <section className="panel" aria-label="Order history">
-      {orders.data === null && <div className="empty"><p>{orders.error ? 'Order history could not be loaded.' : 'Loading orders…'}</p></div>}
-      {orders.data?.length === 0 && <div className="empty"><h2>No paid orders yet.</h2><p>{checkout.data?.mode === 'pilot' ? 'The current pilot reviews are free. Paid checkout is not enabled.' : checkout.data?.mode === 'coupons' ? 'Reviews covered by a code appear under Reviews. They do not create a paid order.' : 'Website review orders will appear here after checkout is prepared.'}</p></div>}
-      {orders.data?.map(order => <button key={order.id} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => onSelect(order.id)}><span><strong>Audit · {order.id.slice(0, 8)}</strong><small>{new Date(order.created_at).toLocaleString()} · {paymentLabel(order)}</small></span><span className={`badge ${order.requires_attention ? 'revoked' : 'pending'}`}>{orderLabel(order)}</span></button>)}
+      {!history.ready && !orders.error && !coupons.error && <div className="empty"><p>Loading orders…</p></div>}
+      {history.ready && !orders.error && !coupons.error && history.entries.length === 0 && <div className="empty"><h2>No orders yet.</h2><p>{checkout.data?.mode === 'pilot' ? 'The current pilot reviews are free. Paid checkout is not enabled.' : 'Your paid and coupon assessments will appear here after checkout.'}</p></div>}
+      {history.entries.map(entry => {
+        const order = entry.record;
+        return <button key={`${entry.kind}-${order.id}`} className={`review-item ${selected === order.id ? 'selected' : ''}`} onClick={() => onSelect(order.id)}><span><strong>Audit · {order.id.slice(0, 8)}</strong><small>{new Date(entry.created).toLocaleString()} · {entry.kind === 'coupon' ? 'Covered by coupon · $0 charged' : paymentLabel(entry.record)}</small></span><span className={`badge ${entry.kind === 'payment' && entry.record.requires_attention ? 'revoked' : 'pending'}`}>{entry.kind === 'coupon' ? (order.review_id ? 'Open assessment' : 'Start not confirmed') : orderLabel(entry.record)}</span></button>;
+      })}
     </section>
     {orders.data?.length === 50 && <p className="fine">Showing your 50 most recent orders.</p>}
+    {coupons.data?.length === 50 && <p className="fine">Showing your 50 most recent coupon assessments.</p>}
   </>;
 }
