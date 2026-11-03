@@ -61,6 +61,19 @@
 .dns-record-field > code { display: block; font: 400 13px/1.8 var(--mono-font); color: #e0e6f1; background: #151d2b; padding: 12px; margin-top: 6px; overflow-wrap: anywhere; user-select: all; white-space: normal; }
 .copy-feedback { display: block; color: #b2dfcf; font-size: 12px; margin-top: 3px; }.copy-feedback:empty { display: none; }
 .dns-ttl { font-size: 13px; margin: 16px 0 0; color: var(--muted); }
+.textmode-ui .pentests-page .dns-name-help { margin: 18px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.dns-name-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0 16px; }
+.dns-name-options > div { background: #151d2b; padding: 16px; min-width: 0; }
+.dns-name-options strong { display: block; color: #e0e6f1; font-size: 15px; }
+.dns-name-options p { margin: 8px 0 12px; overflow-wrap: anywhere; }
+.dns-name-options code { display: block; border: 1px solid #45516b; padding: 10px; color: #d0deff; background: #0c111a; user-select: all; }
+.dns-subdomain-help dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 14px; padding: 14px; background: #151d2b; margin: 12px 0; }
+.dns-subdomain-help dd { margin: 0; min-width: 0; color: #d0deff; }
+.dns-last-check { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 16px; margin: 18px 0 0; }
+.dns-check-status { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; border-left: 2px solid #8aaaff; background: #192338; padding: 18px 20px; margin-top: 24px; }
+.dns-check-status > div { flex: 1 1 240px; }.dns-check-status strong { color: #d3e3ff; font-size: 16px; }.dns-check-status p { color: var(--muted); font-size: 14px; margin: 6px 0 0; max-width: 54ch; }
+.dns-check-status[role=alert] { display: block; }.dns-check-status[role=alert] .quiet { margin-top: 10px; }
+.dns-countdown { font: 500 24px/1.3 var(--mono-font); font-variant-numeric: tabular-nums; color: #d3e3ff; }.dns-countdown small { display: block; font: 400 12px/1.6 var(--body-font); color: var(--muted); }
 .textmode-ui .pentests-page .notice { font-size: 15px; line-height: 1.5; padding: 16px; }
 .textmode-ui .pentests-page .assessment-footnote { color: var(--muted); font-size: 14px; line-height: 1.6; margin: 14px 0 24px; }
 .approval-card { border-top: 2px solid #8aaaff; }.assessment-staff-form > p { color: var(--muted); }.assessment-staff-form textarea { margin-top: 8px; }
@@ -73,5 +86,6 @@
 .saved-requests { padding: 0; }.saved-requests-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 24px; border-bottom: 1px solid var(--line); }.saved-requests-heading p { margin: 0; color: var(--muted); font-size: 14px; }
 .saved-request { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 20px; text-align: left; padding: 22px 24px; border-bottom: 1px solid var(--line); }.saved-request:last-child { border-bottom: 0; }.saved-request:hover { background: #1c273a; }.saved-request strong { display: block; font: 600 16px var(--body-font); overflow-wrap: anywhere; }.saved-request small { display: block; font-size: 13px; margin-top: 7px; color: var(--muted); }.request-state { font-size: 14px; color: #bdd1fc; flex-shrink: 0; }
 @media (max-width: 640px) {
+  .dns-name-options { grid-template-columns: 1fr; }.dns-subdomain-help dl { grid-template-columns: 1fr; gap: 3px; }.dns-subdomain-help dd { margin-bottom: 8px; }
   .assessment-navigation { gap: 8px; flex-wrap: wrap; }.assessment-navigation > div { gap: 18px; }.assessment-heading { margin-top: 20px; }.textmode-ui .assessment-heading h1 { font-size: 30px; }.assessment-steps { margin-bottom: 20px; }.assessment-steps li { flex-direction: column; align-items: start; gap: 8px; padding: 12px 10px; font-size: 12px; }.assessment-card { padding: 22px 18px; }.textmode-ui .assessment-card h2 { font-size: 23px; }.assessment-actions { flex-direction: column; align-items: stretch; gap: 16px; }.assessment-actions > p { max-width: none; }.assessment-actions .primary { width: 100%; }.assessment-request-summary { gap: 10px 16px; }.assessment-request-summary > span:last-child { margin-left: 0; }.assessment-team { grid-template-columns: 1fr; }.assessment-team > div { padding: 14px; }.assessment-team .assessment-role { margin-bottom: 4px; }.request-details dl { grid-template-columns: 1fr; gap: 6px; }.request-details dd { margin-bottom: 12px; }.dns-record { padding: 14px; }.dns-record-field > code { font-size: 12px; }.saved-request { flex-direction: column; align-items: start; gap: 12px; padding: 20px; }.saved-requests { padding: 0; }.saved-requests-heading { padding: 16px 20px; }.coupon-explanation { align-items: start; }
 }

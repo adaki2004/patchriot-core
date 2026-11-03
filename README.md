@@ -36,7 +36,7 @@ Open **App** to sign in or request access. The dashboard brings together your re
 For a live website test:
 
 1. Enter the website URL and confirm your authority to test it. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
-2. Add the supplied TXT record for every domain. Select **Check DNS record**; the server checks for up to five minutes. A repeated click does not extend that window.
+2. Add the supplied TXT record for every domain. Select **Check DNS record**; the server checks for up to five minutes. The page shows the last lookup and remaining time, then offers a retry if no match was found. Returning from your DNS provider’s tab refreshes the status. A repeated click does not extend the window.
 3. Wait for domain verification and staff approval, then confirm the named operators and disclosed model provider. Use a coupon or pay the quoted fee when checkout is enabled. Work queues automatically after access is confirmed.
 4. Inspect the private report, including evidence, gaps and disagreement. Download the readable Markdown report, the original evidence JSON, or a Postman inventory of observed endpoints. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
 
