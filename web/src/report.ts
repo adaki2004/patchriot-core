@@ -21,6 +21,7 @@ export function stopExplanation(reason?: string): string {
     case 'provider_budget_reached': case 'engine_budget_reached': return 'The agent reached its allowed AI usage budget. Saved evidence is available, but the remaining checks were not completed.';
     case 'timed_out': case 'timeout': return 'The allowed testing time ended before this work finished.';
     case 'provider_unavailable': case 'provider_rejected_request': case 'provider_stream_interrupted': return 'The AI provider did not complete a request. The agent could not finish this stage.';
+    case 'near_attestation_unavailable': case 'near_model_attestation_required': case 'near_signature_unavailable': case 'near_model_signature_required': case 'near_verification_timeout': return 'NEAR AI verification could not be completed. The agent stopped rather than trust an unverified model response. Saved website requests remain available; this stage needs another assessment.';
     case 'cancelled': return 'This stage was cancelled. Work already recorded remains available.';
     case 'invalid_tool_records': return 'The runner could not validate the recorded tool output. Its conclusions need review.';
     case undefined: return 'Some checks or supporting evidence are incomplete. Review the recorded limits before relying on these findings.';
