@@ -116,7 +116,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
     const team = review.pentest?.reviewers ?? [];
     const teamOperators = new Set(team.map(r => r.operator_id)).size;
     const teamGroups = new Set(team.map(r => `${r.operator_id}:${r.compute_group}`)).size;
-    const report: ReportInput = { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, scope_sha256: review.pentest?.scope_sha256, team };
+    const report: ReportInput = { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, scope_sha256: review.pentest?.scope_sha256, team };
     const target = review.pentest?.scope.origins.map(origin => { try { return new URL(origin).host; } catch { return origin; } }).join(', ');
     return <section ref={panel} tabIndex={-1} className="review-detail panel live-review" aria-label="Review report">
       <div className="section-heading"><div><p className="eyebrow">PRIVATE WEBSITE ASSESSMENT</p><h2 className="review-target">{target || 'Website test'}</h2><p className="fine">Started {new Date(review.created_at * 1000).toLocaleString()}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>

@@ -106,6 +106,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.begin('02 / Scope & method');
   p.label('Authorized origins', input.origins.join('\n'));
   p.label('Profile', input.profile ?? 'Recorded custom scope');
+  p.label('Test-account scope', input.authentication ? `${input.authentication === 'basic' ? 'HTTP Basic' : 'Bearer token'} · protected control path ${input.auth_check_path ?? 'not recorded'}. Credentials are not included.` : 'No test account supplied.');
   p.label('Approved HTTP methods', input.methods?.join(', ') ?? 'See the saved scope');
   p.label('Scope fingerprint (SHA-256)', input.scope_sha256 ?? 'Not recorded');
   p.heading('Assessment process');
