@@ -4,7 +4,7 @@ import { reportFindings, stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
-export type HttpRecord = { id: number; method: string; url: string; status: number | null; request_headers?: Record<string, string>; headers: Record<string, string>; body_excerpt: string; body_sha256?: string | null; observed_at?: number; authenticated?: boolean; request_body_excerpt?: string; request_body_sha256?: string; truncated: boolean; error: string | null };
+export type HttpRecord = { id: number; method: string; url: string; status: number | null; request_headers?: Record<string, string>; headers: Record<string, string>; body_excerpt: string; body_sha256?: string | null; observed_at?: number; authenticated?: boolean; login?: boolean; request_body_excerpt?: string; request_body_sha256?: string; truncated: boolean; error: string | null };
 export type LiveFinding = { title: string; severity: string; support: string; explanation: string; reproduction: string; suggested_action: string; evidence_ids: number[] };
 export type LiveToolRun = { tool: string; version: string; arguments: string[]; started_at: number; duration_ms: number; exit_code: number | null; failure: string | null; evidence_ids: number[]; output_sha256: string; output_excerpt: string; output_truncated: boolean };
 export type LiveResult = { kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
@@ -126,7 +126,7 @@ export function LiveReportDownloads({ id, steps, loadReport, disabled }: { id: s
 }
 
 function RequestEvidence({ entry }: { entry: HttpRecord }) {
-  return <article className="request-evidence"><div className="section-heading"><strong>HTTP #{entry.id}</strong><span className="pill">{entry.method} · {entry.status ?? 'No response'}</span></div><p className="evidence-url">{entry.url}</p>{entry.authenticated && <p className="fine">The relay sent the supplied test account with this request.</p>}
+  return <article className="request-evidence"><div className="section-heading"><strong>HTTP #{entry.id}</strong><span className="pill">{entry.method} · {entry.status ?? 'No response'}</span></div><p className="evidence-url">{entry.url}</p>{entry.login && <p className="fine">Relay-managed login. Passwords, tokens, cookies and login response content are withheld.</p>}{entry.authenticated && <p className="fine">The relay sent the supplied test account with this request.</p>}
     {entry.error && <p className="notice">Request did not complete: {entry.error.replaceAll('_', ' ')}.</p>}
     {entry.observed_at && <p className="fine">Recorded {new Date(entry.observed_at * 1000).toLocaleString()}</p>}
     <details><summary>Request and response headers</summary><h5>Request</h5><pre>{JSON.stringify(entry.request_headers ?? {}, null, 2)}</pre><h5>Recorded response headers</h5><pre>{JSON.stringify(entry.headers, null, 2)}</pre></details>

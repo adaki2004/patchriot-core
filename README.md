@@ -11,12 +11,12 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 Repeat findings appear once in the report, with each agent’s contribution and request references retained. Grouping requires matching titles and the same first cited request, including its authentication context and inputs. Different severity or support stays marked for review; the highest reported severity is shown. Uncertain matches stay separate. PDF and Markdown use the same grouping; the evidence JSON preserves the original reports.
 
-The pilot is read-only by default. Dedicated HTTP Basic accounts and bearer API tokens can extend access. An explicit disposable-environment option permits bounded POST submissions. Browser login forms, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
+The pilot is read-only by default. Dedicated test accounts can extend access through cookie-based form/JSON login, HTTP Basic or a bearer token. An explicit disposable-environment option permits bounded POST tests. Interactive browser login, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
 
 | Assessment | What you provide | Status |
 | --- | --- | --- |
 | **Black box** | A website or API URL and proof of control | First product |
-| **Grey box** | The URL and a dedicated HTTP Basic account or bearer API token | Managed pilot; no browser login |
+| **Grey box** | The URL and a dedicated test account | Cookie-based form/JSON login, HTTP Basic or bearer token; no interactive browser login |
 | **White box** | Source code plus an approved test environment | Planned; existing source-text review is a separate, limited tool |
 | **SIaaS** | Your own agents, infrastructure and access rules | Roadmap |
 
@@ -471,10 +471,12 @@ Do not put the treasury signing key in the web service. Payment reconciliation a
 
 ### Test accounts and recorded coverage
 
-In **New website test → Test accounts & form submissions**, choose HTTP Basic or a bearer API token and a protected GET path on the same host. The path must return 2xx with the account and 401/403 without it. Use a disposable, low-privilege account. Unsupported browser login, SSO, MFA and CAPTCHA cannot be selected. Availability requires three approved agents with the matching capabilities before checkout.
+In **New website test → Test accounts & form submissions**, choose email/username and password, HTTP Basic or a bearer token. Supply the protected GET path that returns 2xx for this account and 401/403 without it. For session login, also declare the exact POST endpoint, form or JSON format and field names. A form may use a hidden CSRF token from the declared login page. The server must set a session cookie: token-only JSON responses, JavaScript-only login, SSO, MFA and CAPTCHA are unsupported. The relay attempts login once per role and never follows redirects. This narrow login permission does not allow other POST tests. Availability requires three agents with the matching capability.
+
+Add the disposable account after domain verification, then choose the team and pay. Before an assessment is admitted, the requester may replace an expired or incorrect account through `POST /api/pentests/:id/credentials`; scope, requester, session and CSRF checks apply. Once checkout or testing has reserved the request, the account cannot be changed. Existing API clients may still supply Basic/bearer credentials at creation.
 
 Credentials are encrypted in the dispatcher, delivered only to the assigned relay's active lease and removed from container/model input. The relay adds them to approved requests and redacts known credentials and session values from retained text. Assigned operators can still access plaintext. Each credential set serves one assessment and is deleted when work ends, permission is revoked or its 24-hour lifetime expires. Revoke the test account afterwards; deletion cannot recall data already received by an operator.
 
 The **Coverage & tools** tab and PDF include versioned check results: completed, potential issue, inconclusive, skipped or unsupported. Configuration-file probes use a random-path control; query reflection alone is not called XSS. Authenticated coverage requires both a successful account request and a denied anonymous control. Older reports keep their original evidence and do not gain invented checks.
 
-**Upgrade order:** deploy core first, then dispatcher and its gateway, then adapter 8 relays. Core can read older agents and keeps baseline request fields compatible with the older dispatcher. Older core versions cannot decode the new capability names; do not advertise them until core has updated. Keep advanced options unavailable until the server and all three selected agents support them.
+**Upgrade order for v0.0.5:** deploy dispatcher and its gateway with migrations 21–24, then core, then adapter 10 relays. Core can read older agents and keeps baseline request fields compatible with the older dispatcher. Older core versions cannot decode the new capability names; do not advertise them until core has updated. Keep advanced options unavailable until the server and all three selected agents support them.

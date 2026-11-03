@@ -295,6 +295,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/pentests", get(pentests::list).post(pentests::create))
         .route("/api/pentests/{id}/decision", post(pentests::decide))
         .route(
+            "/api/pentests/{id}/credentials",
+            post(pentests::set_credentials),
+        )
+        .route(
             "/api/pentests/{id}/authorize-owned-test",
             post(pentests::authorize_owned_test),
         )
