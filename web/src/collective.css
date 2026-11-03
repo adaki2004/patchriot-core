@@ -11,8 +11,8 @@
 .header-account .quiet { font-size: 12px; white-space: nowrap; min-height: 44px; padding: 8px; }
 .textmode-ui .header-account .header-login { gap: 12px; padding: 12px 14px; min-height: 44px; font-size: 12px; white-space: nowrap; }
 .textmode-ui .access-dialog-brand > img { width: 66px; height: 66px; }
-.textmode-ui .tm-hero-copy { width: 72%; }
-.textmode-ui .tm-hero-copy h1 { max-width: 900px; }
+.textmode-ui .tm-hero-copy { width: 56%; }
+.textmode-ui .tm-hero-copy h1 { max-width: 720px; font-size: clamp(42px, 5.1vw, 72px); }
 .tm-hero-copy > p { max-width: 570px; }
 .tm-hero-actions .primary { gap: 18px; }
 .compare-heading { gap: 18px; }
@@ -264,3 +264,13 @@
 @media (prefers-reduced-motion: reduce) { .assessment-status[data-active=true] .assessment-orbit-signal { animation: none; } }
 
 .live-review:focus { outline: none; }
+
+/* Illustration stays separate from the readable service description. */
+.product-card-art { display: block; position: relative; margin: -24px -24px 24px; overflow: hidden; border-bottom: 1px solid var(--line); background: #09090d; }
+.product-card-art img { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; object-fit: cover; transition: transform 700ms ease; }
+.request-option:hover .product-card-art img, .request-option:focus-visible .product-card-art img { transform: scale(1.035); }
+.product-card-art::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 78%, #09090d88); }
+@media (min-width: 701px) { .product-card-art { margin: -32px -32px 28px; } }
+@media (min-width: 601px) and (max-width: 1000px) { .textmode-ui .tm-hero-copy { width: 60%; }.textmode-ui .tm-hero-copy h1 { font-size: clamp(36px, 5.3vw, 53px); }.tm-hero-actions { flex-wrap: wrap; gap: 12px; } }
+@media (max-width: 600px) { .textmode-ui .tm-hero-copy h1 { font-size: clamp(32px, 8vw, 46px); } }
+@media (prefers-reduced-motion: reduce) { .product-card-art img { transition: none; }.request-option:hover .product-card-art img, .request-option:focus-visible .product-card-art img { transform: none; } }
