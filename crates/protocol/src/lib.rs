@@ -25,7 +25,7 @@ pub const SIGNATURE_MAX_FUTURE_SECONDS: i64 = 30;
 /// Both deployment and operator limits are explicit. Renewal cannot extend a
 /// saved attempt, and the relay reserves one minute for cleanup/reporting.
 pub const DEFAULT_AGENT_ATTEMPT_SECONDS: u64 = 600;
-pub const MAX_AGENT_ATTEMPT_SECONDS: u64 = 1800;
+pub const MAX_AGENT_ATTEMPT_SECONDS: u64 = 3600;
 pub const AGENT_CLEANUP_SECONDS: u64 = 60;
 pub const MAX_AGENT_RESULT_DURATION_MS: u64 = (MAX_AGENT_ATTEMPT_SECONDS + 60) * 1000;
 

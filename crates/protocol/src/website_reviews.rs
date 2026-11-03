@@ -368,5 +368,6 @@ mod tests {
         .unwrap();
         assert_eq!(fleet.agent_review_timeout_seconds, 2100);
         assert_eq!(crate::agent_review_seconds(1800), 5700);
+        assert_eq!(crate::agent_review_seconds(3600), 11100);
     }
 }
