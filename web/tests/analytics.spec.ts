@@ -5,19 +5,21 @@ import { readFileSync } from 'node:fs';
 const bridge = readFileSync(new URL('../../crates/server/src/analytics.js', import.meta.url), 'utf8');
 
 const consentKey = 'patchriot.analytics-choice.v1';
+const frameOrigin = 'https://counts.patchriot.test';
 async function publicPage(page: Page, enabled = true) {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: null } }));
-  await page.route('**/api/analytics', r => r.fulfill({ json: { enabled } }));
+  await page.route('**/api/analytics', r => r.fulfill({ json: { enabled, frame_origin: enabled ? frameOrigin : null } }));
   await page.route('**/api/incidents', r => r.fulfill({ json: [] }));
-  // Exercise the shipped bridge script inside an opaque, CSP-restricted frame.
+  // Exercise the shipped bridge script on its separate hostname, with the
+  // same sandbox and network restrictions as the production frame.
   // Rust route tests separately check the actual HTML and response headers.
   await page.route('**/api/analytics/frame/*', r => {
     const view = new URL(r.request().url()).pathname.split('/').pop();
     const title = view === 'docs' ? 'Patchriot documentation' : 'Patchriot';
     const path = view === 'home' ? '/' : '/' + view;
     return r.fulfill({ contentType: 'text/html', headers: {
-      'content-security-policy': "sandbox allow-scripts; default-src 'none'; script-src 'nonce-test-nonce' https://www.googletagmanager.com; connect-src https://www.google-analytics.com https://region1.google-analytics.com; frame-ancestors 'self'; base-uri 'none'; form-action 'none'",
+      'content-security-policy': "sandbox allow-scripts allow-same-origin; default-src 'none'; script-src 'nonce-test-nonce' https://www.googletagmanager.com; connect-src https://www.google-analytics.com https://region1.google-analytics.com; frame-ancestors http://127.0.0.1:5174; base-uri 'none'; form-action 'none'",
       'referrer-policy': 'no-referrer',
     }, body: `<script nonce="test-nonce" data-measurement-id="G-EXAMPLE123" data-parent-origin="http://127.0.0.1:5174" data-page-location="http://127.0.0.1:5174${path}" data-page-title="${title}">${bridge}</script>` });
   });
@@ -51,16 +53,18 @@ test('the shipped bridge cannot read private DOM, cookies, storage or APIs and s
     google.push({ url: r.request().url(), referer: r.request().headers().referer });
     return r.fulfill({ contentType: 'text/javascript', body: `
       window.probe = {};
-      for (const [key, read] of Object.entries({ parent: () => parent.document.body.innerText, storage: () => parent.localStorage.getItem('private-test'), cookie: () => document.cookie })) {
+      for (const [key, read] of Object.entries({ parent: () => parent.document.body.innerText, storage: () => parent.localStorage.getItem('private-test'), cookie: () => parent.document.cookie })) {
         try { window.probe[key] = read(); } catch { window.probe[key] = 'blocked'; }
       }
       fetch('/api/session').then(() => window.probe.api = 'read').catch(() => window.probe.api = 'blocked');
+      window.ownCookies = document.cookie;
       window.commands = window.dataLayer.map(v => Array.from(v));
     ` });
   });
   await page.goto('/?email=PRIVATE_EMAIL&token=PRIVATE_TOKEN#/docs/start');
   await page.evaluate(() => {
     localStorage.setItem('private-test', 'PRIVATE_REPORT');
+    document.cookie = 'private-test=PRIVATE_SESSION; SameSite=Strict; Path=/';
     const marker = document.createElement('div'); marker.textContent = 'PRIVATE_REPORT'; document.body.append(marker);
   });
   await page.getByRole('button', { name: 'Allow page counts' }).click();
@@ -68,6 +72,8 @@ test('the shipped bridge cannot read private DOM, cookies, storage or APIs and s
   const frame = page.frames().find(f => f.url().includes('/api/analytics/frame/docs'))!;
   await expect.poll(() => frame.evaluate(() => (window as any).probe?.api)).toBe('blocked');
   expect(await frame.evaluate(() => (window as any).probe)).toEqual({ parent: 'blocked', storage: 'blocked', cookie: 'blocked', api: 'blocked' });
+  expect(await frame.evaluate(() => (window as any).ownCookies)).not.toContain('PRIVATE_SESSION');
+  expect(new URL(frame.url()).origin).toBe(frameOrigin);
   expect(frameApi).toBe(0);
   expect(google[0].referer).toBeUndefined();
   const commands = await frame.evaluate(() => (window as any).commands);
@@ -105,10 +111,24 @@ test('disabled configuration and signed-in public pages never load analytics', a
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.locator('iframe')).toHaveCount(0);
-  await page.route('**/api/analytics', r => r.fulfill({ json: { enabled: true } }));
+  await page.route('**/api/analytics', r => r.fulfill({ json: { enabled: true, frame_origin: frameOrigin } }));
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id: 'member', role: 'member', display_name: 'Private member' }, csrf_token: 'fixture-csrf' } }));
   await page.reload();
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
   await expect(page.locator('iframe')).toHaveCount(0);
+  expect(google).toEqual([]);
+});
+
+test('a missing, same-host or invalid analytics origin cannot load third-party code', async ({ page }) => {
+  await publicPage(page);
+  await page.addInitScript(key => localStorage.setItem(key, JSON.stringify({ choice: 'allow', expires: Date.now() + 86400000 })), consentKey);
+  const google: string[] = [];
+  page.on('request', r => { if (r.url().includes('google')) google.push(r.url()); });
+  for (const origin of [null, 'http://127.0.0.1:5174', 'http://127.0.0.1:9999', 'javascript:alert(1)', frameOrigin + '/path']) {
+    await page.route('**/api/analytics', r => r.fulfill({ json: { enabled: true, frame_origin: origin } }));
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await expect(page.locator('iframe')).toHaveCount(0);
+  }
   expect(google).toEqual([]);
 });
