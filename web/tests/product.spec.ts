@@ -36,7 +36,7 @@ test('public documentation is bookmarkable and never requests private records', 
   await expect(page.getByRole('heading', { name: 'Services and boundaries', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Don’t trust. Verify.', exact: true })).toBeVisible();
-  expect(calls.every(path => ['/api/session', '/api/fleet', '/api/incidents'].includes(path))).toBe(true);
+  expect(calls.filter(path => !['/api/session', '/api/fleet', '/api/incidents', '/api/analytics'].includes(path))).toEqual([]);
   await page.goto('/#/docs/../../admin');
   await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
 });

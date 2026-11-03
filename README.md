@@ -76,6 +76,12 @@ At expiry, report reads hide findings, HTTP evidence and tool output immediately
 
 Deploy dispatcher and its migration before core. Clients using the previous GET download route must use the explicit POST; this prevents prefetching or cross-site links from starting deletion.
 
+## Optional public page counts
+
+Set `PATCHRIOT_GA_MEASUREMENT_ID` to enable an opt-in Google Analytics prompt. Leave it unset to disable analytics. Only signed-out visits to Home, Docs and Recent events qualify; opening sign-in or private work removes the analytics frame. **Privacy choices** lets visitors decline or withdraw consent. The choice stays in local storage for 180 days, without a user identifier.
+
+Google's script runs in an opaque sandbox, outside the application document. It receives a fixed public page name, never the actual URL, query, fragment, referrer, report or account. Cookie storage, advertising personalization and Google Signals are disabled. Google still receives the visitor's IP and basic browser information after opt-in. A measurement ID is public, not a credential or permission to read Analytics reports; forged traffic can still pollute counts. Disable Enhanced Measurement and advertising integrations in the Analytics property for simple page counts. This is optional traffic measurement, not a security monitor.
+
 ## Testing limits
 
 Use a staging copy, disposable accounts and a recovery plan. Even a GET request can trigger side effects. The relay restricts hosts, methods, rate and time, but cannot guarantee a target stays unaffected. HTTP redirects do not expand scope; a reverse proxy can hide third-party services, so domain control alone is not permission to test everything behind it.
@@ -119,6 +125,7 @@ Set these through your **private environment**:
 | `PATCHRIOT_PUBLIC_ORIGIN` | `http://127.0.0.1:7410` |
 | `PATCHRIOT_DISPATCHER_URL` | `http://127.0.0.1:7411` |
 | `PATCHRIOT_CONTACT_EMAIL` | Optional public email; leave unset until configured |
+| `PATCHRIOT_GA_MEASUREMENT_ID` | Optional public GA4 measurement ID; unset disables analytics |
 | `PATCHRIOT_RELAY_ORIGIN` | Relay-facing URL; locally `http://127.0.0.1:7411` |
 | `PATCHRIOT_WEB_ROOT` | `web/dist` |
 

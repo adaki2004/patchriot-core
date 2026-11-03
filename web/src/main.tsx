@@ -1,3 +1,4 @@
+import { Analytics } from './Analytics';
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -165,6 +166,8 @@ function App() {
   const access = <AccessPanel initialCode={initialCode} mode={entryMode} onMode={setEntryMode} onLogin={signedIn} />;
   const landingAccess = <section className="access-invitation"><p className="tm-kicker">JOIN THE PRIVATE BETA</p><h3>Bring something<br />worth protecting.</h3><p>Request a test for a domain you control.</p><button className="primary" onClick={() => openAccess('request')}>Request access <span aria-hidden="true">↗</span></button><button className="text-button" onClick={() => openAccess('signin')}>Already a member? Sign in →</button></section>;
   const auditView = ['audits', 'sites', 'pentests', 'sources', 'reviews', 'request'].includes(view);
+  const publicPage = view === 'home' || (view === 'overview' && ['', '#/', '#/overview'].includes(window.location.hash)) ? 'home' : view === 'docs' ? 'docs' : view === 'incidents' ? 'events' : null;
+  const analyticsPage = session && !account && !accessOpen && !initialCode && window.location.pathname === '/' ? publicPage : null;
   return <>
     <a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     <header className="site-header">
@@ -227,6 +230,7 @@ function App() {
       {view === 'contact-inbox' && isAdmin && session?.csrf_token && <ContactInbox key={account?.id} csrf={session.csrf_token} />}
       </div>
     </main>
+    <Analytics page={analyticsPage} />
     <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><span>Inspect the code. Question the evidence.</span></footer>
     {!account && accessOpen && <AccessDialog initialCode={initialCode} mode={entryMode} onMode={setEntryMode} onLogin={signedIn} onClose={() => setAccessOpen(false)} />}
     {pairing && isAdmin && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => { setView('devices'); changed('Relay paired. Check its approval and connection status below.'); }} onClose={() => setPairing(false)} />}

@@ -153,11 +153,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("invalid PATCHRIOT_CONTACT_EMAIL".into()),
     };
+    let ga_measurement_id = match std::env::var("PATCHRIOT_GA_MEASUREMENT_ID") {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(_) => return Err("invalid PATCHRIOT_GA_MEASUREMENT_ID".into()),
+    };
     let mut state = AppState::new(
         pool,
         config
             .with_relay_origin(relay_origin)?
-            .with_contact_email(contact_email)?,
+            .with_contact_email(contact_email)?
+            .with_ga_measurement_id(ga_measurement_id)?,
     )?;
     if let Some(path) = std::env::var_os("PATCHRIOT_TREASURY_CONFIG") {
         use std::io::Read;

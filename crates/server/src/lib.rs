@@ -3,6 +3,7 @@
 //! integration; an invitation must never be presented as a verified Google identity.
 
 mod access;
+mod analytics;
 mod auth;
 mod contact;
 mod diagnostics;
@@ -52,9 +53,17 @@ pub struct Config {
     pub secure_cookies: bool,
     /// Optional public contact address. Inquiry delivery is the private inbox.
     pub contact_email: Option<String>,
+    pub ga_measurement_id: Option<String>,
 }
 
 impl Config {
+    pub fn with_ga_measurement_id(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        if value.as_ref().is_some_and(|id| !analytics::valid_id(id)) {
+            return Err("invalid PATCHRIOT_GA_MEASUREMENT_ID");
+        }
+        self.ga_measurement_id = value;
+        Ok(self)
+    }
     pub fn with_contact_email(mut self, value: Option<String>) -> Result<Self, &'static str> {
         self.contact_email = value
             .map(|value| access::contact(&value).map_err(|_| "invalid PATCHRIOT_CONTACT_EMAIL"))
@@ -126,6 +135,7 @@ impl Config {
             dispatcher_url: dispatcher.origin().ascii_serialization(),
             relay_origin: None,
             contact_email: None,
+            ga_measurement_id: None,
             internal_key,
             web_root,
         })
@@ -209,6 +219,8 @@ pub fn router(state: AppState) -> Router {
             }),
         )
         .route("/api/session", get(auth::session))
+        .route("/api/analytics", get(analytics::settings))
+        .route("/api/analytics/frame/{page}", get(analytics::frame))
         .route("/api/contact", get(contact::details).post(contact::create))
         .route("/api/admin/inquiries", get(contact::inbox))
         .route("/api/admin/inquiries/{id}", post(contact::decide))
@@ -352,11 +364,13 @@ pub fn router(state: AppState) -> Router {
             ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
         );
     }
+    // Only the isolated analytics frame supplies its own CSP. Application pages
+    // keep the default policy, which cannot load third-party scripts.
     routes.layer(DefaultBodyLimit::max(16 * 1024))
         .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
         .layer(SetResponseHeaderLayer::overriding(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")))
         .layer(SetResponseHeaderLayer::overriding(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
-        .layer(SetResponseHeaderLayer::overriding(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")))
+        .layer(SetResponseHeaderLayer::if_not_present(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")))
         .with_state(state)
 }
 
