@@ -4,11 +4,12 @@ import { emptyDashboard } from './helpers';
 import type { LiveResult } from '../src/LiveReport';
 
 const id = '00000000-0000-4000-8000-000000000003';
+const fixExample = 'Disable the debug route in production.\n\n```html\n<script>window.fixExecuted=true</script>\n<!-- ' + 'untrusted-example-'.repeat(60) + ' -->\n```\n\nIllustrative only; verify the route returns 404. <img src=x onerror="window.fixExecuted=true">';
 const result: LiveResult = {
   kind: 'pentest_agent_v1', scope_sha256: 'a'.repeat(64),
   execution: { state: 'completed', model: 'fixture-model', provider: 'fixture-provider', duration_ms: 30000, http_requests: 2, inference_calls: 4, cost_upper_microusd: 0, cleanup_confirmed: true },
   tool_runs: [{ tool: 'nuclei', version: '3.11.1', arguments: ['-u', 'http://127.0.0.1:1234'], started_at: 1793640000, duration_ms: 2000, exit_code: 0, failure: null, evidence_ids: [1, 2], output_sha256: 'a'.repeat(64), output_excerpt: '<script>window.toolExecuted=true</script>', output_truncated: true }],
-  assessment: { summary: 'Owned fixture: debug information appeared in an unauthenticated response. A control route returned 404.', findings: [{ title: 'Debug metadata exposed', severity: 'low', support: 'observed', explanation: 'The fixture returned debug metadata. This has not been reproduced independently.', reproduction: 'GET /debug?token=synthetic-value\nCompare the 404 control.', suggested_action: 'Disable the debug route in production.\nThis recommendation has not been tested.', evidence_ids: [1, 2] }, { title: '<script>window.fake=true</script>', severity: 'info', support: 'needs_review', explanation: 'Target text is displayed literally.', reproduction: 'No execution proof.', suggested_action: 'Review the target input handling.', evidence_ids: [1] }], limitations: ['No authenticated accounts or state-changing operations were tested.'] },
+  assessment: { summary: 'Owned fixture: debug information appeared in an unauthenticated response. A control route returned 404.', findings: [{ title: 'Debug metadata exposed', severity: 'low', support: 'observed', explanation: 'The fixture returned debug metadata. This has not been reproduced independently.', reproduction: 'GET /debug?token=synthetic-value\nCompare the 404 control.', suggested_action: fixExample, evidence_ids: [1, 2] }, { title: '<script>window.fake=true</script>', severity: 'info', support: 'needs_review', explanation: 'Target text is displayed literally.', reproduction: 'No execution proof.', suggested_action: 'Review the target input handling.\n```unfinished\nKeep this incomplete example visible.', evidence_ids: [1] }], limitations: ['No authenticated accounts or state-changing operations were tested.'] },
   evidence: [{ id: 1, method: 'GET', url: 'https://owned.example/debug?token=synthetic-value', status: 200, request_headers: {}, headers: { 'content-type': 'application/json' }, body_excerpt: '{"debug":"fixture"}', body_sha256: 'b'.repeat(64), observed_at: 1793640000, truncated: false, error: null }, { id: 2, method: 'GET', url: 'https://owned.example/control', status: 404, headers: {}, body_excerpt: 'Not found', truncated: false, error: null }], raw_summary: '',
 };
 
@@ -65,6 +66,27 @@ test('report and endpoint exports preserve scope without putting query values in
   expect(md).toContain('```text\n<script>window.fake=true</script>');
   expect(md).toContain('### Recorded tools');
   expect(md).toContain('3.11.1');
+  expect(md).toContain(fixExample);
+  expect(md).toContain('````text\nDisable the debug route');
+});
+
+test('fix examples stay inert, preserve code, and fit the viewport', async ({ page }) => {
+  await setup(page);
+  const finding = page.locator('.live-finding').first();
+  await finding.getByText('Recommended fix', { exact: true }).click();
+  await expect(finding.getByText('Suggested example · html', { exact: true })).toBeVisible();
+  await expect(finding.locator('.remediation-example code')).toHaveText(fixExample.split('```html\n')[1].split('```')[0]);
+  await expect(finding.locator('.remediation')).toContainText('<img src=x onerror="window.fixExecuted=true">');
+  await expect(finding.locator('.remediation script, .remediation img')).toHaveCount(0);
+  expect(await page.evaluate(() => 'fixExecuted' in window)).toBe(false);
+  const example = finding.locator('.remediation-example pre');
+  await expect(example).toBeVisible();
+  expect(await example.evaluate(el => ({ scrolling: el.scrollWidth > el.clientWidth, whitespace: getComputedStyle(el).whiteSpace }))).toEqual({ scrolling: true, whitespace: 'pre' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const unfinished = page.locator('.live-finding').nth(1);
+  await unfinished.getByText('Recommended fix', { exact: true }).click();
+  await expect(unfinished.locator('.remediation')).toContainText('```unfinished');
+  await expect(unfinished.locator('.remediation')).toContainText('Keep this incomplete example visible.');
 });
 
 test('tool transcripts remain inert and open actual HTTP references', async ({ page }) => {

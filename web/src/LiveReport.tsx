@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
@@ -84,6 +84,21 @@ function RequestEvidence({ entry }: { entry: HttpRecord }) {
   </article>;
 }
 
+function Remediation({ text }: { text: string }) {
+  // Recognize fenced examples only. Model prose, HTML and links stay literal
+  // React text; a security report must never execute the payload it describes.
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const match of text.matchAll(/^(`{3,})[ \t]*([a-z0-9_+.-]*)[ \t]*\r?\n([\s\S]*?)^\1[ \t]*$/gmi)) {
+    const before = text.slice(cursor, match.index);
+    if (before.trim()) parts.push(<p className="finding-prose" key={`text-${cursor}`}>{before.trim()}</p>);
+    parts.push(<figure className="remediation-example" key={`code-${match.index}`}><figcaption>Suggested example{match[2] ? ` · ${match[2]}` : ''}</figcaption><pre><code>{match[3]}</code></pre></figure>);
+    cursor = match.index + match[0].length;
+  }
+  if (text.slice(cursor).trim()) parts.push(<p className="finding-prose" key={`text-${cursor}`}>{text.slice(cursor).trim()}</p>);
+  return <div className="remediation">{parts}</div>;
+}
+
 export function LiveEvidence({ result, complete }: { result: LiveResult; complete?: boolean | null }) {
   const evidence = useRef<HTMLDetailsElement>(null);
   const [selected, setSelected] = useState<number[]>([]);
@@ -100,7 +115,7 @@ export function LiveEvidence({ result, complete }: { result: LiveResult; complet
     {!!result.tool_runs?.length && <details className="tool-evidence"><summary>Tools run ({result.tool_runs.length})</summary><p>The pinned runner recorded these checks before the agent investigated their output. Matches are leads, not confirmed vulnerabilities. Open the referenced requests to see what the target actually returned.</p>{result.tool_runs.map((run, i) => <article className="request-evidence" key={i}><div className="section-heading"><strong>{run.tool} · {run.version}</strong><span className="pill">{run.failure ? run.failure.replaceAll('_', ' ') : run.exit_code === 0 ? 'Finished' : 'Tool error'}</span></div><p className="fine">{new Date(run.started_at * 1000).toLocaleString()} · {Math.round(run.duration_ms / 1000)}s · {run.evidence_ids.length} recorded requests</p><details><summary>Command arguments</summary><pre>{JSON.stringify(run.arguments, null, 2)}</pre></details><pre>{run.output_excerpt || (run.exit_code === 0 && !run.failure ? 'No matching observations were printed. This does not prove the site is safe.' : 'No tool output was retained.')}</pre>{run.output_truncated && <p className="fine">Output was shortened; inspect the request evidence for the recorded response excerpts.</p>}{run.evidence_ids.length > 0 && <button className="text-button" onClick={() => inspect(run.evidence_ids)}>Inspect tool requests →</button>}</article>)}</details>}
     {result.assessment && <><p className="assessment-summary">{result.assessment.summary}</p>
       {findings.length > 0 ? <><div className="finding-controls"><h4>Findings from this role</h4><label>Show<select aria-label="Filter findings" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All claims ({findings.length})</option><option value="reproduced">Reported reproduced</option><option value="unconfirmed">Unconfirmed or not reproduced</option></select></label></div>
-      {shown.map((f, i) => <article className="live-finding" data-severity={f.severity} key={`${f.title}:${i}`}><div className="finding-heading"><h4>{f.title}</h4><span className="pill">{f.severity} severity</span></div><p className="finding-support">{support[f.support] ?? f.support}</p><h5>Why it matters / what was observed</h5><p className="finding-prose">{f.explanation}</p><details><summary>Reproduce the observation</summary><p>These are the agent’s instructions. Inspect the scope and evidence before running them.</p><pre>{f.reproduction}</pre></details><details><summary>Recommended fix</summary><p className="fine">A recommendation based on the observed behavior. No production patch was tested.</p><pre>{f.suggested_action}</pre></details><button className="text-button" onClick={() => inspect(f.evidence_ids)}>Inspect {f.evidence_ids.length} supporting request{f.evidence_ids.length === 1 ? '' : 's'} →</button></article>)}
+      {shown.map((f, i) => <article className="live-finding" data-severity={f.severity} key={`${f.title}:${i}`}><div className="finding-heading"><h4>{f.title}</h4><span className="pill">{f.severity} severity</span></div><p className="finding-support">{support[f.support] ?? f.support}</p><h5>Why it matters / what was observed</h5><p className="finding-prose">{f.explanation}</p><details><summary>Reproduce the observation</summary><p>These are the agent’s instructions. Inspect the scope and evidence before running them.</p><pre>{f.reproduction}</pre></details><details><summary>Recommended fix</summary><p className="fine">A recommendation based on the observed behavior. No production patch was tested.</p><Remediation text={f.suggested_action} /></details><button className="text-button" onClick={() => inspect(f.evidence_ids)}>Inspect {f.evidence_ids.length} supporting request{f.evidence_ids.length === 1 ? '' : 's'} →</button></article>)}
       {shown.length === 0 && <p>No findings match this filter.</p>}
       <p className="fine">Severity and reproduction labels are the agent’s assessment. Other roles may disagree. Review every role before deciding what to fix.</p></> : <p className="notice">This role reported no findings. That is not proof the site has no vulnerabilities.</p>}
       <details className="coverage-limits" open><summary>What this role could not check</summary><ul>{result.assessment.limitations.map((v, i) => <li key={i}>{v}</li>)}</ul></details>

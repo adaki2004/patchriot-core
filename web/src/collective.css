@@ -194,8 +194,12 @@
 .finding-heading .pill { white-space: nowrap; }
 .finding-support { font-size: 11px; color: #a8bfe9; margin-bottom: 24px; }
 .finding-prose { line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+.review-steps > .review-step { min-width: 0; }
 .live-assessment h5 { font-size: 12px; margin: 20px 0 10px; }
 .live-assessment pre { max-width: 100%; padding: 16px; margin: 12px 0; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--paper); border: 1px solid var(--line); font: 11px/1.8 var(--mono-font); }
+.remediation-example { margin: 20px 0; min-width: 0; }
+.remediation-example figcaption { font: 11px/1.6 var(--mono-font); color: var(--muted); }
+.remediation-example pre { white-space: pre; overflow-wrap: normal; overflow-x: auto; }
 .coverage-limits { border-top: 1px solid var(--line); margin: 24px 0; padding-top: 12px; }
 .coverage-limits li { margin: 10px 0; line-height: 1.65; }
 .http-evidence { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding-block: 12px; scroll-margin-top: 20px; }
