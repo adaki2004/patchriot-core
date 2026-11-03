@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useLive } from './useLive';
+import type { AgentSystem } from './api';
 
 type PairingInfo = { relay_origin: string; audience: string };
-type Agent = { id: string; reported_os: string | null; runtime: string; runtime_version: string; declared_model: string | null; state: string; last_seen_at: number | null };
+type Agent = { id: string; reported_os: string | null; system?: AgentSystem | null; runtime: string; runtime_version: string; declared_model: string | null; state: string; last_seen_at: number | null; live_tests?: boolean; live_tools?: string[]; reports_received?: number };
 const repository = 'https://github.com/adaki2004/patchriot-relay';
 // Configuration is displayed as shell input, so quote even trusted server values.
 function shell(value: string) { return `'${value.replaceAll("'", "'\\''")}'`; }
@@ -80,15 +81,20 @@ export function AgentList({ compact = false, onAll }: { compact?: boolean; onAll
   const agents = useLive<Agent[]>('/agents');
   return <section className={compact ? 'agent-panel compact-agents' : 'panel agent-panel'} aria-labelledby="agents-title">
     <div className={compact ? 'block-heading' : 'panel-heading'}><div>{!compact && <p className="eyebrow">NETWORK</p>}<h2 id="agents-title">{compact ? 'Network agents' : 'Connected to Patchriot'}</h2></div>{compact ? <button className="text-button" onClick={onAll}>View all →</button> : <button className="quiet" onClick={agents.refresh}>Refresh</button>}</div>
-    {!compact && <p>Approved agents across the network. Model and OS details are supplied by operators.</p>}
+    {!compact && <p>Approved agents across the network. Software and model details are self-reported.</p>}
     {agents.error && <div className="notice error" role="alert">{agents.error}</div>}
     {!agents.data && !agents.error && <p role="status">Loading agents…</p>}
     {agents.data?.length === 0 && <p>No approved agents to show yet.</p>}
     <div className="agent-directory">{(compact ? agents.data?.slice(0, 3) : agents.data)?.map(agent => <article key={agent.id} className="agent-entry">
-      <div><strong>{agent.runtime === 'hermes' ? 'Hermes' : 'Built-in example'} <span className="subtle">{agent.runtime_version}</span></strong><span className="pill">{agent.state.replaceAll('_', ' ')}</span></div>
-      <dl><dt>System</dt><dd>{agent.reported_os ?? 'Not reported'}</dd><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd>{!compact && <><dt>Last heartbeat</dt><dd>{agent.last_seen_at ? new Date(agent.last_seen_at * 1000).toLocaleString() : 'None yet'}</dd></>}</dl>
+      <div><strong>{agent.runtime === 'hermes' ? 'Hermes' : 'Built-in example'} <span className="subtle">{agent.id.slice(0, 8)}</span></strong><span className="pill">{agent.state.replaceAll('_', ' ')}</span></div>
+      <dl><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd>{!compact && <>
+        <dt>Runner version</dt><dd>{agent.runtime_version}</dd>
+        {agent.system && <><dt>Architecture</dt><dd>{agent.system.architecture}</dd><dt>Relay version</dt><dd>{agent.system.relay_version}</dd></>}
+        <dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.includes('artex_engine_v1') ? 'ARTEX + standard checks' : 'Standard checks') : 'Not enabled'}</dd>
+        <dt>Reports received</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd>
+        <dt>Last heartbeat</dt><dd>{agent.last_seen_at ? new Date(agent.last_seen_at * 1000).toLocaleString() : 'None yet'}</dd></>}</dl>
       {!compact && <small className="subtle">Device {agent.id.slice(0, 8)}</small>}
     </article>)}</div>
-    <p className="fine">{compact ? 'Network-wide presence. Online does not mean available or independently verified.' : 'This list contains no customer targets, reports, operator profiles or machine addresses. A heartbeat shows presence, not availability or verified skill.'}</p>
+    <p className="fine">{compact ? 'Network-wide presence. Online does not mean available or independently verified.' : 'A heartbeat shows presence, not verified skill. Counts include incomplete role reports, not just confirmed findings. Customer work and machine addresses are private.'}</p>
   </section>;
 }

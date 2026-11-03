@@ -6,7 +6,7 @@
 
 .textmode-ui {
   --paper: #080a0b; --surface: #101314; --ink: #ecefe6; --muted: #a1aaa6; --line: #343b39; --accent: #ff6c51; --tint: #1b2220;
-  --body-font: 'Source Sans 3', sans-serif; --heading-font: 'Pixelify Sans', sans-serif; --mono-font: 'IBM Plex Mono', monospace; --radius: 0;
+  --body-font: 'IBM Plex Sans', sans-serif; --heading-font: 'IBM Plex Sans', sans-serif; --mono-font: 'IBM Plex Mono', monospace; --radius: 0;
   --dark: var(--ink); --lime: var(--paper); color-scheme: dark; font-size: 14px;
 }
 [data-design=collective] { --paper: #0b0b0f; --surface: #11131b; --ink: #eeeae7; --muted: #afb3c2; --line: #353c4c; --accent: #ff715c; --tint: #1a2234; }

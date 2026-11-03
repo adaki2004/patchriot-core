@@ -10,9 +10,9 @@ import { UIIcon } from './UIIcon';
 
 type Earnings = { balance: { available: string } };
 
-// Unfinished decisions come before reports and running work, even when they are older.
+// Keep actions and active work visible before finished reports.
 const needsAction = (state: string) => ['needs_review', 'failed', 'awaiting_payment', 'awaiting_verification', 'collected', 'approved'].includes(state);
-const workPriority = (state: string) => needsAction(state) ? 0 : state === 'completed' ? 1 : auditActive(state) ? 2 : 3;
+const workPriority = (state: string) => needsAction(state) ? 0 : auditActive(state) ? 1 : state === 'completed' ? 2 : 3;
 
 export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet | null; onOpen: (view: View, id?: string | null) => void }) {
   const audits = useAudits();
@@ -20,7 +20,8 @@ export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet
   const earnings = useLive<Earnings>('/withdrawals', true, 60_000);
   const ready = audits.ready && !audits.error;
   const complete = audits.items.filter(item => item.state === 'completed').length;
-  const active = audits.items.filter(item => auditActive(item.state) && !needsAction(item.state)).length;
+  const active = audits.items.filter(item => ['running', 'collecting'].includes(item.state)).length;
+  const queued = audits.items.filter(item => item.state === 'queued').length;
   const attention = audits.items.filter(item => needsAction(item.state)).length;
   const total = audits.items.length;
   const work = [...audits.items].sort((a, b) => workPriority(a.state) - workPriority(b.state) || b.created - a.created || a.key.localeCompare(b.key));
@@ -29,17 +30,18 @@ export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet
       <img className="workspace-art" src="/brand/collective.png" alt="" width="1536" height="1024" />
       <div className="workspace-welcome"><p className="section-kicker">YOUR WORKSPACE / COLLECTIVE DEFENSE</p><h1>Hello, {name}.</h1><p>Your systems. More eyes on the weak points.</p><button className="primary" onClick={() => onOpen('request')}><UIIcon name="plus" />Request an audit</button></div>
     </div>
-    <section className="work-card recent-work"><div className="card-title"><div><p className="section-kicker">YOUR NEXT STEPS</p><h2>What needs your attention?</h2></div><button onClick={() => onOpen('audits')}>View all audits <span aria-hidden="true">↗</span></button></div>
+    <section className="work-card recent-work"><div className="card-title"><div><p className="section-kicker">YOUR REQUESTS</p><h2>Work in progress.</h2></div><button onClick={() => onOpen('audits')}>View all audits <span aria-hidden="true">↗</span></button></div>
       {audits.error && <p className="notice error" role="alert">Audits could not fully refresh. Saved entries may be out of date. <button className="inline" onClick={audits.refresh}>Retry audits</button></p>}
       {!audits.ready && !audits.error && <p role="status">Loading audits…</p>}
       {ready && total === 0 && <div className="workspace-empty"><UIIcon name="folder" /><h3>A fresh pair of eyes.</h3><p>Start with a website you control.<br />Your requests and reports will appear here.</p><button onClick={() => onOpen('request')}>Create your first request <UIIcon name="arrow" /></button></div>}
       <AuditRows items={work.slice(0, 5)} onOpen={onOpen} />
-      <p className="card-note"><UIIcon name="lock" />{ready ? `${total} recent ${total === 1 ? 'audit' : 'audits'} in your account. ` : ''}Decisions first, then reports and work in progress.</p>
+      <p className="card-note"><UIIcon name="lock" />{ready ? `${total} recent ${total === 1 ? 'audit' : 'audits'} in your account. ` : ''}You can close this page; queued and running work continues.</p>
     </section>
     <div className="workspace-metrics" aria-label="Workspace summary">
       <div className="metric-attention"><strong>{ready ? attention : '—'}</strong><span>Need attention</span></div>
+      <div><strong>{ready ? queued : '—'}</strong><span>Queued</span></div>
+      <div><strong>{ready ? active : '—'}</strong><span>Running</span></div>
       <div><strong>{ready ? complete : '—'}</strong><span>Reports ready</span></div>
-      <div><strong>{ready ? active : '—'}</strong><span>In progress</span></div>
     </div>
     <div className="workspace-cards">
       <section className="work-card workspace-orders"><div className="card-title"><h2>Orders & payments</h2><button onClick={() => onOpen('orders')}>View all <span aria-hidden="true">↗</span></button></div>

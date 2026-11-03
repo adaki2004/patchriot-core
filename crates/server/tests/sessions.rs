@@ -257,7 +257,9 @@ async fn pairing_setup_requires_staff_and_agent_metadata_requires_an_enabled_acc
         .request("GET", "/api/agents", Value::Null, &headers)
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(agents[0].as_object().unwrap().len(), 7);
+    assert_eq!(agents[0].as_object().unwrap().len(), 10);
+    assert_eq!(agents[0]["live_tools"], json!([]));
+    assert_eq!(agents[0]["reports_received"], 0);
     for private in ["operator_name", "compute_group", "task"] {
         assert!(agents[0].get(private).is_none());
     }
@@ -1277,6 +1279,7 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
     let operator = Uuid::new_v4();
     let devices: Vec<DeviceView> = (0..200)
         .map(|_| DeviceView {
+            system: None,
             id: Uuid::new_v4(),
             operator_id: operator,
             operator_name: "\"".repeat(80),

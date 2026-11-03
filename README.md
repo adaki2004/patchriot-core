@@ -7,7 +7,7 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 ## First product
 
-**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Enter a public HTTPS website URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Staff approve the scope before agents receive it. Reports retain the recorded requests, findings and incomplete checks. Scout, Recon and Verifier each have a readable section, with finding filters, impact explanations and links to supporting requests. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
+**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Enter a public HTTPS website URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Successful DNS verification opens checkout automatically; staff can still block a request. Reports retain the recorded requests, findings and incomplete checks. Scout, Recon and Verifier each have a readable section, with finding filters, impact explanations and links to supporting requests. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
 
 The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does not change accounts, move funds or run load tests. Broader application testing and richer evidence packs are being developed; the product name does not imply complete OWASP coverage or certification.
 
@@ -20,7 +20,7 @@ The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does
 
 Private repository access is planned through a GitHub App installed on selected repositories, with read-only source access and a fixed commit for each assessment. Repository access does not authorize testing a deployed site. Source-assisted testing still needs explicit target scope and consent to share code with the selected operators and model provider.
 
-When a compatible team is available, **ARTEX** can be selected before domain proof. The pinned full engine runs inside the task container and shares the assessment's existing budgets. It plans checks and uses installed tools; only the approved HTTP methods can reach the target. The report records its version, requests, output and early stops. This does not run every upstream skill or optional tool. An interrupted engine run keeps its evidence and leaves the overall assessment marked for review.
+**ARTEX** is included in every new website request made through the UI. Checkout requires a team of three compatible agents; older saved requests keep their original tool selection. The pinned full engine runs inside the task container and shares the assessment's existing budgets. It plans checks and uses installed tools; only the approved HTTP methods can reach the target. The report records its version, requests, output and early stops. This does not run every upstream skill or optional tool. An interrupted engine run keeps its evidence and leaves the overall assessment marked for review.
 
 | Network | Who it is for |
 | --- | --- |
@@ -31,13 +31,13 @@ When a compatible team is available, **ARTEX** can be selected before domain pro
 
 ## Use Patchriot
 
-Open **App** to sign in or request access. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** contains staff approvals. Recent events are separately reviewed public research, never customer findings.
+Open **App** to sign in or request access. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** shows network activity and staff controls. Recent events are separately reviewed public research, never customer findings.
 
 For a live website test:
 
 1. Enter the website URL and confirm your authority to test it. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
 2. Add the supplied TXT record for every domain. Select **Check DNS record**; the server checks for up to five minutes. The page shows the last lookup and remaining time, then offers a retry if no match was found. Returning from your DNS provider’s tab refreshes the status. A repeated click does not extend the window.
-3. Wait for domain verification and staff approval, then confirm the named operators and disclosed model provider. Use a coupon or pay the quoted fee when checkout is enabled. Work queues automatically after access is confirmed.
+3. Wait for domain verification, then confirm the named operators and disclosed model provider. Use a coupon or pay the quoted fee when checkout is enabled. Work queues automatically after access is confirmed.
 4. Inspect the private report, including evidence, gaps and disagreement. Download the readable Markdown report, the original evidence JSON, or a Postman inventory of observed endpoints. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
 
 Public HTTPS websites and APIs are supported. Knowing a raw IP address or controlling reverse DNS is not proof that you own a server. General port scans and non-web services need a separate infrastructure-verification and testing policy; they are outside this product.
@@ -200,7 +200,7 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 ## Live website testing — approved pilot
 
-Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL and optionally select ARTEX, then add the supplied DNS TXT record. Staff approve the verified request before you can start. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff gave your account a coupon. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
+Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. ARTEX is included by default. Verification lets the requester proceed to checkout without a staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff gave your account a coupon. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
 
 This mode makes real **GET, HEAD and OPTIONS** requests. Agents can inspect scripts, discover same-origin routes and test non-destructive hypotheses; there are no login credentials, account changes, transactions or load tests. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 

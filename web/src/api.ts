@@ -7,6 +7,7 @@ export type Account = {
 
 export type Session = { account: Account | null; csrf_token: string | null };
 export type Fleet = { online_devices: number; online_operators: number; online_compute_groups: number };
+export type AgentSystem = { os_name: string; os_version: string | null; architecture: string; relay_version: string };
 export type Device = {
   id: string;
   operator_id: string;
@@ -16,6 +17,7 @@ export type Device = {
   runtime_version: string;
   declared_model: string | null;
   reported_os?: string | null;
+  system?: AgentSystem | null;
   compute_group: string;
   approval: 'pending' | 'approved' | 'revoked';
   private_work_approved?: boolean;

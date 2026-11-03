@@ -198,15 +198,15 @@ License: CC0 1.0 Universal — https://creativecommons.org/publicdomain/zero/1.0
 Font served by https://extension.textmode.art/ (unchanged).
 
 
-Pixelify Sans
-Source: https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/pixelifysans/PixelifySans%5Bwght%5D.ttf
-SHA256: 9ba86cd010a4de309d263ceff8e8044092c9db7efda869620cb9ff1c4389e8a5
+IBM Plex Sans
+Source: https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/ibmplexsans/IBMPlexSans%5Bwdth,wght%5D.ttf
+SHA256: 3b031aa4216174205bd8471f88a49b91f093169e9e87bd5262242bc5967fe2e3
 
-Copyright 2021 The Pixelify Sans Project Authors (https://github.com/eifetx/Pixelify-Sans)
+Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
-This license is copied below, and is also available with a FAQ at:
-https://scripts.sil.org/OFL
+
+This license is copied below, and is also available with a FAQ at: http://scripts.sil.org/OFL
 
 
 -----------------------------------------------------------
