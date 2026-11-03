@@ -93,6 +93,26 @@ pub(crate) async fn request_for_account<T: Serialize, R: DeserializeOwned>(
     .await
 }
 
+/// Payment/reward retries may read an already completed review. Apply the same
+/// bound as a private report read, so saved evidence cannot block bookkeeping.
+pub(crate) async fn request_review_for_account<T: Serialize>(
+    state: &AppState,
+    method: reqwest::Method,
+    path: &str,
+    account: Uuid,
+    body: Option<&T>,
+) -> Result<Json<ReviewView>, ApiError> {
+    request_as(
+        state,
+        method,
+        path,
+        Some((account, "member")),
+        body,
+        patchriot_protocol::pentests::MAX_REVIEW_BYTES,
+    )
+    .await
+}
+
 async fn request_as<T: Serialize, R: DeserializeOwned>(
     state: &AppState,
     method: reqwest::Method,
@@ -336,7 +356,7 @@ pub async fn review(
         &format!("/internal/reviews/{id}"),
         Some(&session),
         None,
-        4 * 1024 * 1024,
+        patchriot_protocol::pentests::MAX_REVIEW_BYTES,
     )
     .await
 }
@@ -364,12 +384,13 @@ pub async fn cancel_review(
     Json(input): Json<CancelReview>,
 ) -> Result<Json<ReviewView>, ApiError> {
     let session = auth::require_write(&headers, &state).await?;
-    request(
+    request_with_limit(
         &state,
         reqwest::Method::POST,
         &format!("/internal/reviews/{id}/cancel"),
         Some(&session),
         Some(&input),
+        patchriot_protocol::pentests::MAX_REVIEW_BYTES,
     )
     .await
 }

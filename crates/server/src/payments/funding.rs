@@ -133,7 +133,7 @@ async fn deliver_claimed(
     let path = format!("/internal/reviews/{review_id}");
     // Read first even after expiry or account disable: a previous POST might
     // have succeeded while its reply was lost. This never starts new work.
-    let view = match gateway::request_for_account::<(), ReviewView>(
+    let view = match gateway::request_review_for_account::<()>(
         state,
         reqwest::Method::GET,
         &path,
@@ -177,7 +177,7 @@ async fn deliver_claimed(
             amount: event.amount.to_string(),
         },
     };
-    let view = match gateway::request_for_account::<_, ReviewView>(
+    let view = match gateway::request_review_for_account::<_>(
         state,
         reqwest::Method::POST,
         &format!("{path}/fund"),

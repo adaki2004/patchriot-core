@@ -1376,7 +1376,7 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
             .await;
         observations.push((path, expected, denied, accepted, oversized));
     }
-    *payload.lock().unwrap() = json!("x".repeat(4 * 1024 * 1024));
+    *payload.lock().unwrap() = json!("x".repeat(patchriot_protocol::pentests::MAX_REVIEW_BYTES));
     let detail = test
         .request(
             "GET",
@@ -1400,6 +1400,53 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
     }
     assert_eq!(detail.0, StatusCode::BAD_GATEWAY);
     assert_eq!(detail.2["error"], "dispatcher_response_too_large");
+}
+
+#[tokio::test]
+async fn large_private_report_survives_detail_export_and_cancellation() {
+    use patchriot_protocol::pentests::{MAX_RESULT_BYTES, MAX_REVIEW_BYTES};
+    let id = Uuid::new_v4();
+    let result = json!({"kind":"pentest_agent_v1","scope_sha256":"a".repeat(64),
+        "execution":{"state":"completed","provider":"abliteration.ai","model":"abliterated-model-large-v2","image_digest":"owned-fixture","duration_ms":1,"inference_calls":1,"http_requests":1,"cost_upper_microusd":1,"cleanup_confirmed":true},
+        "assessment":null,"evidence":[{"id":1,"method":"GET","url":"https://owned.example/","request_headers":{},"status":200,"headers":{},"body_excerpt":"x".repeat(MAX_RESULT_BYTES-4096),"truncated":true,"error":null,"observed_at":1}],"raw_summary":""});
+    let expected: patchriot_protocol::ReviewView = serde_json::from_value(json!({
+        "id":id,"request_id":Uuid::new_v4(),"scenario":"live_http_v1","mode":"pentest_agent",
+        "state":"needs_review","created_at":1,"deadline_at":2,"evidence_source":"owned fixture",
+        "steps":(["investigator","reproducer","challenger"].iter().map(|role|json!({"role":role,"state":"completed","attempts":1,"device_id":null,"operator_id":null,"compute_group":null,"result":result,"fixture_matches":null})).collect::<Vec<_>>())
+    })).unwrap();
+    let expected = serde_json::to_value(expected).unwrap();
+    let length = serde_json::to_vec(&expected).unwrap().len();
+    assert!(length > 3 * MAX_RESULT_BYTES - 16384 && length < MAX_REVIEW_BYTES);
+    let reply = expected.clone();
+    let downstream = Router::new().fallback(move || {
+        let value = reply.clone();
+        async move { Json(value) }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let (cookie, session) = test.login("member").await;
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    for (method, suffix) in [("GET", ""), ("GET", "/report"), ("POST", "/cancel")] {
+        let path = format!("/api/reviews/{id}{suffix}");
+        assert_eq!(
+            test.request(method, &path, json!({}), &[("origin", ORIGIN)])
+                .await
+                .0,
+            StatusCode::UNAUTHORIZED
+        );
+        let response = test.request(method, &path, json!({}), &headers).await;
+        assert_eq!(response.0, StatusCode::OK, "{}", response.2);
+        assert_eq!(response.2, expected);
+    }
+    test.finish().await;
+    server.abort();
+    let _ = server.await;
 }
 
 #[tokio::test]

@@ -77,6 +77,34 @@ test('PDF, original report and endpoint downloads keep their distinct purposes',
   expect(md).toContain(fixExample);
 });
 
+test('large evidence stays intact while the report and PDF stay concise', async ({ page }) => {
+  await setup(page);
+  const review = await page.evaluate(async id => (await fetch(`/api/reviews/${id}`)).json(), id);
+  review.state = 'completed';
+  for (const step of review.steps) {
+    step.state = 'completed'; step.evidence_complete = true; step.progress = null;
+    step.result = structuredClone(result);
+    step.result.evidence[0].body_excerpt = 'x'.repeat(4 * 1024 * 1024 - 16384) + '-END-OF-PRIVATE-EVIDENCE';
+    step.result.evidence[0].truncated = true;
+  }
+  const wire = JSON.stringify(review);
+  expect(wire.length).toBeGreaterThan(11 * 1024 * 1024);
+  await page.route(`**/api/reviews/${id}`, r => r.fulfill({ contentType: 'application/json', body: wire }));
+  await page.route(`**/api/reviews/${id}/report`, r => r.fulfill({ headers: { 'content-type': 'application/json', 'content-disposition': 'attachment; filename="evidence.json"' }, body: wire }));
+  await page.reload();
+  await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const pdfDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download vulnerability report' }).click();
+  const pdfBytes = await readFile((await (await pdfDownload).path())!);
+  expect(pdfBytes.length).toBeLessThan(1024 * 1024);
+  expect((await PDFDocument.load(pdfBytes)).getPageCount()).toBeGreaterThan(5);
+  await page.getByText('Other downloads & test details', { exact: true }).click();
+  const href = await page.getByRole('link', { name: 'Download evidence JSON', exact: false }).getAttribute('href');
+  const body = await page.evaluate(async href => (await fetch(href!)).text(), href);
+  expect(body).toBe(wire);
+});
+
 test('finding text and suggested code remain inert and fit mobile', async ({ page }) => {
   await setup(page);
   const finding = page.locator('.report-finding').first();

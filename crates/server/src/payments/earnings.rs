@@ -236,7 +236,7 @@ pub async fn allocate_once(state: &AppState) -> Result<AllocationSummary, Paymen
         summary.checked += 1;
         let c: Candidate = sqlx::query_as("SELECT f.invoice_id,f.account_id,o.review_id,o.terms,o.expires_at,f.asset,f.amount FROM payment_funding_events f JOIN checkout_orders o ON o.invoice_id=f.invoice_id WHERE f.invoice_id=$1")
             .bind(id).fetch_one(&state.pool).await?;
-        let view = gateway::request_for_account::<(), ReviewView>(
+        let view = gateway::request_review_for_account::<()>(
             state,
             reqwest::Method::GET,
             &format!("/internal/reviews/{}", c.review_id),
