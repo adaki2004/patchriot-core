@@ -60,6 +60,8 @@ The form accepts 10 submissions per socket peer per 15 minutes, 100 globally per
 
 An investigator makes a claim, a reproducer checks it and a challenger questions it. Prefer different operators and models; disclose shared infrastructure. Three devices on one VPS are one shared machine, not three independent operators.
 
+New live tests run ready requests in order on each shared machine, with one active assignment at a time. Paid requests join that order when payment is confirmed. Waiting does not spend an agent's execution allowance: its clock starts when assigned. The report shows waiting, the active agent's deadline and the separate request expiry. Requests remain valid for at most 24 hours after admission or payment, and stop sooner if domain permission or test-account access expires. An unavailable assigned agent can be skipped in favor of other ready work; no replacement operator is silently added. Existing requests keep their original deadlines.
+
 **Private means access-controlled.** Assigned operators, service staff and consented model providers can see the data they process. Findings are not published automatically. The beta has produced incomplete reports and false positives, which remain visible for review.
 
 ## Implementation plan and status

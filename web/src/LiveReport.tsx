@@ -10,6 +10,7 @@ export type LiveToolRun = { tool: string; version: string; arguments: string[]; 
 export type LiveResult = { kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
 export type LiveActivity = { received_at: number; progress: { phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number } };
 export type LiveStep = { role: LiveRole; state: string; result: LiveResult | null; evidence_complete?: boolean | null; progress?: LiveActivity | null };
+export type LiveTiming = { role_limit_seconds: number; started_at: number | null; active_role_deadline_at: number | null; requests_ahead: number };
 const roleDuty = { investigator: 'Map the application and investigate leads.', reproducer: 'Repeat probes and challenge the initial claims.', challenger: 'Check the evidence, impact and recommended fixes.' };
 const phases = { starting: 'Starting the isolated runner', scoped_tools: 'Running scoped tools', investigating: 'Investigating the evidence', finishing: 'Preparing the report' };
 const support: Record<string, string> = { observed: 'Observed behavior', reproduced: 'Agent reports reproduction', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
@@ -22,14 +23,19 @@ export function LiveProgress({ steps, state }: { steps: LiveStep[]; state: strin
   </section>;
 }
 
-export function LiveStatus({ steps, state, deadline }: { steps: LiveStep[]; state: string; deadline: number }) {
+export function LiveStatus({ steps, state, deadline, timing }: { steps: LiveStep[]; state: string; deadline: number; timing?: LiveTiming }) {
   const active = steps.find(s => ['leased', 'running'].includes(s.state));
   const stopped = steps.find(s => s.state === 'failed');
   const working = state === 'running' && !!active;
   const title = state === 'awaiting_payment' ? 'Waiting for payment.' : state === 'failed' ? 'The test stopped early.' : state === 'cancelled' ? 'Test cancelled.' : state === 'needs_review' ? 'Some checks need a closer look.' : state === 'completed' ? 'Your reports are ready.' : working ? `${liveRoles[active.role]} is on the case.` : 'Your test is in the queue.';
   const description = state === 'awaiting_payment' ? 'Testing starts after payment is confirmed. Check your order for the current payment status.' : state === 'failed' ? `${stopped && !stopped.result ? `${liveRoles[stopped.role]} stopped before its report arrived. ` : ''}The assessment did not finish. This is not a clean bill of health for your website.` : state === 'cancelled' ? 'No further stages will start. You can still read any reports already received.' : state === 'needs_review' ? 'Some agents could not finish their assessments. Saved findings and unfinished work are listed below.' : state === 'completed' ? 'Read what the agents found and the suggested fixes below. Findings still need your review.' : working ? `${roleDuty[active.role]} This page updates automatically.` : 'Your place is saved. Testing starts when an assigned agent is available.';
   return <div className="assessment-status" data-active={working} data-state={state}>
-    <div className="assessment-status-copy"><span className="assessment-kicker">{state === 'failed' ? 'INCOMPLETE ASSESSMENT' : state === 'cancelled' ? 'STOPPED' : state === 'completed' ? 'REPORTS RECEIVED' : state === 'needs_review' ? 'NEEDS ATTENTION' : working ? 'TEST IN PROGRESS' : 'WAITING TO START'}</span><h2>{title}</h2><p>{description}</p>{['queued', 'running'].includes(state) && <small>Run window ends at {new Date(deadline * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. The run may finish earlier.</small>}</div>
+    <div className="assessment-status-copy"><span className="assessment-kicker">{state === 'failed' ? 'INCOMPLETE ASSESSMENT' : state === 'cancelled' ? 'STOPPED' : state === 'completed' ? 'REPORTS RECEIVED' : state === 'needs_review' ? 'NEEDS ATTENTION' : working ? 'TEST IN PROGRESS' : 'WAITING TO START'}</span><h2>{title}</h2><p>{description}</p>{['queued', 'running'].includes(state) && (timing ? <>
+      {!working && <p>{timing.requests_ahead > 0 ? `${timing.requests_ahead} earlier test${timing.requests_ahead === 1 ? '' : 's'} share your selected agents. Ready work runs in order on each machine.` : timing.started_at ? 'Waiting for the next agent to become available.' : 'Waiting for your selected Scout to become available.'}</p>}
+      <small>Each agent gets up to {Math.ceil(timing.role_limit_seconds / 60)} minutes after its own work starts. Waiting does not use that allowance.</small>
+      {working && timing.active_role_deadline_at && <small>This agent’s time limit ends at {new Date(timing.active_role_deadline_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}; it can finish earlier.</small>}
+      <details><summary>Timing & permission</summary><p>The request remains valid until {new Date(deadline * 1000).toLocaleString()}. Work must stop if permission or test-account access expires, or you cancel. This separate limit also bounds how long a request can wait.</p></details>
+    </> : <small>This request has a fixed expiry: {new Date(deadline * 1000).toLocaleString()}. Saved requests keep their original limits.</small>)}</div>
     <div className="assessment-orbit" aria-hidden="true"><img src="/brand/review-orbit.png" alt="" width="1536" height="1024" /><span className="assessment-orbit-signal" /></div>
   </div>;
 }

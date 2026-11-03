@@ -6,7 +6,7 @@ import { useDialog } from './useDialog';
 import { WebsiteEvidence } from './WebsiteReview';
 import type { WebsiteContext, WebsiteResult } from './WebsiteReview';
 import { LiveEvidence, LiveProgress, LiveStatus, LiveReportDownloads, PdfReportDownload, liveRoles } from './LiveReport';
-import type { LiveActivity, LiveResult, LiveStep } from './LiveReport';
+import type { LiveActivity, LiveResult, LiveStep, LiveTiming } from './LiveReport';
 import type { PentestContext } from './Pentests';
 import { VulnerabilityReport } from './VulnerabilityReport';
 import type { ReportInput } from './report';
@@ -25,7 +25,7 @@ type Step = {
   device_id: string | null; operator_id: string | null; compute_group: string | null;
   result: { runs: Run[] } | AgentResult | WebsiteResult | LiveResult | null; fixture_matches: boolean | null; evidence_complete?: boolean | null; progress?: LiveActivity | null;
 };
-type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; steps: Step[]; evidence_source: string; pentest?: PentestContext; website?: WebsiteContext; source?: { source_id: string; snapshot_sha256: string; reviewers: WebsiteContext['reviewers'] }; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
+type Review = { id: string; mode: string; state: string; created_at: number; deadline_at: number; timing?: LiveTiming; steps: Step[]; evidence_source: string; pentest?: PentestContext; website?: WebsiteContext; source?: { source_id: string; snapshot_sha256: string; reviewers: WebsiteContext['reviewers'] }; payment?: { price: { asset: string; amount: string }; expires_at: number; invoice_id: string | null; funded_at: number | null } };
 
 const states: Record<string, string> = {
   awaiting_payment: 'Waiting for payment', queued: 'Waiting for a relay', running: 'In progress', completed: 'Example checks complete',
@@ -119,9 +119,9 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
     const report: ReportInput = { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, scope_sha256: review.pentest?.scope_sha256, team };
     const target = review.pentest?.scope.origins.map(origin => { try { return new URL(origin).host; } catch { return origin; } }).join(', ');
     return <section ref={panel} tabIndex={-1} className="review-detail panel live-review" aria-label="Review report">
-      <div className="section-heading"><div><p className="eyebrow">PRIVATE WEBSITE ASSESSMENT</p><h2 className="review-target">{target || 'Website test'}</h2><p className="fine">Started {new Date(review.created_at * 1000).toLocaleString()}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
+      <div className="section-heading"><div><p className="eyebrow">PRIVATE WEBSITE ASSESSMENT</p><h2 className="review-target">{target || 'Website test'}</h2><p className="fine">Requested {new Date(review.created_at * 1000).toLocaleString()}</p></div><button className="quiet" onClick={onClose}>Close report ×</button></div>
       {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} <button className="inline" onClick={detail.refresh}>Retry report</button></div>}
-      {!['completed', 'needs_review'].includes(review.state) && <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} />}
+      {!['completed', 'needs_review'].includes(review.state) && <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} timing={review.timing} />}
       {['awaiting_payment', 'queued', 'running'].includes(review.state) && <LiveProgress steps={liveSteps} state={review.state} />}
       <PdfReportDownload report={report} />
       <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a website ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>

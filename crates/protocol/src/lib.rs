@@ -697,6 +697,18 @@ pub struct ReviewView {
     pub pentest: Option<pentests::PentestContext>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub payment: Option<website_reviews::ReviewPayment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timing: Option<ReviewTiming>,
+}
+
+/// Queue counts reveal no other request, target or account. Waiting is bounded
+/// separately from a role's execution allowance; permission expiry still wins.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ReviewTiming {
+    pub role_limit_seconds: u64,
+    pub started_at: Option<i64>,
+    pub active_role_deadline_at: Option<i64>,
+    pub requests_ahead: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -819,6 +831,10 @@ mod tests {
         let parsed: CompleteWork = serde_json::from_value(outbox.clone()).unwrap();
         assert!(matches!(parsed.result, WorkResult::Fixture(_)));
         assert_eq!(serde_json::to_value(parsed).unwrap(), outbox);
+        let review = serde_json::json!({"id":id,"request_id":id,"scenario":"access_control_v1","mode":"owned_fixture","state":"queued","created_at":1000,"deadline_at":1900,"evidence_source":"operator_reported","steps":[]});
+        let parsed: ReviewView = serde_json::from_value(review.clone()).unwrap();
+        assert!(parsed.timing.is_none());
+        assert_eq!(serde_json::to_value(parsed).unwrap(), review);
         assert!(
             serde_json::from_value::<CompleteWork>(
                 serde_json::json!({"lease_id":id,"result":{"runs":[],"kind":"owned_agent_v1"}})

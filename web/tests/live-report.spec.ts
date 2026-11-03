@@ -208,3 +208,27 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   for (const role of ['investigator', 'reproducer', 'challenger']) expect(md).toContain(`${role}#1`);
   expect(md.match(/^### [SRV]-\d+$/gm)).toHaveLength(2);
 });
+
+test('queue waiting and active role deadlines are explained separately', async ({ page }) => {
+  await setup(page);
+  const review = { ...repeatedReport(), mode: 'pentest_agent', state: 'queued', deadline_at: 1793726400,
+    timing: { role_limit_seconds: 3600, started_at: null as number | null, active_role_deadline_at: null as number | null, requests_ahead: 2 },
+    pentest: { scope: { origins: ['https://owned.example'], methods: ['GET'] }, reviewers: [] },
+    steps: (['investigator', 'reproducer', 'challenger'] as const).map(role => ({ role, state: 'queued', result: null })),
+  };
+  await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
+  await page.reload();
+  await expect(page.getByText(/2 earlier tests share your selected agents/)).toBeVisible();
+  await expect(page.getByText(/Each agent gets up to 60 minutes after its own work starts/)).toBeVisible();
+  await expect(page.getByText(/Run window ends/)).toHaveCount(0);
+  await expect(page.getByText(/This agent’s time limit ends/)).toHaveCount(0);
+  review.state = 'running'; review.steps[0].state = 'leased';
+  review.timing.started_at = 1793640000; review.timing.active_role_deadline_at = 1793643600;
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Scout is on the case.' })).toBeVisible();
+  await expect(page.getByText(/This agent’s time limit ends/)).toBeVisible();
+  await expect(page.getByText(/2 earlier tests share your selected agents/)).toHaveCount(0);
+  await page.getByText('Timing & permission', { exact: true }).click();
+  await expect(page.getByText(/Work must stop if permission or test-account access expires/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
