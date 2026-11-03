@@ -407,3 +407,7 @@
   .incident-dialog .incident-prose { font-size: 12px; }
   .incident-dialog-nav { padding: 10px 14px; }
 }
+
+.textmode-ui .request-option.roadmap-product { cursor: default; color: var(--muted); background: var(--surface); border-style: dashed; }
+.textmode-ui .request-option.roadmap-product:hover { border-color: var(--line); background: var(--surface); }
+.textmode-ui .request-option.roadmap-product h2, .textmode-ui .request-option.roadmap-product strong { color: var(--muted); }

@@ -7,7 +7,7 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 ## First product
 
-**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Submit an exact HTTPS scope, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Staff approve the scope before agents receive it. Reports retain the recorded requests, findings and incomplete checks. Scout, Recon and Verifier each have a readable section, with finding filters, impact explanations and links to supporting requests. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
+**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Enter a public HTTPS website URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Staff approve the scope before agents receive it. Reports retain the recorded requests, findings and incomplete checks. Scout, Recon and Verifier each have a readable section, with finding filters, impact explanations and links to supporting requests. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
 
 The current pilot allows unauthenticated GET, HEAD and OPTIONS requests. It does not change accounts, move funds or run load tests. Broader application testing and richer evidence packs are being developed; the product name does not imply complete OWASP coverage or certification.
 
@@ -24,10 +24,12 @@ Open **App** to sign in or request access. The dashboard brings together your re
 
 For a live website test:
 
-1. Save the exact website origins and your permission to test them.
+1. Enter the website URL and confirm your authority to test it. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
 2. Add the supplied TXT record for every domain. Select **Refresh DNS**; the server checks for up to five minutes. A repeated click does not extend that window.
 3. Wait for domain verification and staff approval, then confirm the named operators and disclosed model provider.
 4. Inspect the private report, including evidence, gaps and disagreement. Download the readable Markdown report, the original evidence JSON, or a Postman inventory of observed endpoints. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
+
+Public HTTPS websites and APIs are supported. Knowing a raw IP address or controlling reverse DNS is not proof that you own a server. General port scans and non-web services need a separate infrastructure-verification and testing policy; they are outside this product.
 
 DNS proof belongs to this account and exact request. It expires with the scope after 24 hours, cannot authorize another request, and does not permit testing other domains. Each request allows six refresh windows. Normal DNS propagation may take longer than one window. Access is rechecked when work starts and workers request evidence.
 
