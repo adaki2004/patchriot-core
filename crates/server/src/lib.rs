@@ -322,6 +322,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/reviews/{id}/cancel", post(gateway::cancel_review))
         .route("/api/reviews/{id}/report", post(gateway::report))
         .route(
+            "/api/reviews/{id}/consistency-check",
+            get(gateway::report_check).post(gateway::request_report_check),
+        )
+        .route(
             "/api/sources",
             get(sources::list)
                 .post(sources::create)

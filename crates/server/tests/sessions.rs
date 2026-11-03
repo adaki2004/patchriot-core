@@ -15,6 +15,90 @@ use uuid::Uuid;
 const ORIGIN: &str = "https://patchriot.example";
 
 #[tokio::test]
+async fn report_check_gateway_requires_session_csrf_and_uses_only_session_identity() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let records = seen.clone();
+    let downstream = Router::new().fallback(
+        move |headers: HeaderMap, uri: axum::http::Uri, body: String| {
+            let records = records.clone();
+            async move {
+                records
+                    .lock()
+                    .unwrap()
+                    .push((headers, uri.path().to_owned(), body));
+                Json(json!({"state":"queued","can_request":false}))
+            }
+        },
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let id = Uuid::new_v4();
+    let path = format!("/api/reviews/{id}/consistency-check");
+    let body = json!({"accepts_near_ai":true});
+    assert_eq!(
+        test.request("GET", &path, Value::Null, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &[("origin", ORIGIN)])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (cookie, session) = test.login("member").await;
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &[("cookie", &cookie)])
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert!(seen.lock().unwrap().is_empty());
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+        ("x-patchriot-account", "forged"),
+        ("x-patchriot-role", "admin"),
+    ];
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            json!({"accepts_near_ai":true,"model":"unapproved"}),
+            &headers
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    for (method, body) in [("GET", Value::Null), ("POST", body)] {
+        assert_eq!(
+            test.request(method, &path, body, &headers).await.0,
+            StatusCode::OK
+        );
+    }
+    let observed = seen.lock().unwrap().clone();
+    assert_eq!(observed.len(), 2);
+    for (headers, path, _) in &observed {
+        assert_eq!(
+            headers["x-patchriot-account"],
+            session["account"]["id"].as_str().unwrap()
+        );
+        assert_eq!(headers["x-patchriot-role"], "member");
+        assert!(!headers.contains_key("cookie"));
+        assert_eq!(path, &format!("/internal/reviews/{id}/consistency-check"));
+    }
+    assert_eq!(
+        serde_json::from_str::<Value>(&observed[1].2).unwrap(),
+        json!({"accepts_near_ai":true})
+    );
+    server.abort();
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn ownership_refresh_requires_session_csrf_and_forwards_only_the_authenticated_identity() {
     let id = Uuid::new_v4();
     let seen = Arc::new(Mutex::new(Vec::new()));

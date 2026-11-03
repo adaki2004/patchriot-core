@@ -38,6 +38,67 @@ async function mockExport(page: import('@playwright/test').Page, review: unknown
   });
 }
 
+test('NEAR report advice needs consent, renders inert text and exports through retention', async ({ page }) => {
+  await page.clock.install();
+  let state = 'not_requested', writes = 0, exports = 0, reads = 0;
+  const advice = { duplicate_groups: [['investigator-1', 'reproducer-1']], review_ids: ['challenger-1'], explanation: '<img src=x onerror="window.checkExecuted=true"> Compare the evidence.' };
+  const result = { advisory_only: true, advice, omitted_findings: 0, receipt: { kind: 'provider_tee', request_sha256: 'a'.repeat(64), response_sha256: 'b'.repeat(64), signer: 'fixture' } };
+  await page.route(`**/api/reviews/${id}/consistency-check`, async route => {
+    if (route.request().method() === 'POST') {
+      expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
+      expect(route.request().postDataJSON()).toEqual({ accepts_near_ai: true });
+      writes++; state = 'queued';
+    } else reads++;
+    await route.fulfill({ json: { state, can_request: state === 'not_requested', model: 'fixture-model', result: state === 'verified' ? result : null } });
+  });
+  page.on('request', r => { if (r.url().endsWith('/report')) exports++; });
+  await setup(page, false, false, true);
+  const check = page.getByLabel('NEAR AI report check');
+  await check.locator('summary').click();
+  await expect(check.getByRole('button', { name: 'Check this report' })).toBeDisabled();
+  expect(writes).toBe(0); expect(exports).toBe(0);
+  await check.getByRole('checkbox').check();
+  await check.getByRole('button', { name: 'Check this report' }).click();
+  await expect(check.getByText('Waiting for the report checker.')).toBeVisible();
+  state = 'verified'; await page.clock.fastForward(5000);
+  await expect(check.getByText('Model-signed advice')).toBeVisible();
+  await expect(check.getByText('Scout #1 · Recon #1')).toBeVisible();
+  await expect(check.locator('img, script')).toHaveCount(0);
+  expect(await page.evaluate(() => 'checkExecuted' in window)).toBe(false);
+  const previous = reads; await page.clock.fastForward(60_000); expect(reads).toBe(previous);
+  const download = page.waitForEvent('download');
+  await check.getByRole('button', { name: 'Download check & signature ↓' }).click();
+  const file = await download;
+  expect(JSON.parse(await readFile((await file.path())!, 'utf8'))).toEqual(result);
+  expect(exports).toBe(1); expect(writes).toBe(1);
+  await expect(page.getByText('Save a copy before', { exact: false })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('an unavailable checker keeps the original findings and never shows a proof badge', async ({ page }) => {
+  let writes = 0;
+  await page.route(`**/api/reviews/${id}/consistency-check`, route => {
+    if (route.request().method() === 'POST') writes++;
+    return route.fulfill({ json: { state: 'unavailable', can_request: false, model: 'fixture-model', error_code: 'response_signature_unavailable' } });
+  });
+  await setup(page, false, false, true);
+  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').click();
+  await expect(check.getByText(/could not be completed and verified/)).toBeVisible();
+  await expect(check.getByRole('button')).toHaveCount(0);
+  await expect(page.getByText('Model-signed advice')).toHaveCount(0);
+  await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible(); expect(writes).toBe(0);
+});
+
+test('expired receipt download cannot save stale model advice', async ({ page }) => {
+  await page.route(`**/api/reviews/${id}/consistency-check`, route => route.fulfill({ json: { state: 'verified', can_request: false, model: 'fixture-model', result: { advisory_only: true, advice: { duplicate_groups: [], review_ids: [], explanation: 'Fixture.' }, omitted_findings: 0, receipt: { kind: 'provider_tee' } } } }));
+  await setup(page, false, false, true);
+  await page.route(`**/api/reviews/${id}/report`, route => route.fulfill({ status: 410, json: { error: 'report_content_deleted' } }));
+  let downloads = 0; page.on('download', () => downloads++);
+  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').click();
+  await check.getByRole('button', { name: 'Download check & signature ↓' }).click();
+  await expect(check.getByRole('alert')).toBeVisible(); expect(downloads).toBe(0);
+});
+
 test('a compact report preserves the author, uncertainty and request references', async ({ page }) => {
   await setup(page);
   await expect(page.getByRole('progressbar', { name: 'Role reports received' })).toHaveAttribute('value', '1');

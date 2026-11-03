@@ -437,3 +437,44 @@ pub async fn report(
     )
         .into_response())
 }
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReportCheckConsent {
+    accepts_near_ai: bool,
+}
+
+pub async fn report_check(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let session = auth::require_session(&headers, &state).await?;
+    request_with_limit(
+        &state,
+        reqwest::Method::GET,
+        &format!("/internal/reviews/{id}/consistency-check"),
+        Some(&session),
+        None::<&()>,
+        512 * 1024,
+    )
+    .await
+}
+
+pub async fn request_report_check(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(input): Json<ReportCheckConsent>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let session = auth::require_write(&headers, &state).await?;
+    request_with_limit(
+        &state,
+        reqwest::Method::POST,
+        &format!("/internal/reviews/{id}/consistency-check"),
+        Some(&session),
+        Some(&input),
+        512 * 1024,
+    )
+    .await
+}
