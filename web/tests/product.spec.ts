@@ -24,31 +24,41 @@ test('public documentation is bookmarkable and never requests private records', 
   await page.goto('/#/docs/privacy');
   await expect(page.getByRole('heading', { name: 'Who can see your data', exact: true })).toBeVisible();
   const docs = page.getByRole('navigation', { name: 'Documentation' });
+  await expect(docs.locator('strong')).toHaveText(['Get started', 'How it works']);
+  await expect(docs.getByRole('button').nth(4)).toHaveAccessibleName('5. Architecture');
+  await expect(docs.getByRole('button').last()).toHaveAccessibleName('7. Testing & questions');
+  await expect(docs.getByRole('button', { name: /Meet the agents/ })).toHaveCount(0);
   for (const [index, section] of docPages.entries()) {
     await docs.getByRole('button', { name: `${index + 1}. ${section.title}`, exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`#/docs/${section.id}$`));
     await expect(page.getByRole('heading', { name: section.title, exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
+  await page.goto('/#/docs/start');
+  await expect(page.locator('.docs-report-example')).toHaveCount(0);
+  await page.goto('/#/docs/workflow');
+  await expect(page.locator('.docs-report-example')).toContainText('EXAMPLE / FICTIONAL DATA');
   await page.goto('/#/docs/infrastructure');
   const diagram = page.locator('.docs-diagram');
   await expect(diagram.locator('.service-map')).toBeVisible();
   await expect(diagram).toContainText('NEAR AI');
   await expect(diagram).toContainText('isolated Hermes agents on Kali');
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Inside the network', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
   await page.goto('/#/docs/architecture');
-  await expect(page.getByRole('heading', { name: 'Inside the network', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
+  await page.goto('/#/docs/agents');
+  await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
   expect(calls.filter(path => !['/api/session', '/api/fleet', '/api/incidents', '/api/analytics'].includes(path))).toEqual([]);
   await page.goto('/#/docs/../../admin');
-  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toBeVisible();
 });
 
 test('workspace separates requests and pairing from the public introduction', async ({ page }) => {
   await setup(page, true);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'A first check. With evidence.' })).toBeVisible();
   await page.getByRole('button', { name: 'Start with a URL', exact: false }).click();
@@ -59,8 +69,8 @@ test('workspace separates requests and pairing from the public introduction', as
   await expect(page.getByRole('heading', { name: 'Agent pairing is staff-only.' })).toBeVisible();
   await page.getByRole('button', { name: 'Patchriot home' }).click();
   await expect(page).toHaveURL(/#\/home$/);
-  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toBeVisible();
-  await page.getByRole('button', { name: 'OPEN DASHBOARD', exact: false }).click();
+  await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Website' }).getByRole('button', { name: 'App', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

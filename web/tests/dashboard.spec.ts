@@ -41,7 +41,7 @@ for (const dialog of [
 test('shows real fleet dimensions, prototype scope and usable mobile layout', async ({ page }) => {
   await setup(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
   await expect(page.locator('.tm-footnote')).toContainText('An automated first check, before a human penetration test.');

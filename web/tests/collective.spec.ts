@@ -1,16 +1,22 @@
 import { expect, test } from '@playwright/test';
 import { emptyDashboard } from './helpers';
 
-test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
+test.beforeEach(async ({ page }) => {
+  await emptyDashboard(page);
+  await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+});
 
-test('Collective shows the selected hero, logo and consistent navigation', async ({ page }) => {
+test('Exposure shows the selected hero, logo and consistent navigation', async ({ page }) => {
   await page.route('**/api/session', route => route.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: {} }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.goto('/#/home');
   await expect(page.locator('html')).toHaveAttribute('data-design', 'collective');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DEFENSE BEFOREGOING LIVE.');
-  await expect(page.locator('.tm-hero-copy h1 em')).toHaveCSS('color', 'rgb(145, 179, 255)');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Security testing.Just your URL.');
+  await expect(page.locator('.exposure-copy h1 em')).toHaveCSS('color', 'rgb(243, 140, 126)');
+  await expect(page.locator('.exposure-eyebrow')).toHaveText('WEB APPLICATION SECURITY TESTING');
+  await expect(page.locator('.exposure-art img')).toHaveAttribute('src', '/brand/exposure-hero.png');
+  await expect(page.locator('.exposure-hero input[type=checkbox]')).toHaveCount(0);
   await expect(page.locator('header .brand-mark')).toHaveAttribute('src', '/brand/white-hat.png');
   expect((await page.locator('header .brand-mark').boundingBox())!.width).toBeGreaterThanOrEqual(64);
   const navigation = page.getByRole('navigation', { name: 'Website' });
@@ -20,13 +26,78 @@ test('Collective shows the selected hero, logo and consistent navigation', async
   await page.keyboard.press('Escape');
 });
 
+test('the hero prefills the owned-site form without creating or authorizing work', async ({ page }) => {
+  await page.route('**/api/session', route => route.fulfill({ json: { account: { id: 'hero-member', display_name: 'Member', role: 'member' }, csrf_token: 'test-only' } }));
+  const writes: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST') writes.push(new URL(request.url()).pathname); });
+  await page.goto('/#/home');
+  await page.getByLabel('A domain you own').fill('https://EXAMPLE.com/path?draft=example');
+  await page.getByRole('button', { name: 'Start a test', exact: false }).click();
+  await expect(page).toHaveURL(/#\/pentests$/);
+  await expect(page.getByLabel('Website URL')).toHaveValue('https://example.com');
+  await expect(page.locator('input[name=permissionConfirmed]')).not.toBeChecked();
+  expect(writes).toEqual([]);
+  await page.getByRole('button', { name: 'Patchriot home' }).click();
+  await page.getByLabel('A domain you own').fill('https://user:password@example.com');
+  await page.getByRole('button', { name: 'Start a test', exact: false }).click();
+  await expect(page.locator('.exposure-form').getByRole('alert')).toContainText('without credentials');
+  await expect(page).toHaveURL(/#\/home$/);
+  expect(writes).toEqual([]);
+});
+
+for (const signIn of ['password', 'redirect']) test('the hero retains only the origin through ' + signIn + ' sign-in', async ({ page }) => {
+  let authenticated = false;
+  await page.route('**/api/session', route => route.fulfill({ json: { account: authenticated ? { id: 'hero-signin', display_name: 'Member', role: 'member' } : null, csrf_token: authenticated ? 'test-only' : null } }));
+  await page.route('**/api/auth/login', route => { authenticated = true; return route.fulfill({ json: {} }); });
+  const workWrites: string[] = [];
+  page.on('request', request => { if (request.method() === 'POST' && !new URL(request.url()).pathname.startsWith('/api/auth/')) workWrites.push(new URL(request.url()).pathname); });
+  await page.goto('/#/home');
+  await page.getByLabel('A domain you own').fill('https://example.com/private?token=example');
+  await page.getByRole('button', { name: 'Start a test', exact: false }).click();
+  const dialog = page.getByRole('dialog', { name: 'Sign in' });
+  await expect(dialog).toBeVisible();
+  const draft = await page.evaluate(() => JSON.parse(sessionStorage.getItem('patchriot.website-draft')!));
+  expect(draft.origin).toBe('https://example.com');
+  expect(JSON.stringify(draft)).not.toContain('token');
+  if (signIn === 'password') {
+    await dialog.getByLabel('Username', { exact: true }).fill('local-reviewer');
+    await dialog.getByLabel('Password', { exact: true }).fill('local-test-password');
+    await dialog.getByRole('button', { name: 'Open workspace', exact: false }).click();
+  } else {
+    authenticated = true;
+    // Simulate returning to the app after the provider callback has set the session.
+    await page.goto('/');
+  }
+  await expect(page).toHaveURL(/#\/pentests$/);
+  await expect(page.getByLabel('Website URL')).toHaveValue('https://example.com');
+  await expect(page.locator('input[name=permissionConfirmed]')).not.toBeChecked();
+  expect(await page.evaluate(() => sessionStorage.getItem('patchriot.website-draft'))).toBeNull();
+  expect(workWrites).toEqual([]);
+});
+
+test('cancelling sign-in clears a draft and expired drafts do not redirect an account', async ({ page }) => {
+  let authenticated = false;
+  await page.route('**/api/session', route => route.fulfill({ json: { account: authenticated ? { id: 'hero-expiry', display_name: 'Member', role: 'member' } : null, csrf_token: authenticated ? 'test-only' : null } }));
+  await page.goto('/#/home');
+  await page.getByLabel('A domain you own').fill('example.com');
+  await page.getByRole('button', { name: 'Start a test', exact: false }).click();
+  await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Sign in' })).toHaveCount(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('patchriot.website-draft'))).toBeNull();
+  await page.evaluate(() => sessionStorage.setItem('patchriot.website-draft', JSON.stringify({ origin: 'https://example.com', expires: Date.now() - 1 })));
+  authenticated = true;
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Hello, Member.' })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('patchriot.website-draft'))).toBeNull();
+});
+
 test('one service diagram explains scope, agents and inference and respects reduced motion', async ({ page }) => {
   await page.route('**/api/session', route => route.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 3, online_operators: 2, online_compute_groups: 2 } }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/#/home');
-  await expect(page.locator('.textmode-landing')).toHaveAttribute('data-paused', 'true');
   await expect(page.locator('animateMotion')).toHaveCount(0);
   await expect(page.getByLabel('Live fleet counts')).toContainText('3 AGENTS ONLINE');
   await expect(page.locator('.service-map')).toHaveCount(1);
@@ -39,7 +110,8 @@ test('one service diagram explains scope, agents and inference and respects redu
   await expect(page.locator('link[rel=icon]')).toHaveAttribute('href', '/brand/white-hat.png');
   await expect(page.getByRole('heading', { name: 'YOUR WEB APP. UNDER REVIEW.' })).toBeVisible();
   await expect(page.getByText('NO SOLO', { exact: false })).toHaveCount(0);
-  await page.locator('.tm-hero').getByRole('button', { name: 'TEST MY WEB APP', exact: false }).click();
+  await page.getByLabel('A domain you own').fill('example.com');
+  await page.locator('.exposure-hero').getByRole('button', { name: 'Start a test', exact: false }).click();
   const access = page.getByRole('dialog', { name: 'Sign in' });
   await expect(access.getByRole('heading', { name: 'Sign in to Patchriot.' })).toBeInViewport();
   await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
@@ -140,7 +212,7 @@ test('the restored diagram animates and can be paused on both the landing and do
   const map = page.locator('.service-map');
   await expect(map).toHaveAttribute('data-paused', 'false');
   await expect(map.locator('animateMotion')).toHaveCount(5);
-  await page.getByRole('button', { name: /pause motion/i }).click();
+  await page.getByRole('button', { name: 'Pause diagram' }).click();
   await expect(map).toHaveAttribute('data-paused', 'true');
   await expect(map.locator('animateMotion')).toHaveCount(0);
   await page.goto('/#/docs/workflow');
