@@ -957,3 +957,20 @@ mod tests {
         );
     }
 }
+
+/// Aggregate counts for the staff desk. Counts never include private report bodies.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReviewStats {
+    pub requested: i64,
+    pub live_requested: i64,
+    pub awaiting_verification: i64,
+    pub review_runs: i64,
+    pub awaiting_payment: i64,
+    pub queued: i64,
+    pub running: i64,
+    pub completed: i64,
+    pub needs_review: i64,
+    pub failed: i64,
+    pub cancelled: i64,
+    pub as_of: i64,
+}

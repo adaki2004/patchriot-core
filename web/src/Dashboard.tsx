@@ -6,6 +6,7 @@ import { AgentList } from './Pairing';
 import { money } from './Earnings';
 import { orderLabel, paymentLabel } from './Orders';
 import { useOrderHistory } from './orderHistory';
+import { Trial } from './Trial';
 import { UIIcon } from './UIIcon';
 
 type Earnings = { balance: { available: string } };
@@ -14,7 +15,7 @@ type Earnings = { balance: { available: string } };
 const needsAction = (state: string) => ['needs_review', 'failed', 'awaiting_payment', 'awaiting_verification', 'collected', 'approved'].includes(state);
 const workPriority = (state: string) => needsAction(state) ? 0 : auditActive(state) ? 1 : state === 'completed' ? 2 : 3;
 
-export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet | null; onOpen: (view: View, id?: string | null) => void }) {
+export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: string; fleet?: Fleet | null; onOpen: (view: View, id?: string | null) => void }) {
   const audits = useAudits();
   const history = useOrderHistory();
   const { orders, coupons } = history;
@@ -31,6 +32,7 @@ export function Dashboard({ name, fleet, onOpen }: { name: string; fleet?: Fleet
       <img className="workspace-art" src="/brand/collective.png" alt="" width="1536" height="1024" />
       <div className="workspace-welcome"><p className="section-kicker">YOUR WORKSPACE / COLLECTIVE DEFENSE</p><h1>Hello, {name}.</h1><p>Your systems. More eyes on the weak points.</p><button className="primary" onClick={() => onOpen('request')}><UIIcon name="plus" />Request an audit</button></div>
     </div>
+    <Trial csrf={csrf} onStart={() => onOpen('request')} />
     <section className="work-card recent-work"><div className="card-title"><div><p className="section-kicker">YOUR REQUESTS</p><h2>Work in progress.</h2></div><button onClick={() => onOpen('audits')}>View all audits <span aria-hidden="true">↗</span></button></div>
       {audits.error && <p className="notice error" role="alert">Audits could not fully refresh. Saved entries may be out of date. <button className="inline" onClick={audits.refresh}>Retry audits</button></p>}
       {!audits.ready && !audits.error && <p role="status">Loading audits…</p>}

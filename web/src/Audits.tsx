@@ -1,3 +1,5 @@
+import { AdminStats } from './AdminStats';
+import { TrialDesk } from './Trial';
 import { useState } from 'react';
 import { useLive } from './useLive';
 import type { View } from './navigation';
@@ -43,18 +45,20 @@ export function AuditRows({ items, onOpen }: { items: Audit[]; onOpen: (view: Vi
   </article>)}</div>;
 }
 
-export function Audits({ onOpen, admin = false }: { onOpen: (view: View, id?: string | null) => void; admin?: boolean }) {
+export function Audits({ onOpen, admin = false, csrf }: { csrf?: string; onOpen: (view: View, id?: string | null) => void; admin?: boolean }) {
   const data = useAudits(admin);
   const [filter, setFilter] = useState('All');
   const [status, setStatus] = useState('All work');
   const items = data.items.filter(item => (filter === 'All' || item.kind === filter) && (status === 'All work' || (status === 'Queued' ? item.state === 'queued' : ['running', 'collecting'].includes(item.state))));
   return <section className="audits-page">
     <div className="dashboard-title"><div><p className="eyebrow">{admin ? 'ADMINISTRATION' : 'YOUR WORK'}</p><h1>{admin ? 'Audit activity' : 'Audits'}</h1><p className="subtle">{admin ? 'Queued work, active tests and reports across accounts.' : 'Your requests, saved material and agent reports.'}</p></div><button className="primary" onClick={() => onOpen('request')}>Request an audit</button></div>
+    {admin && <AdminStats />}
     <div className="audit-controls"><div className="segmented" aria-label="Audit type">{['All', 'Website', 'Source code', 'Example'].map(value => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div><button className="quiet" onClick={data.refresh}>Refresh audits</button></div>
     <div className="audit-controls"><div className="segmented" aria-label="Work status">{['All work', 'Queued', 'Running'].map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{value}</button>)}</div></div>
     {data.error && <p className="notice error" role="alert">Some audits could not refresh. Any entries shown may be out of date.</p>}
     {!data.ready && !data.error && <p role="status">Loading your audits…</p>}
-    <div className="panel">{items.length > 0 ? <AuditRows items={items} onOpen={onOpen} /> : data.ready && !data.error && <div className="dashboard-empty"><h2>{status !== 'All work' ? `No ${status.toLowerCase()} requests.` : filter === 'All' ? 'Your first audit starts here.' : `No ${filter.toLowerCase()} audits yet.`}</h2><p>{status !== 'All work' ? 'Open All work to see your other requests and reports.' : 'Choose a website or a few source files you have permission to review.'}</p></div>}</div>
+    <div className="panel">{items.length > 0 ? <AuditRows items={items} onOpen={onOpen} /> : data.ready && !data.error && <div className="dashboard-empty"><h2>{status !== 'All work' ? `No ${status.toLowerCase()} requests.` : filter === 'All' ? 'Your first audit starts here.' : `No ${filter.toLowerCase()} audits yet.`}</h2><p>{status !== 'All work' ? 'Open All work to see your other requests and reports.' : 'Choose a website you own and control.'}</p></div>}</div>
+    {admin && csrf && <TrialDesk csrf={csrf} />}
     <details className="audit-tools"><summary>Saved material and test examples</summary><div className="review-actions"><button className="quiet" onClick={() => onOpen('pentests')}>Live website tests</button><button className="quiet" onClick={() => onOpen('sites')}>Website snapshots</button><button className="quiet" onClick={() => onOpen('sources')}>Source uploads</button><button className="quiet" onClick={() => onOpen('reviews')}>Reports</button></div><p className="fine">Recent records only. A snapshot is saved evidence; an audit adds the agents’ review. Live tests use a separate approved scope; saved-page approval does not authorize live probes.</p></details>
   </section>;
 }

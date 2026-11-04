@@ -138,6 +138,6 @@ test('invalid paths cannot become API paths and member links cannot open admin d
     await page.goto(`/#/${view}`);
     await expect(page.getByRole('heading', { name: 'Administrator access required.', exact: true })).toBeVisible();
   }
-  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/withdrawals', '/api/agents', '/api/pentests'].includes(path))).toBe(true);
+  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/withdrawals', '/api/agents', '/api/pentests', '/api/trial'].includes(path))).toBe(true);
   expect(calls.writes).toEqual([]);
 });

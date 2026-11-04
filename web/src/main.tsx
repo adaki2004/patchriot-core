@@ -26,7 +26,7 @@ import { useNavigation } from './navigation';
 import type { View } from './navigation';
 import { AccessPanel, AccessDialog, AccessDesk } from './Access';
 import { Guide, AgentList, PairingClosed } from './Pairing';
-import { Landing, RequestWork } from './Product';
+import { Landing, RequestWork, websiteOrigin } from './Product';
 import { Docs } from './Docs';
 import { Sources } from './Sources';
 import { Earnings } from './Earnings';
@@ -99,8 +99,27 @@ function Decision({ device, action, csrf, onDone, onClose }: { device: Device; a
 }
 
 
+const websiteDraftKey = 'patchriot.website-draft';
+// Keep only the origin in this tab while sign-in redirects away. This never authorizes or submits work.
+function readWebsiteDraft(): string {
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(websiteDraftKey) ?? 'null');
+    if (typeof draft?.origin === 'string' && Number.isFinite(draft.expires) && draft.expires > Date.now() && draft.expires <= Date.now() + 30 * 60_000 && websiteOrigin(draft.origin) === draft.origin) return draft.origin;
+  } catch { /* An absent, blocked or invalid draft starts an empty form. */ }
+  rememberWebsiteDraft('');
+  return '';
+}
+function rememberWebsiteDraft(origin: string) {
+  try {
+    if (origin) sessionStorage.setItem(websiteDraftKey, JSON.stringify({ origin, expires: Date.now() + 30 * 60_000 }));
+    else sessionStorage.removeItem(websiteDraftKey);
+  } catch { /* The in-memory draft still works when browser storage is disabled. */ }
+}
+
 function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const [websiteDraft, setWebsiteDraft] = useState(readWebsiteDraft);
+  const resumeWebsiteDraft = useRef(Boolean(websiteDraft));
   const [sessionError, setSessionError] = useState('');
   const [initialCode, setInitialCode] = useState(() => window.location.pathname === '/activate' && /^[0-9a-f]{64}$/i.test(window.location.hash.slice(1)) ? window.location.hash.slice(1) : '');
   const [signinFailed] = useState(() => new URLSearchParams(window.location.search).get('signin') === 'failed');
@@ -119,6 +138,12 @@ function App() {
   const fleet = useLive<Fleet>('/fleet');
   const devices = useLive<Device[]>('/devices', Boolean(session?.account));
   const account = session?.account;
+  useEffect(() => {
+    if (!account || !resumeWebsiteDraft.current) return;
+    resumeWebsiteDraft.current = false;
+    rememberWebsiteDraft('');
+    navigate('pentests');
+  }, [account, navigate]);
   const isAdmin = account?.role === 'admin';
   const privateView = !['home', 'overview', 'incidents', 'docs', 'contact'].includes(view);
   const appView = Boolean(account) && !['home', 'docs', 'incidents', 'contact'].includes(view);
@@ -139,6 +164,7 @@ function App() {
   }, [view, account?.id, isAdmin]);
   const endSession = useCallback((message = '') => {
     sessionChanged();
+    setWebsiteDraft(''); resumeWebsiteDraft.current = false; rememberWebsiteDraft('');
     setSession({ account: null, csrf_token: null }); navigate('overview', null, false, true);
     setPairing(false); setDecision(null); setAccessOpen(false); setCheckout(null); setSessionError(''); setNotice(message);
   }, [navigate]);
@@ -158,9 +184,20 @@ function App() {
   }
   function changed(message: string) { devices.refresh(); fleet.refresh(); setNotice(message); }
   function openAccess() { setAccessOpen(true); }
+  function requestWork(website = '') {
+    setWebsiteDraft(website);
+    if (!website) { rememberWebsiteDraft(''); resumeWebsiteDraft.current = false; setView('request'); return; }
+    if (account) { rememberWebsiteDraft(''); navigate('pentests'); }
+    else { rememberWebsiteDraft(website); resumeWebsiteDraft.current = true; openAccess(); }
+  }
+  function closeAccess() {
+    setAccessOpen(false); setWebsiteDraft(''); resumeWebsiteDraft.current = false; rememberWebsiteDraft('');
+  }
   async function signedIn() {
+    const resumeWebsite = resumeWebsiteDraft.current;
     await loadSession(); setInitialCode(''); setAccessOpen(false);
-    if (!privateView || view === 'home') setView('overview');
+    if (resumeWebsite) { resumeWebsiteDraft.current = false; rememberWebsiteDraft(''); navigate('pentests'); }
+    else if (!privateView || view === 'home') setView('overview');
   }
   const access = <AccessPanel initialCode={initialCode} onLogin={signedIn} />;
   const landingAccess = <section className="access-invitation"><p className="tm-kicker">YOUR PRIVATE WORKSPACE</p><h3>Bring something<br />worth protecting.</h3><p>Request a test for a domain you control.</p><button className="primary" onClick={() => openAccess()}>Get started <span aria-hidden="true">↗</span></button><button className="text-button" onClick={() => openAccess()}>Sign in →</button></section>;
@@ -197,10 +234,10 @@ function App() {
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
       {privateView && !account && <section className="private-entry"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1>{session ? 'Sign in to continue.' : 'Checking your session…'}</h1><p>A saved link does not share its contents. Use the account that owns this work.</p></div>{session && !accessOpen && access}</section>}
       {adminView && account && !isAdmin && <section className="panel empty"><h1 className="page-title">Administrator access required.</h1><p>This account cannot open the admin desk.</p></section>}
-      {(view === 'home' || (view === 'overview' && !account)) && <Landing fleet={fleet.data} error={fleet.error} onRetry={fleet.refresh} signedIn={Boolean(account)} access={landingAccess} onAccess={openAccess} onApp={() => setView('overview')} onRequest={() => setView('request')} onDocs={() => navigate('docs', 'start')} />}
-      {view === 'overview' && account && <><Dashboard key={account.id} name={account.display_name} fleet={fleet.data} onOpen={navigate} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}</>}
+      {(view === 'home' || (view === 'overview' && !account)) && <Landing fleet={fleet.data} error={fleet.error} onRetry={fleet.refresh} signedIn={Boolean(account)} access={landingAccess} onAccess={openAccess} onApp={() => setView('overview')} onRequest={requestWork} onDocs={() => navigate('docs', 'start')} />}
+      {view === 'overview' && account && <><Dashboard csrf={session?.csrf_token ?? ''} key={account.id} name={account.display_name} fleet={fleet.data} onOpen={navigate} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}</>}
       {view === 'audits' && account && <Audits key={account.id} onOpen={navigate} />}
-      {view === 'audit-desk' && isAdmin && <Audits key={`admin:${account.id}`} admin onOpen={navigate} />}
+      {view === 'audit-desk' && isAdmin && <Audits key={`admin:${account.id}`} admin csrf={session?.csrf_token ?? undefined} onOpen={navigate} />}
       {['sites', 'sources', 'reviews'].includes(view) && account && <div className="audit-breadcrumb"><button className="text-button" onClick={() => setView('audits')}>← Your audits</button><span>{view === 'sites' ? 'Website snapshots' : view === 'sources' ? 'Source uploads' : 'Reports'}</span></div>}
       {['orders', 'earnings', 'agents'].includes(view) && account && <div className="audit-breadcrumb"><button className="text-button" onClick={() => setView('overview')}>← Dashboard</button></div>}
       {view === 'request' && account && <RequestWork onLive={() => navigate('pentests')} onWebsite={() => { setStartAudit('sites'); setView('sites'); }} onSource={() => { setStartAudit('sources'); setView('sources'); }} />}
@@ -217,7 +254,7 @@ function App() {
       {view === 'reviews' && account && session?.csrf_token && <Reviews key={account.id} admin={account.role === 'admin'} csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('reviews', id)} onOpenOrders={() => setView('orders')} />}
       {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('orders', id)} report={route.report} onReport={open => navigate('orders', route.id, open)} onOpenReview={id => navigate('reviews', id)} initialQuote={checkout} onClearQuote={() => setCheckout(null)} />}
       {view === 'sites' && account && session?.csrf_token && <Sites key={account.id} startNew={startAudit === 'sites'} onStarted={() => setStartAudit(null)} csrf={session.csrf_token} admin={isAdmin} accountId={account.id} selected={route.id} onSelect={id => navigate('sites', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
-      {view === 'pentests' && account && session?.csrf_token && <Pentests key={account.id} onBack={() => navigate('audits')} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => navigate('pentests', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
+      {view === 'pentests' && account && session?.csrf_token && <Pentests key={account.id} initialWebsite={websiteDraft} onBack={() => navigate('audits')} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => { setWebsiteDraft(''); navigate('pentests', id); }} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'sources' && account && session?.csrf_token && <Sources key={account.id} startNew={startAudit === 'sources'} onStarted={() => setStartAudit(null)} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => navigate('sources', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'guide' && account && (isAdmin ? <Guide onPair={() => setPairing(true)} /> : <PairingClosed />)}
       {view === 'earnings' && account && session?.csrf_token && <Earnings csrf={session.csrf_token} />}
@@ -231,7 +268,7 @@ function App() {
     </main>
     <Analytics page={analyticsPage} />
     <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><span>Inspect the code. Question the evidence.</span></footer>
-    {!account && accessOpen && <AccessDialog initialCode={initialCode} onLogin={signedIn} onClose={() => setAccessOpen(false)} />}
+    {!account && accessOpen && <AccessDialog initialCode={initialCode} onLogin={signedIn} onClose={closeAccess} />}
     {pairing && isAdmin && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => { setView('devices'); changed('Relay paired. Check its approval and connection status below.'); }} onClose={() => setPairing(false)} />}
     {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(`${decisionLabels[decision.action]}: saved.`)} onClose={() => setDecision(null)} />}
   </>;

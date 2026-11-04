@@ -22,3 +22,11 @@
 
 .report-checks article { padding: 1rem 0; border-bottom: 1px solid var(--line, #303c4c); }
 .report-checks h4 small { margin-left: .6rem; color: var(--muted, #a4b0bf); font-weight: 400; }
+
+.report-prose { min-width: 0; max-width: 100%; }
+.report-prose p { line-height: 1.75; margin: .7rem 0 1.1rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.report-prose ol,.report-prose ul { padding-left: 1.5rem; line-height: 1.7; }
+.report-prose li { margin: .45rem 0; overflow-wrap: anywhere; }
+.report-prose p code,.report-prose li code { font-size: .9em; padding: .1em .3em; border: 1px solid #49566d; background: #192334; color: #bdd0ff; border-radius: 3px; }
+.report-prose figure { margin: 1rem 0; min-width: 0; }
+.report-prose pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.65 'IBM Plex Mono',monospace; }

@@ -1,3 +1,4 @@
+import { reportBlocks } from './reportFormatting';
 import { fallbackDescription } from './LiveReport';
 import { coverageChecks, checkLabels, findingRequest } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
@@ -16,8 +17,9 @@ class Pages {
   readonly charset: Set<number>;
   readonly doc: PDFDocument;
   readonly font: PDFFont;
+  readonly mono: PDFFont;
   substituted = false;
-  constructor(doc: PDFDocument, font: PDFFont) { this.doc = doc; this.font = font; this.charset = new Set(font.getCharacterSet()); }
+  constructor(doc: PDFDocument, font: PDFFont, mono: PDFFont) { this.doc = doc; this.font = font; this.mono = mono; this.charset = new Set(font.getCharacterSet()); }
   text(value: string) {
     return Array.from(value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')).map(c => {
       if (c === '\n' || c === '\t') return c === '\t' ? '    ' : c;
@@ -52,6 +54,28 @@ class Pages {
     }
     this.y -= 7;
   }
+  formatted(value: string) {
+    for (const block of reportBlocks(value)) {
+      if (block.kind === 'prose') { this.paragraph(block.text); continue; }
+      this.ensure(55);
+      this.paragraph(block.language ? `CODE / ${block.language.toUpperCase()}` : 'CODE / EVIDENCE', 8, muted);
+      const size = 9, leading = 14, available = lineWidth - 20;
+      const charset = new Set(this.mono.getCharacterSet());
+      const safe = this.text(block.text).replace(/./gu, c => charset.has(c.codePointAt(0)!) ? c : `[U+${c.codePointAt(0)!.toString(16).toUpperCase()}]`);
+      const emit = (line: string) => {
+        this.ensure(leading + 8);
+        this.page.drawRectangle({ x: margin, y: this.y - 4, width: lineWidth, height: leading, color: rgb(.93, .95, .98) });
+        if (line) this.page.drawText(line, { x: margin + 10, y: this.y, font: this.mono, size, color: ink });
+        this.y -= leading;
+      };
+      for (const line of safe.split('\n')) {
+        let wrapped = '';
+        for (const c of line) { if (this.mono.widthOfTextAtSize(wrapped + c, size) > available) { emit(wrapped); wrapped = ''; } wrapped += c; }
+        emit(wrapped);
+      }
+      this.y -= 12;
+    }
+  }
   heading(value: string, level = 2) { this.ensure(level === 1 ? 96 : 60); this.y -= 10; this.paragraph(value, level === 1 ? 25 : 13, level === 1 ? ink : blue); }
   begin(title: string) { this.newPage(title); this.contents.push({ title, page: this.doc.getPageCount() }); this.heading(title, 1); }
   label(label: string, value: string) { this.ensure(52); this.paragraph(label.toUpperCase(), 8, muted); this.paragraph(value); }
@@ -65,14 +89,17 @@ async function asset(path: string) {
 
 /** Generated locally from the authorized report. No customer data leaves the browser. */
 export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
-  const [fontBytes, logoBytes] = await Promise.all([asset('/fonts/ibm-plex-sans-variable.ttf'), asset('/brand/white-hat.png')]);
+  // Use the original TrueType font for PDF subsets. The browser WOFF2 font's
+  // compound glyph offsets can make fontkit throw and leave export unfinished.
+  const [fontBytes, logoBytes, monoBytes] = await Promise.all([asset('/fonts/ibm-plex-sans-variable.ttf'), asset('/brand/white-hat.png'), asset('/fonts/ibmplexmono-400.ttf')]);
   const doc = await PDFDocument.create(); doc.registerFontkit(fontkit);
   const font = await doc.embedFont(fontBytes, { subset: true });
   const logo = await doc.embedPng(logoBytes);
   const summary = reportSummary(input);
   const generated = new Date();
   doc.setTitle('Patchriot vulnerability report'); doc.setAuthor('Patchriot'); doc.setSubject('Automated website assessment'); doc.setCreationDate(generated);
-  const p = new Pages(doc, font);
+  const mono = await doc.embedFont(monoBytes, { subset: true });
+  const p = new Pages(doc, font, mono);
   const cover = doc.addPage([width, height]);
   cover.drawRectangle({ x: 0, y: 0, width, height, color: ink });
   cover.drawRectangle({ x: 0, y: 0, width: width / 2, height: 8, color: red });
@@ -125,7 +152,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.paragraph(`${s.result.evidence.length} recorded requests · ${s.result.execution.inference_calls} model calls · ${Math.round(s.result.execution.duration_ms / 1000)} seconds`, 9, muted);
     if (s.result.execution.fallback) p.paragraph(fallbackDescription(s.result.execution.fallback), 9, muted);
     p.label('Primary provider / model', `${s.result.execution.provider} / ${s.result.execution.model}`);
-    p.paragraph(s.result.assessment?.summary ?? 'No usable assessment was returned. Request and tool records do not by themselves establish a vulnerability.');
+    p.formatted(s.result.assessment?.summary ?? 'No usable assessment was returned. Request and tool records do not by themselves establish a vulnerability.');
     const refs = summary.findings.filter(f => f.contributions.some(c => c.role === s.role)).map(f => f.id);
     if (refs.length) p.paragraph(`Observations: ${refs.join(', ')}`, 10, blue);
   }
@@ -139,17 +166,17 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.heading(f.title, 1);
     p.paragraph(`${supportLabels[f.support] ?? 'Unconfirmed'}${row.complete ? '' : ' · From a partial assessment'}. Severity and support are the agent’s assessment.`, 10, muted);
     if (row.disputed) p.paragraph('Roles differ — review needed. The highest reported severity is shown, not a confirmed verdict.', 11, blue);
-    p.heading('Observation & impact'); p.paragraph(f.explanation);
-    p.heading('Recommended action'); p.paragraph(f.suggested_action);
+    p.heading('Observation & impact'); p.formatted(f.explanation);
+    p.heading('Recommended action'); p.formatted(f.suggested_action);
     p.paragraph('Recommendation only. No patch was applied or retested.', 9, muted);
-    p.heading('Reproduction recorded by the agent'); p.paragraph(f.reproduction);
+    p.heading('Reproduction recorded by the agent'); p.formatted(f.reproduction);
     for (const c of row.contributions) {
       p.heading(`${reportRoles[c.role]} — supporting contribution`);
       p.paragraph(`${c.finding.severity} · ${supportLabels[c.finding.support] ?? c.finding.support}${c.complete ? '' : ' · Partial assessment'}`, 9, muted);
       p.label('First cited request', findingRequest(c));
-      if (c.finding.explanation !== f.explanation) p.paragraph(c.finding.explanation);
-      if (c.finding.reproduction !== f.reproduction) { p.heading('Reproduction'); p.paragraph(c.finding.reproduction); }
-      if (c.finding.suggested_action !== f.suggested_action) { p.heading('Suggested action'); p.paragraph(c.finding.suggested_action); }
+      if (c.finding.explanation !== f.explanation) p.formatted(c.finding.explanation);
+      if (c.finding.reproduction !== f.reproduction) { p.heading('Reproduction'); p.formatted(c.finding.reproduction); }
+      if (c.finding.suggested_action !== f.suggested_action) { p.heading('Suggested action'); p.formatted(c.finding.suggested_action); }
       for (const id of c.finding.evidence_ids) {
         const e = c.result.evidence.find(e => e.id === id);
         if (!e) { p.paragraph(`${reportRoles[c.role]} #${id}: missing from the recorded evidence.`); continue; }

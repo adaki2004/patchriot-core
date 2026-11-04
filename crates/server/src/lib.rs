@@ -16,6 +16,7 @@ mod review_target;
 mod sites;
 mod sources;
 mod sso;
+mod trials;
 mod wallet;
 
 use axum::{
@@ -287,7 +288,13 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/admin/treasury", get(payments::payouts::desk))
         .route("/api/admin/payments", get(payments::desk::list))
+        .route("/api/admin/review-stats", get(gateway::review_stats))
         .route("/api/checkout", get(payments::access::settings))
+        .route("/api/trial", get(trials::offer).post(trials::claim))
+        .route(
+            "/api/admin/trial",
+            get(trials::desk).post(trials::configure),
+        )
         .route("/api/review-codes", get(review_codes::list))
         .route("/api/review-codes/{id}/resume", post(review_codes::resume))
         .route(

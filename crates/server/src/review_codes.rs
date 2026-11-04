@@ -52,7 +52,7 @@ fn hash(code: &str) -> String {
     hex::encode(Sha256::digest(code.as_bytes()))
 }
 
-fn available(state: &AppState) -> Result<(), ApiError> {
+pub(crate) fn available(state: &AppState) -> Result<(), ApiError> {
     if !matches!(
         state.review_access,
         ReviewAccess::Coupons | ReviewAccess::Paid(_)
@@ -67,7 +67,7 @@ fn available(state: &AppState) -> Result<(), ApiError> {
 
 // A separate committed counter includes rejected guesses. No HTTP call holds a
 // database transaction, and neither the raw code nor an upstream body is logged.
-async fn rate(pool: &PgPool, account: Uuid) -> Result<(), ApiError> {
+pub(crate) async fn rate(pool: &PgPool, account: Uuid) -> Result<(), ApiError> {
     let count: Option<i32> = sqlx::query_scalar("INSERT INTO review_code_attempts (account_id,started_at,attempts) VALUES ($1,now(),1) ON CONFLICT (account_id) DO UPDATE SET started_at = CASE WHEN review_code_attempts.started_at <= now() - interval '15 minutes' THEN now() ELSE review_code_attempts.started_at END, attempts = CASE WHEN review_code_attempts.started_at <= now() - interval '15 minutes' THEN 1 ELSE review_code_attempts.attempts + 1 END WHERE review_code_attempts.started_at <= now() - interval '15 minutes' OR review_code_attempts.attempts < 20 RETURNING attempts")
         .bind(account).fetch_optional(pool).await?;
     count
@@ -175,6 +175,14 @@ async fn reserve(
     }
     let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,pentest_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
         .bind(hash(&code)).fetch_optional(&mut *tx).await?.ok_or_else(unavailable)?;
+    let is_trial: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM trial_claims WHERE code_id=$1)")
+            .bind(saved.id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if is_trial && target.pentest_id().is_none() {
+        return Err(ApiError::bad("trial_requires_live_assessment"));
+    }
     if saved
         .issued_to
         .is_some_and(|recipient| recipient != account)

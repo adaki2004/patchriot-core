@@ -1,159 +1,98 @@
 # Patchriot
+
 **Defense before going live.**
 
-Patchriot runs managed security assessments for web applications. Verify your own domain, start a bounded test and inspect private findings with recorded evidence. Businesses can arrange a dedicated installation.
+Give us your website URL. Our hosted agents test it and return a private report: what they found, the evidence behind it and what to fix next. No local agent installation needed.
 
-> **DON’T TRUST! VERIFY!** Read the public source—or ask your own security agent to review it. Test your own deployment before sharing private material. Agent agreement is not proof of safety.
+**[Open Patchriot ↗](https://patchriot.tech)** · [How it works](https://patchriot.tech/#/docs/workflow) · [Testing FAQ](https://patchriot.tech/#/docs/safety)
 
-## First product
+## URL in. Evidence out.
 
-Our **web application assessment** is an automated first check before a human penetration test. Only test websites and systems you own and control. Enter their public HTTPS URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Successful DNS verification opens checkout automatically; staff can still block a request. Reports retain the recorded requests, findings and incomplete checks. The report separates numbered findings, each agent’s contribution, coverage and technical evidence. Missing assessments and execution limits stay visible; agent agreement is not presented as independent confirmation. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
+```mermaid
+flowchart LR
+    U[Your web app] --> V[Verify domain]
+    V --> C[Confirm team + coupon or payment]
+    C --> S[Scout investigates]
+    S --> R[Recon verifies]
+    R --> T{Further review?}
+    T -->|Yes| X[Verifier challenges]
+    T -->|No| P[Private report]
+    X --> P
+```
 
-Repeat findings appear once in the report, with each agent’s contribution and request references retained. Grouping requires matching titles and the same first cited request, including its method, URL and body inputs. Anonymous and test-account checks appear inside the same observation, with each access context labelled. Different severity or support stays marked for review; the highest reported severity is shown. Uncertain matches stay separate. PDF and Markdown use the same grouping; the evidence JSON preserves the original reports.
-
-The pilot is read-only by default. Dedicated test accounts can extend access through cookie-based form/JSON login, HTTP Basic or a bearer token. An explicit disposable-environment option permits bounded POST tests. Interactive browser login, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
-
-| Assessment | What you provide | Status |
+| Choose | You provide | You get |
 | --- | --- | --- |
-| **Black box** | A website or API URL and proof of control | First product |
-| **Grey box** | The URL and a dedicated test account | Cookie-based form/JSON login, HTTP Basic or bearer token; no interactive browser login |
-| **White box** | Source code plus an approved test environment | Planned; existing source-text review is a separate, limited tool |
-| **Dedicated installation** | Business requirements, hosting and access rules | By arrangement |
+| **Black box** | A deployed HTTPS URL + DNS ownership proof | Checks of public routes and exposed behavior |
+| **Grey box** | The same, plus a dedicated test account | Checks of account access with anonymous controls |
+| **White box** | Source + a deployment | Roadmap; not part of current onboarding |
 
-Private repository access is planned through a GitHub App installed on selected repositories, with read-only source access and a fixed commit for each assessment. Repository access does not authorize testing a deployed site. Source-assisted testing still needs explicit target scope and consent to share code with the selected operators and model provider.
+Scout maps the application. Recon checks leads with fresh requests. A reserved third agent reviews serious claims, disagreements or incomplete evidence. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
 
-**Discovery tools** include an adapted ARTEX engine in every new website request made through the UI. We reuse its pinned planner and tools inside Patchriot’s restricted runner; this is not an unrestricted ARTEX deployment. Scout runs discovery once. Recon uses those leads for fresh, targeted checks. A named third reviewer joins for serious findings, disagreement or incomplete evidence; all three devices are reserved at checkout. Older requests keep their original tool selection and three required stages.
+Download **PDF, Markdown, evidence JSON or observed endpoints**. Your first export starts a fixed 12-hour report deletion timer; repeated downloads do not extend it. Existing snapshot and source-text reports remain accessible.
 
-The engine shares the assessment's existing budgets and allowed HTTP methods. Reports record the tools actually run, versions, requests and early stops; they do not claim every upstream skill ran. An interrupted discovery run keeps its recorded evidence and leaves the assessment marked for review, even when later roles finish.
+## Two NEAR building blocks
 
-| Service | Who it is for |
-| --- | --- |
-| **Managed assessments** | Application owners. Patchriot operates the agents; users need only a browser and domain-control proof. Reports stay private. |
-| **Dedicated installations** | Businesses with separate services, agents, storage and agreed access rules. Setup is arranged with the team, not created automatically. |
+- **NEAR AI:** our Hermes agents use DeepSeek V4.1 Flash Abliterated in NEAR AI’s private, hardware-protected inference environment. The relay encrypts requests and verifies attestation and signed responses. This protects model inference; the Kali agents and report storage are separate.
+- **NEAR Intents:** checkout converts and settles supported crypto payments. The server confirms settlement before work starts. A browser transaction hash never grants access on its own.
 
-**Pairing is staff-only.** Public machines cannot join the managed service. Administrators connect the agents we operate. Existing approved devices continue to work. Relay connection details are available only to administrators, and the browser never receives the private core-to-dispatcher address.
+A disclosed Venice fallback can recover temporary model failures when the requester agrees. It is not a TEE route; usage appears in the report. [Data handling and retention →](https://patchriot.tech/#/docs/privacy)
 
-## Private inference with NEAR AI
-
-NEAR-backed agents use **DeepSeek V4.1 Flash 1017 Abliterated** on the [Private TEE route](https://near.ai/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated). The relay encrypts model messages, verifies the execution environment and checks signed responses before passing them to the agent. [NEAR AI](https://near.ai/) states that private inference does not log prompts or responses.
-
-This protects the model step, not the entire agent machine. Approved operators handle task content, and Patchriot stores reports under its own deletion policy. Previously saved reviews retain their disclosed providers; inspect them before consenting. See [privacy and retention](https://patchriot.tech/#/docs/privacy) and the [testing FAQ](https://patchriot.tech/#/docs/safety).
-
-## Components
-
-| Repository | Responsibility |
-| --- | --- |
-| **patchriot-core** | Website, accounts, NEAR Intents checkout, accounting and shared API types |
-| **patchriot-dispatcher** | Ownership checks, staff approval, assignments and private evidence |
-| **patchriot-relay** | Connects managed Kali agents; bounds tool access and verifies encrypted NEAR AI inference |
-
-Core is the product and integration entry point. Dispatcher and relay are separate repositories, currently private. Repository privacy does not protect runtime data; access controls, scope checks and isolation do. Deployment keys and customer records never belong in any repository.
+## The three parts
 
 ```mermaid
 flowchart LR
-  U[Application owner] --> C[Core: account and checkout]
-  C --> N[NEAR Intents: payment settlement]
-  C --> D[Dispatcher: approved scope]
-  D --> R[Relay + isolated Hermes on Kali]
-  R <-->|Encrypted model messages / verified response| T[NEAR AI Private TEE]
-  R --> E[Private evidence report]
-  E --> C
+    B[Browser] --> C[Core: accounts, checkout, reports]
+    C --> I[NEAR Intents]
+    C --> D[Dispatcher: permission + queue]
+    D --> R[Relay + isolated Hermes on Kali]
+    R <-->|Encrypted inference| N[NEAR AI Private TEE]
+    R -->|Evidence| D
+    D --> C
 ```
 
-The TEE covers model inference. The managed agent and its operator handle task content outside it. A dedicated business installation uses this same separation with its own services and storage.
-
-## Use Patchriot
-
-Open **App** to sign in with a configured GitHub or Google provider. Existing pilot accounts can still use their password. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** shows network activity and staff controls. Recent events are separately reviewed public research, never customer findings.
-
-For a live website test:
-
-1. Enter your own website URL and confirm that you own and control the target system. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
-2. Add the supplied TXT record for every domain. New requests allow up to seven days to arrange this; **Copy instructions for my developer** prepares the values to share. Select **Check DNS record** after the record is saved; the server checks for up to five minutes. The page shows the last lookup and remaining time, then offers a retry if no match was found. Returning from your DNS provider’s tab refreshes the status. A repeated click does not extend the window.
-3. Wait for domain verification, then confirm the named operators and disclosed model provider. Use a coupon or pay the quoted fee when checkout is enabled. Work queues automatically after access is confirmed.
-4. Inspect the private report, including evidence, gaps and disagreement. Download a PDF with a summary, scope, findings, recommendations, coverage limits and tool register. The PDF is generated in your browser without sending the report elsewhere. Markdown, original evidence JSON and a Postman inventory remain available under other downloads. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
-
-Public HTTPS websites and APIs are supported. Knowing a raw IP address or controlling reverse DNS is not proof that you own a server. General port scans and non-web services need a separate infrastructure-verification and testing policy; they are outside this product.
-
-DNS proof belongs to this account and exact request. New requests allow up to seven days for setup. Successful verification narrows permission to at most 24 hours, capped by the saved expiry. A proof cannot authorize another request or testing on other domains. Each request allows six refresh windows. Normal DNS propagation may take longer than one window. Access is rechecked when work starts and workers request evidence.
-
-Staff can explicitly authorize a configured owned test site for development. This is recorded separately from DNS proof, expires, and can be revoked. It does not start work, replace requester consent or bypass payment. Public requests still require DNS verification.
-
-**Hosted pilot:** [patchriot.tech](https://patchriot.tech). The website shows its configured sign-in methods and available features. Signing in does not replace domain verification. Features on a development branch may not be deployed yet. The local instructions below run a separate installation.
-
-## Enterprise inquiries
-
-Use **Discuss a dedicated setup** on the homepage to discuss a separate business installation. The form saves the inquiry in **Administration → Contact inbox**; it does not send automated email, create an account or approve testing. Only administrators can read or mark inquiries handled. Set `PATCHRIOT_CONTACT_EMAIL` to an inbox you operate to also show a public email link. When unset, the form remains available without inventing an address.
-
-The form accepts 10 submissions per socket peer per 15 minutes, 100 globally per 15 minutes and three per email per day. Caller-supplied forwarding headers cannot bypass these limits. Behind a proxy, the peer limit is shared. Contact and sign-in limits are separate.
-
-## How reviews work
-
-Finished website reports can offer an **optional NEAR AI report check** when dispatcher enables it. With the requester's consent, a separate model reviews finding excerpts for possible duplicates and unsupported claims. This advice does not change findings or run more tests. Download its signed input/output receipt from the same report; that export starts the same 12-hour deletion clock. Verification covers that model response, not the Kali agents, a particular physical machine or the truth of the findings. Finding excerpts can contain sensitive details, even though raw HTTP captures and saved login credentials are excluded.
-
-```mermaid
-flowchart LR
-  S[Verified scope and team consent] --> I[Scout: discover]
-  I --> R[Recon: reproduce with fresh evidence]
-  R --> D{Further review needed?}
-  D -->|Serious, disputed or incomplete| V[Verifier: challenge]
-  D -->|No| P[Private report]
-  V --> P
-```
-
-New live assessments require Scout and Recon. The reserved Verifier runs for high/critical findings, disagreement, unchecked claims or incomplete evidence, at no extra charge. The report records why it joined or was unnecessary. Existing live assessments and snapshot/source reviews keep three required roles. Shared infrastructure stays visible: three devices on one VPS are one shared machine, not three independent operators.
-
-New live tests run ready requests in order on each shared machine, with one active assignment at a time. Paid requests join that order when payment is confirmed. Waiting does not spend an agent's execution allowance: its clock starts when assigned. The report shows waiting, the active agent's deadline and the separate request expiry. Requests remain valid for at most 24 hours after admission or payment, and stop sooner if domain permission or test-account access expires. An unavailable assigned agent can be skipped in favor of other ready work; no replacement operator is silently added. Existing requests keep their original deadlines.
-
-**Private means access-controlled.** Assigned operators, service staff and consented model providers can see the data they process. Findings are not published automatically. The beta has produced incomplete reports and false positives, which remain visible for review.
-
-Live evidence allows up to 4 MiB of compact JSON per agent report. The full three-role report, downloads and internal payment/reward reads accept that combined size. Lists omit report bodies. The PDF remains a readable summary; original recorded evidence is in the JSON export. HTTP capture and excerpt limits still apply and shortening is marked explicitly.
-
-## Report downloads and deletion
-
-The requester’s first export of a finished report starts a fixed 12-hour deletion timer. PDF, Markdown, endpoint and evidence JSON exports all use the same authenticated `POST /api/reviews/:id/report` with `{}`, the session cookie, allowed Origin and CSRF token. A GET does not start an export. The timer records server acceptance, not confirmation that the browser saved the file. Repeated downloads never extend it; ordinary reads and staff exports do not start it.
-
-At expiry, report reads hide findings, HTTP evidence and tool output immediately. Dispatcher cleanup removes those fields from active storage within its next successful 30-second sweep. Small work receipts preserve earnings accounting; job state, consent, hashes and payment records remain. Browser-generated exports are not stored on the server. Existing reports acquire a deadline only when the requester exports them. Source uploads and snapshots retain their separate seven-day policy. Downloaded/operator/provider copies and database recovery media are outside this application-level deletion; configure and document backup retention for the deployment.
-
-Deploy dispatcher and its migration before core. Clients using the previous GET download route must use the explicit POST; this prevents prefetching or cross-site links from starting deletion.
-
-## Wallet sign-in and checkout
-
-Set `WC_REOWNED_PRJ_ID` to your Reown project ID and allow your exact website origin in that project. This enables Ethereum and Solana personal-wallet sign-in and WalletConnect/browser-wallet payments. Wallet code and its network connections load only after the user opens the wallet window. Contract-wallet sign-in is not supported in this release.
-
-Sign-in verifies a five-minute, single-use message bound to this website and browser. It creates a member account; it does not grant operator access or authorize payment. Google, GitHub and wallet identities stay separate. Connect a wallet during checkout to pay an existing account's order, or send the displayed amount manually without connecting. The server confirms payment through the existing NEAR Intents reconciliation before work starts; a browser transaction hash cannot credit an order.
-
-The wallet sends only the saved quote's exact USDC/USDT transfer on Ethereum or Solana mainnet, plus network gas. It requests no token allowance. Expired, changed or unsupported quotes stop before signing. An uncertain send result stays marked locally to prevent an accidental second payment; check the order and wallet before retrying. This local guard is not shared across browsers or devices.
-
-## Optional public page counts
-
-**Off by default.** Set `PATCHRIOT_ANALYTICS_ENABLED=true`, `PATCHRIOT_GA_MEASUREMENT_ID` and `PATCHRIOT_ANALYTICS_ORIGIN` to offer opt-in Google Analytics. Old measurement settings alone do not enable it. Leave the switch unset or set it to `false` to disable all analytics routes and delivery. Job, payment and service metrics do not require Google Analytics.
-
-The analytics origin must use a different hostname, routed to this same core service; it serves only the analytics frame, with all app and account routes blocked. A different port on the app hostname is insufficient. Only signed-out visits to Home, Docs and Recent events qualify; opening sign-in or private work removes the frame. **Privacy choices** lets visitors decline or withdraw consent. The choice stays in local storage for 180 days, without a user identifier.
-
-Google's script runs in a sandbox on that separate hostname. It cannot read the app document, host-only login cookie, storage or account API. Google needs this real origin even with cookie storage denied; a fully opaque frame loads its library but does not produce page counts. The frame receives a fixed public page name, never the actual URL, query, fragment, referrer, report or account. Advertising personalization and Google Signals are disabled. Google still receives the visitor's IP and basic browser information after opt-in. A measurement ID is public, not a credential or permission to read Analytics reports; forged traffic can still pollute counts. Disable Enhanced Measurement and advertising integrations in the Analytics property for simple page counts. This is optional traffic measurement, not a security monitor.
-
-## Testing limits
-
-Use a staging copy, disposable accounts and a recovery plan. Even a GET request can trigger side effects. The relay restricts hosts, methods, rate and time, but cannot guarantee a target stays unaffected. HTTP redirects do not expand scope; a reverse proxy can hide third-party services, so domain control alone is not permission to test everything behind it.
-
-The [testing FAQ](https://patchriot.tech/#/docs/safety) explains actual tools, stop controls, responsibilities and limitations. This is a developer tool, not professional security certification, a SOC 2 report or protection against every known or unknown vulnerability.
-
-## Implementation plan and status
-
-| Area | Current state |
+| Repository | Role |
 | --- | --- |
-| Website | Collective design, one App entry, personal dashboard, private reports and recent-events feed |
-| Enterprise | Public inquiry form and private staff inbox; optional configured contact email |
-| Access | GitHub/Google and personal-wallet sign-in, plus existing pilot accounts; staff-only pairing; domain verification before checkout and execution |
-| Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
-| Agents | Isolated Hermes on managed Kali; two required live roles and a third for escalation; legacy three-role reviews preserved |
-| Payments | Single-use codes, manual transfer or wallet checkout through NEAR Intents; 90/10 accounting and reserved operator withdrawals |
-| Existing tools | Approved saved-page and source-text reviews remain accessible |
-| In development | Broader OWASP checks and stronger reproduction coverage |
-| Later | Browser login flows, recurring checks, managed private networks and confidential execution |
+| **[Core](https://github.com/adaki2004/patchriot-core)** | This repo: website, sign-in, checkout, accounting and shared types |
+| **Dispatcher** | Private service: validates scope, schedules work and protects reports |
+| **[Relay](https://github.com/adaki2004/patchriot-relay)** | Connects our managed agents and enforces their tool limits |
 
-## Developer setup: run your own copy
+## Start a test
+
+1. Sign in at **[patchriot.tech](https://patchriot.tech)** and enter your own web app’s HTTPS URL.
+2. Add the supplied DNS TXT record. For grey box, add a disposable test account.
+3. Confirm the named team and providers. Use a coupon or pay the displayed quote.
+4. Follow progress, inspect the findings and download the report. Cancel from the app if needed.
+
+A free-test campaign offers **one requested coupon per account**, with a 24/48-hour claim window and an administrator-set total limit. Claiming does not start work. Coupons last seven days and do not create cash or funded operator rewards. Different sign-ins can represent one person, so the campaign cap is essential.
+
+> **DON’T TRUST! VERIFY!** Inspect the public source—or have your own security agent inspect it. Test only systems you own and control. This is an automated assessment with evidence, not a security certificate. Prefer staging and disposable data; even read requests can have side effects.
+
+## Implementation status
+
+| Ready | Next |
+| --- | --- |
+| Ownership-verified black-box and test-account assessments | Source-assisted repository reviews |
+| Isolated agents, live progress, cancellation, private reports | Interactive browser login and recurring checks |
+| NEAR AI inference, disclosed fallback, NEAR Intents checkout | Broader infrastructure testing |
+| Requested free trials, admin activity counts, 90/10 paid-work accounting | Self-service dedicated installations |
+
+## For developers and operators
+
+Use the hosted product to request a test. The sections below are for running a separate installation or maintaining this one. Secrets, private reports and deployment records do not belong in Git.
+
+<details>
+<summary>Free-trial operations and deployment order</summary>
+
+Apply core migration `0017_trial_campaign.sql`, deploy the dispatcher’s `/internal/admin/review-stats` route, then deploy core. Campaigns start closed. In **Administration → Audit activity**, choose 24 or 48 hours and a maximum number of sponsored assessments. Stop closes new claims; already issued coupons retain their original expiry.
+
+`GET /api/trial` reads the signed-in account’s offer. `POST /api/trial` with `{ "accepts_trial": true }` claims it, using the normal session, Origin and CSRF checks. Concurrent/repeated claims return one account-bound code. The existing `/api/pentests/:id/review-code` route still verifies scope and consent before reserving work. A trial cannot be used for legacy snapshot/source reviews. Admin campaign controls are under `/api/admin/trial` and activity totals under `/api/admin/review-stats`.
+
+Campaign claims retain their display code so the authenticated owner can recover a lost reply. Unlike transferable coupons, these codes are strictly bound to that account and grant no balance. Do not log codes or put them in URLs. Lifetime account eligibility survives campaign changes, expiry and cancellation.
+
+</details>
+
+<details>
+<summary>Developer setup: run your own copy</summary>
 
 This starts a separate local website and dispatcher. Beta testers will use the hosted website. Staff run the managed relays; self-hosters operate their own installation.
 
@@ -246,7 +185,10 @@ Before an upgrade, back up PostgreSQL and retain the installed binary and web fi
 
 **Pairing and agent information:** only administrators can open **Pair an agent** and claim managed devices during the beta. Set `PATCHRIOT_RELAY_ORIGIN` explicitly; the website never exposes the private dispatcher address as a fallback. A signed pairing challenge alone cannot enroll a device; staff must claim and approve it. **Agents** shows only approved devices’ OS, harness, model and heartbeat. It excludes operator profiles, hostnames, keys and customer work. Older relays display “Not reported” for OS.
 
-## Website evidence
+</details>
+
+<details>
+<summary>Website evidence</summary>
 
 Open **Request an audit → Check a website**, enter the HTTPS homepage origin, optionally add up to three script origins, and explain your permission to review the site. An admin must approve the exact scope before any collection. A checkbox alone is not proof of ownership.
 
@@ -273,7 +215,10 @@ The browser uses `/api/site-checks`, `/:id/decision`, `/:id/cancel` and `/:id/ev
 
 </details>
 
-## Private source review
+</details>
+
+<details>
+<summary>Private source review</summary>
 
 Under **Request an audit → Source code**, upload 1–12 UTF-8 files (16 KiB per file, 48 KiB total) and describe what needs checking. No archives, binaries, hidden paths or credentials. Names are labels, never extraction paths. Secret checks are conservative; you must remove sensitive values yourself.
 
@@ -285,7 +230,10 @@ Source JSON is stored privately in PostgreSQL for seven days. The owner can dele
 
 The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`, `/:id/review-plan`, `/:id/review`, `/:id/review-code` and `/:id/checkout`. Session, CSRF, payment and review-capacity rules match website reviews. Intake permits five retained uploads and 20 submissions per account per day, with 200 retained uploads overall. Deploy dispatcher first, then core, then opt-in relays using adapter 4–6. Existing website and example routes remain compatible.
 
-## Live website testing — approved pilot
+</details>
+
+<details>
+<summary>Live website testing — approved pilot</summary>
 
 Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. Adapted discovery tooling is included by default. Verification opens checkout without another staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff supplied one.
 
@@ -306,7 +254,10 @@ Each live role has one execution attempt. A lost delivery retries the saved resu
 
 </details>
 
-## Recent hacks and incidents
+</details>
+
+<details>
+<summary>Recent hacks and incidents</summary>
 
 **Administration → Incident desk** is available to admins. Add a dated entry with public HTTPS sources, choose **Reported**, **Confirmed by the cited source** or **Security advisory**, then save the draft. Check its preview and sources before publishing. Visitors can browse the latest 50 published entries in a table of short names, qualifying disclosures, categories and fixes. Select a row for the full account and source links; ↑/↓ moves between rows and Enter opens the details.
 
@@ -327,7 +278,10 @@ An optional `catalogue` adds `short_name`, `qualifying`, `category`, `fix`, a `r
 
 </details>
 
-## Price and payments
+</details>
+
+<details>
+<summary>Price and payments</summary>
 
 The intended beta offer is **$10 for one bounded live website, snapshot or source review**, or a **single-use coupon**. This covers the agreed assessment, not an unlimited audit or a promise that a site is safe. Codes and checkout are implemented. The deployment chooses whether checkout is enabled; a coupon can cover an approved pilot review.
 
@@ -483,7 +437,10 @@ Customer refund debits and automated refund execution are not implemented. Keep 
 
 </details>
 
-## Verify it
+</details>
+
+<details>
+<summary>Verify it</summary>
 
 GitHub checks run when a ready PR targets `main` and when that PR changes. Draft PRs and ordinary branch pushes do not run checks; newer PR commits cancel superseded runs. Run the commands below locally while developing.
 
@@ -509,7 +466,10 @@ The Rust checks cover sessions, isolation, signature boundaries, payment retries
 
 Use the same local service environment; browser smoke also needs `DATABASE_URL` and `PATCHRIOT_AUDIENCE`. These scripts use owned fixtures, not customer systems.
 
-## Repositories and license
+</details>
+
+<details>
+<summary>Repositories and license</summary>
 
 | Repository | Responsibility |
 | --- | --- |
@@ -517,11 +477,14 @@ Use the same local service environment; browser smoke also needs `DATABASE_URL` 
 | [Relay](https://github.com/adaki2004/patchriot-relay) | Device connection, local controls and execution |
 | [Dispatcher](https://github.com/adaki2004/patchriot-dispatcher) | Approval, assignments and review coordination |
 
-All three are private during development. Core is the product and integration entry point; dispatcher and relay have separate repository visibility. See the [component diagram](#components) for the managed NEAR AI path. Code visibility does not replace access controls or isolation. Approved operators can see assigned plaintext.
+All three are private during development. Core is the product and integration entry point; dispatcher and relay have separate repository visibility. See the [component diagram](#the-three-parts) for the managed NEAR AI path. Code visibility does not replace access controls or isolation. Approved operators can see assigned plaintext.
 
 Original code is [AGPL-3.0-only](LICENSE). The shared [protocol crate](crates/protocol) is [Apache-2.0](crates/protocol/LICENSE). Attribution is in [NOTICE](NOTICE). Credentials, customer source and reports stay out of Git.
 
-## Container deployment
+</details>
+
+<details>
+<summary>Container deployment</summary>
 
 `docker build -t patchriot-core:local .` builds the website and Rust server together. The image runs as an unprivileged user; supply runtime configuration through your deployment service, never build arguments. It listens on `PORT` (default `8080`) unless `PATCHRIOT_CORE_BIND` is set. Use `/api/health` for the service health check.
 
@@ -550,7 +513,10 @@ Venice describes this model as **anonymized**, not private: the upstream provide
 
 The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated) with end-to-end encryption and verified model-response signatures. Hermes receives a reply only after verification passes. This protects and verifies the model-service exchange; it does not attest the Kali host, hide task content from its operator or prove a finding is correct. The optional report check is a separate, requester-approved step.
 
-## Conditional live review
+</details>
+
+<details>
+<summary>Conditional live review</summary>
 
 New live checkout uses `investigate_verify_v1`: Scout investigates and Recon verifies. A third, pre-consented Verifier runs for high/critical findings, disagreement, an unchecked claim or incomplete evidence. The dispatcher records its reasons before scheduling the third role. It compares exact claim titles and cited requests conservatively; it does not infer that similarly worded claims are the same. Discovery tools run once; later agents use fresh scoped requests. An incomplete earlier stage remains incomplete even if a later report arrives.
 
@@ -565,3 +531,38 @@ A temporary NEAR failure can use one backup completion, then keep that role on V
 Deployment: update core, dispatcher/gateway and relay; configure the private Venice key on managed NEAR relays; then set `PATCHRIOT_VENICE_FALLBACK_ENABLED=true` on dispatcher. See the relay README for exact configuration and provider pricing. No new migration is needed.
 
 The relay also checks buffered NEAR responses for the repetition pattern that stops Hermes. With prior Venice consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.
+
+</details>
+
+<details>
+<summary>Wallet sign-in and checkout</summary>
+
+Set `WC_REOWNED_PRJ_ID` to your Reown project ID and allow your exact website origin in that project. This enables Ethereum and Solana personal-wallet sign-in and WalletConnect/browser-wallet payments. Wallet code and its network connections load only after the user opens the wallet window. Contract-wallet sign-in is not supported in this release.
+
+Sign-in verifies a five-minute, single-use message bound to this website and browser. It creates a member account; it does not grant operator access or authorize payment. Google, GitHub and wallet identities stay separate. Connect a wallet during checkout to pay an existing account's order, or send the displayed amount manually without connecting. The server confirms payment through the existing NEAR Intents reconciliation before work starts; a browser transaction hash cannot credit an order.
+
+The wallet sends only the saved quote's exact USDC/USDT transfer on Ethereum or Solana mainnet, plus network gas. It requests no token allowance. Expired, changed or unsupported quotes stop before signing. An uncertain send result stays marked locally to prevent an accidental second payment; check the order and wallet before retrying. This local guard is not shared across browsers or devices.
+
+</details>
+
+<details>
+<summary>Optional public page counts</summary>
+
+**Off by default.** Set `PATCHRIOT_ANALYTICS_ENABLED=true`, `PATCHRIOT_GA_MEASUREMENT_ID` and `PATCHRIOT_ANALYTICS_ORIGIN` to offer opt-in Google Analytics. Old measurement settings alone do not enable it. Leave the switch unset or set it to `false` to disable all analytics routes and delivery. Job, payment and service metrics do not require Google Analytics.
+
+The analytics origin must use a different hostname, routed to this same core service; it serves only the analytics frame, with all app and account routes blocked. A different port on the app hostname is insufficient. Only signed-out visits to Home, Docs and Recent events qualify; opening sign-in or private work removes the frame. **Privacy choices** lets visitors decline or withdraw consent. The choice stays in local storage for 180 days, without a user identifier.
+
+Google's script runs in a sandbox on that separate hostname. It cannot read the app document, host-only login cookie, storage or account API. Google needs this real origin even with cookie storage denied; a fully opaque frame loads its library but does not produce page counts. The frame receives a fixed public page name, never the actual URL, query, fragment, referrer, report or account. Advertising personalization and Google Signals are disabled. Google still receives the visitor's IP and basic browser information after opt-in. A measurement ID is public, not a credential or permission to read Analytics reports; forged traffic can still pollute counts. Disable Enhanced Measurement and advertising integrations in the Analytics property for simple page counts. This is optional traffic measurement, not a security monitor.
+
+</details>
+
+<details>
+<summary>Report downloads and deletion</summary>
+
+The requester’s first export of a finished report starts a fixed 12-hour deletion timer. PDF, Markdown, endpoint and evidence JSON exports all use the same authenticated `POST /api/reviews/:id/report` with `{}`, the session cookie, allowed Origin and CSRF token. A GET does not start an export. The timer records server acceptance, not confirmation that the browser saved the file. Repeated downloads never extend it; ordinary reads and staff exports do not start it.
+
+At expiry, report reads hide findings, HTTP evidence and tool output immediately. Dispatcher cleanup removes those fields from active storage within its next successful 30-second sweep. Small work receipts preserve earnings accounting; job state, consent, hashes and payment records remain. Browser-generated exports are not stored on the server. Existing reports acquire a deadline only when the requester exports them. Source uploads and snapshots retain their separate seven-day policy. Downloaded/operator/provider copies and database recovery media are outside this application-level deletion; configure and document backup retention for the deployment.
+
+Deploy dispatcher and its migration before core. Clients using the previous GET download route must use the explicit POST; this prevents prefetching or cross-site links from starting deletion.
+
+</details>

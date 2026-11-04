@@ -10,7 +10,7 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function readRoute(): Route {
   const [view, id, report, ...extra] = window.location.hash.replace(/^#\//, '').split('/');
   if (!views.includes(view as View) || extra.length) return home;
-  if (view === 'docs' && !report && ['deployment', 'verify', 'architecture'].includes(id)) return { view: 'docs', id: 'infrastructure', report: false };
+  if (view === 'docs' && !report && ['deployment', 'verify', 'architecture', 'agents'].includes(id)) return { view: 'docs', id: 'infrastructure', report: false };
   if (view === 'docs') return !report && (id === undefined || isDocPage(id)) ? { view: 'docs', id: id ?? 'start', report: false } : home;
   if (id !== undefined && (!['reviews', 'sites', 'pentests', 'sources', 'orders'].includes(view) || !uuid.test(id))) return home;
   if (report !== undefined && (view !== 'orders' || report !== 'report')) return home;

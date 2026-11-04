@@ -64,3 +64,17 @@
 @media (max-width: 1120px) {.workspace-metrics { gap: 12px; }.workspace-metrics > * { grid-template-columns: 28px 1fr; padding: 17px 12px 12px; gap: 9px; }.workspace-metrics > * > div > span { font-size: 10px; }.workspace-metrics strong { font-size: 24px; }.workspace-metrics > * > small { font-size: 9px; }.work-card { padding: 20px 18px 16px; }.workspace-cards { gap: 16px; } }
 @media (max-width: 850px) {.workspace-metrics > * { grid-template-columns: 35px 1fr; }.workspace-heading h1 { font-size: 27px; }.workspace-heading { margin-bottom: 24px; }.workspace-cards { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } }
 @media (max-width: 640px) {.workspace-heading { align-items: start; gap: 12px; }.workspace-heading h1 { font-size: 23px; letter-spacing: -.5px; }.workspace-heading .section-kicker { font-size: 9px; }.workspace-heading > div > p:last-child { font-size: 11px; }.workspace-heading > .primary { font-size: 0; padding: 10px; border-radius: 50%; width: 40px; min-height: 40px; gap: 0; }.workspace-heading > .primary svg { width: 20px; height: 20px; }.workspace-metrics { grid-template-columns: 1fr 1fr; gap: 12px; }.workspace-metrics > * { padding: 16px 13px 12px; }.workspace-metrics > * > div > span { font-size: 11px; }.workspace-metrics strong { font-size: 26px; }.workspace-metrics > * > small { font-size: 9px; }.workspace-cards { grid-template-columns: 1fr; }.work-card { padding: 20px 18px 15px; }.workspace-contribute { padding: 24px 21px; flex-direction: column; align-items: start; }.workspace-contribute h2 { font-size: 20px; line-height: 1.35; }.workspace-footnote { font-size: 9px; text-align: center; } }
+
+/* A coupon is requested deliberately, separate from creating or starting work. */
+.trial-card { margin: 1.5rem 0; padding: clamp(1.2rem,3vw,2rem); border: 1px solid #6c89d6; border-left: 4px solid #dc675e; background: #edf1fc; color: #152139; display: grid; gap: .8rem; }
+.textmode-ui .trial-card h2 { font-family: var(--font-body, sans-serif); font-size: 1.5rem; margin: .25rem 0 .5rem; letter-spacing: -.025em; color: #152139; }
+.trial-card p { margin: 0; max-width: 65ch; }
+.textmode-ui .trial-card .fine, .textmode-ui .trial-card .section-kicker { color: #4d5c77; }
+.trial-card .primary { justify-self: start; }
+.trial-code { display: block; overflow-wrap: anywhere; font-size: .85rem; padding: .8rem 0; user-select: all; }
+.trial-admin { margin-top: 2rem; }
+.trial-admin .workspace-metrics { margin: 1rem 0; }
+.trial-settings { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 1.2rem 0; }
+.trial-settings label { display: grid; gap: .5rem; }
+.admin-stats .workspace-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+@media(max-width:600px){.admin-stats .workspace-metrics{grid-template-columns:repeat(2,minmax(0,1fr));}.trial-settings>*{width:100%;}}
