@@ -79,8 +79,8 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
     <svg className="coordination-map" viewBox="0 0 880 410" role="img" aria-label="Your verified website connects through the dispatcher to isolated Hermes agents. Encrypted model requests go to NEAR AI; private evidence returns to you.">
       <defs><pattern id={grid} width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="currentColor" strokeOpacity=".09" /></pattern></defs>
       <rect width="880" height="410" fill={`url(#${grid})`} />
-      <rect className="map-boundary" x="30" y="65" width="570" height="300" rx="8" />
-      <text x="50" y="94" className="map-caption">PATCHRIOT / MANAGED AGENTS</text>
+      <rect className="map-boundary" x="230" y="65" width="370" height="300" rx="8" />
+      <text x="250" y="94" className="map-caption">PATCHRIOT / MANAGED AGENTS</text>
       <rect className="map-tee-boundary" x="655" y="105" width="190" height="180" rx="12" />
       {paths.map((path, index) => <g key={path}><path className={`map-link link-${index % 2}`} d={path} />{!stopped && <rect x="-3" y="-3" width="6" height="6" className="map-packet"><animateMotion dur={`${4 + index % 3}s`} begin={`${-index * .7}s`} repeatCount="indefinite" path={path} /></rect>}</g>)}
       {[{x:110,title:'YOUR WEB APP',detail:'VERIFIED SCOPE'}, {x:300,title:'DISPATCHER',detail:'PERMISSION + QUEUE'}, {x:510,title:'KALI + HERMES',detail:'ISOLATED AGENTS'}, {x:750,title:'NEAR AI',detail:'PRIVATE TEE'}].map(({x,title,detail},i) => <g key={title} transform={`translate(${x},200)`}>
