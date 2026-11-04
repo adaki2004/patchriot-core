@@ -32,6 +32,7 @@ async fn seed(test: &TestApp, account: Uuid) -> (Uuid, Uuid, Uuid) {
         source_id: None,
         pentest_id: None,
         consent: CreateWebsiteReview {
+            allows_venice_fallback: false,
             review_policy: Default::default(),
             request_id: request,
             snapshot_sha256: "a".repeat(64),

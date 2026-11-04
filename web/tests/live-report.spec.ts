@@ -424,3 +424,26 @@ test('queue waiting and active role deadlines are explained separately', async (
   await expect(page.getByText(/Work must stop if permission or test-account access expires/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test('Venice recovery is disclosed on the report and readable export', async ({page}) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r=>r.fulfill({json:{account:{id,display_name:'Owner',role:'member'},csrf_token:'test-csrf'}}));
+  const routed={...result,execution:{...result.execution,provider:'near.ai',model:'deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated',fallback:{model:'deepseek-v4-1-flash-1017-uncensored',reason:'provider_rate_limited',primary_attempts:1,fallback_attempts:4,fallback_completed:4}}};
+  const review={id,mode:'pentest_agent',state:'needs_review',created_at:1793640000,deadline_at:1793643000,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Owned fixture'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'near.ai',allows_venice_fallback:true},
+    steps:[{role:'investigator',state:'completed',evidence_complete:true,result:routed}]};
+  await mockExport(page,review);
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  await expect(page.getByRole('status').filter({hasText:'Venice recovery was attempted'})).toContainText('Backup inference is not NEAR TEE execution.');
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Venice fallback:'})).toContainText('4 completed replies');
+  await page.getByText('Other downloads & test details', {exact:true}).click();
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report ↓'}).click();
+  const file=await download;
+  const body=await readFile((await file.path())!,'utf8');
+  expect(body).toContain('deepseek-v4-1-flash-1017-uncensored');
+  expect(body).toContain('4 completed replies from 4 attempts; 1 NEAR attempts.');
+  expect(body).toContain('not NEAR TEE execution');
+});

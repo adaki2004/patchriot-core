@@ -138,6 +138,8 @@ fn matches(
         && terms.consent.device_ids == input.consent.device_ids
         && terms.consent.accepts_operator_access == input.consent.accepts_operator_access
         && terms.consent.accepts_provider_access == input.consent.accepts_provider_access
+        && terms.consent.allows_venice_fallback == input.consent.allows_venice_fallback
+        && terms.consent.review_policy == input.consent.review_policy
         && terms.payment.quote_request["originAsset"] == input.origin_asset
         && terms.payment.quote_request["refundTo"] == input.refund_address
         && terms

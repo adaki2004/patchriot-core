@@ -95,7 +95,8 @@ pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, Che
     if ReviewTarget::from_ids(Some(terms.site_check_id), terms.source_id, terms.pentest_id)
         .is_none()
         || (terms.pentest_id.is_some() && !terms.consent.accepts_provider_access)
-        || (terms.pentest_id.is_none() && !terms.consent.review_policy.is_legacy())
+        || (terms.pentest_id.is_none()
+            && (!terms.consent.review_policy.is_legacy() || terms.consent.allows_venice_fallback))
         || terms.payment.account_id.is_nil()
         || terms.consent.request_id.is_nil()
         || terms.consent.request_id != terms.payment.request_id

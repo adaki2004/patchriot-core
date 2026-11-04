@@ -536,7 +536,7 @@ The **Coverage & tools** tab and PDF include versioned check results: completed,
 
 ### Inference providers
 
-A live agent declares `abliterated-model-large-v2` at Abliteration, `abliteration-abliterated-model-large-v2` at Venice, or `deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated` at NEAR AI. Checkout shows each route; the saved team and report keep it. Switching providers requires a separately paired device and fresh consent. Existing requests keep their original devices. The first two routes use the same upstream model family, so they do not establish independent model diversity.
+A live agent declares `abliterated-model-large-v2` at Abliteration, `abliteration-abliterated-model-large-v2` at Venice, or `deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated` at NEAR AI. Checkout shows each route; the saved team and report keep it. Changing the primary provider requires a separately paired device and fresh consent. Optional NEAR-to-Venice recovery uses the separate saved permission below. Existing requests keep their original devices. The first two routes use the same upstream model family, so they do not establish independent model diversity.
 
 Venice describes this model as **anonymized**, not private: the upstream provider receives the content. We do not claim upstream zero retention, TEE execution or end-to-end encryption for it. The relay disables provider web search/scraping, added system prompts, storage and model fallbacks. See [Venice privacy](https://docs.venice.ai/overview/privacy). Deleting a Patchriot report does not recall copies already processed by operators or providers.
 
@@ -547,3 +547,11 @@ The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/D
 New live checkout uses `investigate_verify_v1`: Scout investigates and Recon verifies. A third, pre-consented Verifier runs for high/critical findings, disagreement, an unchecked claim or incomplete evidence. The dispatcher records its reasons before scheduling the third role. It compares exact claim titles and cited requests conservatively; it does not infer that similarly worded claims are the same. Discovery tools run once; later agents use fresh scoped requests. An incomplete earlier stage remains incomplete even if a later report arrives.
 
 Checkout names all three available devices so escalation never sends private material to a new operator. The third execution is included in the displayed service price. Report progress, exports and the ledger count only required roles. Clients that omit `review_policy`, saved orders, snapshots and source reviews retain three roles. Deploy the updated dispatcher/gateway before core; core requires migration 0014. No relay capability or automatic retry is added by this policy.
+
+### Inference recovery
+
+When the dispatcher enables Venice recovery, checkout names NEAR as primary and Venice’s DeepSeek V4.1 Flash 1017 Uncensored as backup. The requester’s consent and payment terms save that permission. Existing requests do not gain a new provider automatically.
+
+A temporary NEAR failure can use one backup completion, then keep that role on Venice. It consumes one logical model call; both provider attempts still count toward the spending cap. Reports and exports identify the backup, its trigger and completed replies. Venice inference is not presented as NEAR TEE execution. Invalid signatures, scope failures and exhausted budgets remain hard stops.
+
+Deployment: update core, dispatcher/gateway and relay; configure the private Venice key on managed NEAR relays; then set `PATCHRIOT_VENICE_FALLBACK_ENABLED=true` on dispatcher. See the relay README for exact configuration and provider pricing. No new migration is needed.

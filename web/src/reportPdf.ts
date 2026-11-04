@@ -1,3 +1,4 @@
+import { fallbackDescription } from './LiveReport';
 import { coverageChecks, checkLabels, findingRequest } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
@@ -122,7 +123,8 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.paragraph(roleOutcome(s).detail);
     if (!s.result) continue;
     p.paragraph(`${s.result.evidence.length} recorded requests · ${s.result.execution.inference_calls} model calls · ${Math.round(s.result.execution.duration_ms / 1000)} seconds`, 9, muted);
-    p.label('Provider / model', `${s.result.execution.provider} / ${s.result.execution.model}`);
+    if (s.result.execution.fallback) p.paragraph(fallbackDescription(s.result.execution.fallback), 9, muted);
+    p.label('Primary provider / model', `${s.result.execution.provider} / ${s.result.execution.model}`);
     p.paragraph(s.result.assessment?.summary ?? 'No usable assessment was returned. Request and tool records do not by themselves establish a vulnerability.');
     const refs = summary.findings.filter(f => f.contributions.some(c => c.role === s.role)).map(f => f.id);
     if (refs.length) p.paragraph(`Observations: ${refs.join(', ')}`, 10, blue);

@@ -42,6 +42,8 @@ pub struct CreateWebsiteReview {
     /// on older snapshot/source consent so saved payment terms remain stable.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub accepts_provider_access: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allows_venice_fallback: bool,
     /// Applies only to live tests; snapshot/source reviews always use three roles.
     #[serde(
         default,
@@ -58,6 +60,7 @@ impl From<crate::pentests::StartPentest> for CreateWebsiteReview {
             device_ids: input.device_ids,
             accepts_operator_access: input.accepts_operator_access,
             accepts_provider_access: input.accepts_provider_access,
+            allows_venice_fallback: input.allows_venice_fallback,
             review_policy: input.review_policy,
         }
     }
@@ -71,6 +74,7 @@ impl From<CreateWebsiteReview> for crate::pentests::StartPentest {
             device_ids: input.device_ids,
             accepts_operator_access: input.accepts_operator_access,
             accepts_provider_access: input.accepts_provider_access,
+            allows_venice_fallback: input.allows_venice_fallback,
             review_policy: input.review_policy,
         }
     }

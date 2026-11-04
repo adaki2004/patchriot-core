@@ -24,6 +24,8 @@ pub struct WorkReceipt {
     pub terminal_calls: u16,
     pub http_requests: u16,
     pub cleanup_confirmed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<crate::pentests::VeniceFallbackReceipt>,
 }
 
 impl WorkReceipt {
@@ -44,6 +46,7 @@ impl WorkReceipt {
                     terminal_calls: 0,
                     http_requests: r.execution.http_requests,
                     cleanup_confirmed: r.execution.cleanup_confirmed,
+                    fallback: r.execution.fallback.clone(),
                 });
             }
             _ => return None,
@@ -58,6 +61,7 @@ impl WorkReceipt {
             terminal_calls: run.terminal_calls,
             http_requests: 0,
             cleanup_confirmed: run.cleanup_confirmed,
+            fallback: None,
         })
     }
 
@@ -71,6 +75,11 @@ impl WorkReceipt {
             && self.model.len() <= 240
             && !self.model.chars().any(char::is_control)
             && self.duration_ms <= crate::MAX_AGENT_RESULT_DURATION_MS
+            && self.fallback.as_ref().is_none_or(|receipt| {
+                mode == "pentest_agent"
+                    && self.model == crate::pentests::LiveProvider::NearDeepSeek.model()
+                    && receipt.valid(self.inference_calls)
+            })
             && if mode == "pentest_agent" {
                 self.inference_calls <= crate::pentests::MAX_LIVE_INFERENCE_CALLS
                     && usize::from(self.http_requests) <= crate::pentests::MAX_HTTP_REQUESTS
