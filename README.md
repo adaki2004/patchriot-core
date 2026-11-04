@@ -22,7 +22,9 @@ The pilot is read-only by default. Dedicated test accounts can extend access thr
 
 Private repository access is planned through a GitHub App installed on selected repositories, with read-only source access and a fixed commit for each assessment. Repository access does not authorize testing a deployed site. Source-assisted testing still needs explicit target scope and consent to share code with the selected operators and model provider.
 
-**Discovery tools** include an adapted ARTEX engine in every new website request made through the UI. We reuse its pinned planner and tools inside Patchriot’s restricted runner; this is not an unrestricted ARTEX deployment. Checkout requires a team of three compatible agents; older saved requests keep their original tool selection. With relay adapter 9, Scout runs the discovery scanners and engine once. Recon and Verifier use that record to choose fresh, targeted checks instead of repeating the full scan. The pinned engine runs inside the task container and shares the assessment's existing budgets. Only approved HTTP methods can reach the target. The report records tool versions, requests, output and early stops. This does not run every upstream skill or optional tool. An interrupted discovery run keeps its evidence and leaves the overall assessment marked for review, even when later roles finish.
+**Discovery tools** include an adapted ARTEX engine in every new website request made through the UI. We reuse its pinned planner and tools inside Patchriot’s restricted runner; this is not an unrestricted ARTEX deployment. Scout runs discovery once. Recon uses those leads for fresh, targeted checks. A named third reviewer joins for serious findings, disagreement or incomplete evidence; all three devices are reserved at checkout. Older requests keep their original tool selection and three required stages.
+
+The engine shares the assessment's existing budgets and allowed HTTP methods. Reports record the tools actually run, versions, requests and early stops; they do not claim every upstream skill ran. An interrupted discovery run keeps its recorded evidence and leaves the assessment marked for review, even when later roles finish.
 
 | Service | Who it is for |
 | --- | --- |
@@ -62,7 +64,7 @@ The TEE covers model inference. The managed agent and its operator handle task c
 
 ## Use Patchriot
 
-Open **App** to sign in with GitHub or Google. Existing pilot accounts can still use their password. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** shows network activity and staff controls. Recent events are separately reviewed public research, never customer findings.
+Open **App** to sign in with a configured GitHub or Google provider. Existing pilot accounts can still use their password. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** shows network activity and staff controls. Recent events are separately reviewed public research, never customer findings.
 
 For a live website test:
 
@@ -77,7 +79,7 @@ DNS proof belongs to this account and exact request. New requests allow up to se
 
 Staff can explicitly authorize a configured owned test site for development. This is recorded separately from DNS proof, expires, and can be revoked. It does not start work, replace requester consent or bypass payment. Public requests still require DNS verification.
 
-**Hosted pilot:** [patchriot.tech](https://patchriot.tech). Accounts require approval. Features on a development branch may not be deployed yet; the website shows the options currently available. The local instructions below run a separate installation.
+**Hosted pilot:** [patchriot.tech](https://patchriot.tech). The website shows its configured sign-in methods and available features. Signing in does not replace domain verification. Features on a development branch may not be deployed yet. The local instructions below run a separate installation.
 
 ## Enterprise inquiries
 
@@ -89,9 +91,17 @@ The form accepts 10 submissions per socket peer per 15 minutes, 100 globally per
 
 Finished website reports can offer an **optional NEAR AI report check** when dispatcher enables it. With the requester's consent, a separate model reviews finding excerpts for possible duplicates and unsupported claims. This advice does not change findings or run more tests. Download its signed input/output receipt from the same report; that export starts the same 12-hour deletion clock. Verification covers that model response, not the Kali agents, a particular physical machine or the truth of the findings. Finding excerpts can contain sensitive details, even though raw HTTP captures and saved login credentials are excluded.
 
-![Review flow: scope, permission, team consent, three roles and inspectable evidence.](web/public/diagrams/review-flow.png)
+```mermaid
+flowchart LR
+  S[Verified scope and team consent] --> I[Scout: discover]
+  I --> R[Recon: reproduce with fresh evidence]
+  R --> D{Further review needed?}
+  D -->|Serious, disputed or incomplete| V[Verifier: challenge]
+  D -->|No| P[Private report]
+  V --> P
+```
 
-An investigator makes a claim, a reproducer checks it and a challenger questions it. Prefer different operators and models; disclose shared infrastructure. Three devices on one VPS are one shared machine, not three independent operators.
+New live assessments require Scout and Recon. The reserved Verifier runs for high/critical findings, disagreement, unchecked claims or incomplete evidence, at no extra charge. The report records why it joined or was unnecessary. Existing live assessments and snapshot/source reviews keep three required roles. Shared infrastructure stays visible: three devices on one VPS are one shared machine, not three independent operators.
 
 New live tests run ready requests in order on each shared machine, with one active assignment at a time. Paid requests join that order when payment is confirmed. Waiting does not spend an agent's execution allowance: its clock starts when assigned. The report shows waiting, the active agent's deadline and the separate request expiry. Requests remain valid for at most 24 hours after admission or payment, and stop sooner if domain permission or test-account access expires. An unavailable assigned agent can be skipped in favor of other ready work; no replacement operator is silently added. Existing requests keep their original deadlines.
 
@@ -127,9 +137,9 @@ The [testing FAQ](https://patchriot.tech/#/docs/safety) explains actual tools, s
 | --- | --- |
 | Website | Collective design, one App entry, personal dashboard, private reports and recent-events feed |
 | Enterprise | Public inquiry form and private staff inbox; optional configured contact email |
-| Access | Approved accounts; staff-only pairing; domain verification before live-test approval and execution |
+| Access | Configurable GitHub/Google sign-in and existing pilot accounts; staff-only pairing; domain verification before checkout and execution |
 | Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
-| Agents | Isolated Hermes execution and a three-role live HTTP pilot on managed Kali machines |
+| Agents | Isolated Hermes on managed Kali; two required live roles and a third for escalation; legacy three-role reviews preserved |
 | Payments | Single-use codes and NEAR Intents checkout for live, snapshot and source reviews; 90/10 accounting and reserved operator withdrawals |
 | Existing tools | Approved saved-page and source-text reviews remain accessible |
 | In development | Broader OWASP checks, clearer evidence packs and public deployment |
@@ -269,7 +279,9 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 ## Live website testing — approved pilot
 
-Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. ARTEX is included by default. Verification lets the requester proceed to checkout without a staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff gave your account a coupon. Confirm the three named operators and, separately, permission to send the task and responses to the **inference providers shown for that team**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
+Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. Adapted discovery tooling is included by default. Verification opens checkout without another staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff supplied one.
+
+Confirm the three named devices, their operators and the **inference providers shown for that team**. Scout and Recon run in sequence; the reserved Verifier joins when the escalation checks require it. Open the private report to inspect findings and recorded requests, download it or cancel unfinished work. Recommended fixes can include code examples; these remain untested suggestions displayed as inert text.
 
 This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v1** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes stay read-only. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
@@ -278,7 +290,7 @@ Live assessments use the same access policy as snapshot and source reviews: `pil
 <details>
 <summary><strong>Deployment and API details</strong></summary>
 
-Deploy the current dispatcher first, including migrations `0013` (domain ownership) and `0014` (live progress), then core and adapter **6** relays. Migrations run at service startup. Each device needs private-work approval, a matching hosted model declaration and the separate `--live-tests` opt-in. The [relay guide](https://github.com/adaki2004/patchriot-relay#opt-in-to-live-website-tests) explains its private provider configuration. Existing local-model modes still work and cannot silently receive live tasks.
+Deploy matching dispatcher and agent-gateway versions before core. Migrations run at service startup. Use the current adapter **11** image and relay for the managed NEAR route. Each device needs private-work approval, a matching hosted model declaration and the separate `--live-tests` opt-in. The [relay guide](https://github.com/adaki2004/patchriot-relay#opt-in-to-live-website-tests) explains provider configuration. Older requests keep their saved capabilities and review policy; offline local-model modes cannot silently receive live tasks.
 
 The browser uses `/api/pentests`, `/:id/decision`, `/:id/review-plan` and `/:id/review`. Writes require a session, same origin and CSRF; approval is admin-only, while consent and starting a test belong to the requester. Approval expires after 24 hours. Changing origins or the objective requires a new approval. Revocation, cancellation or removed device approval stops new evidence downloads and lease renewals. A request already sent cannot be recalled.
 
