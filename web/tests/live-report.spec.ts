@@ -15,6 +15,15 @@ const result: LiveResult = {
   evidence: [{ id: 1, method: 'GET', url: 'https://owned.example/debug?token=synthetic-value', status: 200, request_headers: {}, headers: { 'content-type': 'application/json' }, body_excerpt: '{"debug":"fixture"}', body_sha256: 'b'.repeat(64), observed_at: 1793640000, truncated: false, error: null }, { id: 2, method: 'GET', url: 'https://owned.example/control', status: 404, headers: {}, body_excerpt: 'Not found', truncated: false, error: null }], raw_summary: '',
 };
 
+test('two completed reports are complete only for the resolved conditional policy', async () => {
+  const report: ReportInput = { id, state:'completed', created_at:1793640000, origins:['https://owned.example'], review_policy:'investigate_verify_v1', third_review:{reasons:[]}, steps: (['investigator','reproducer'] as const).map(role=>({role,state:'completed',result,evidence_complete:true})) };
+  expect(reportSummary(report).partial).toBe(false);
+  expect(reportSummary(report).description).toContain('2 of 2 agents');
+  expect(reportSummary({...report,third_review:undefined}).partial).toBe(true);
+  expect(reportSummary({...report,review_policy:undefined,third_review:undefined}).partial).toBe(true);
+  expect(reportSummary({...report,third_review:{reasons:['serious_finding']}}).description).toContain('2 of 3 agents');
+});
+
 async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false) {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role: 'member' }, csrf_token: 'test-csrf' } }));

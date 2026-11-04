@@ -145,6 +145,7 @@ async fn reserve(
     }
     let consent = &input.consent;
     if (target.pentest_id().is_some() && !consent.accepts_provider_access)
+        || (target.pentest_id().is_none() && !consent.review_policy.is_legacy())
         || !consent.accepts_operator_access
         || consent.device_ids.len() != 3
         || consent

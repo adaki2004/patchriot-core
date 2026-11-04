@@ -1,5 +1,5 @@
-//! Allocate only completed, paid reviews. Payment is for three completed role
-//! reports, not agreement with a verdict or a count of alleged vulnerabilities.
+//! Allocate only completed, paid reviews. Payment is for the completed roles
+//! required by the consented policy, not agreement or a finding count.
 //! Runtime is an operator report, never a multiplier for earnings.
 
 use super::*;
@@ -36,7 +36,13 @@ struct RoleCredit {
 }
 
 fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static str> {
-    if view.state != "completed" || view.steps.len() != 3 || amount < 10 {
+    let required = match &view.pentest {
+        Some(context) => context
+            .resolved_role_count()
+            .ok_or("unresolved_review_policy")?,
+        None => 3,
+    };
+    if view.state != "completed" || view.steps.len() != required || amount < 10 {
         return Err("review_not_complete");
     }
     let (people, hash) = match (&view.website, &view.source, &view.pentest) {
@@ -56,6 +62,7 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
         ReviewRole::Challenger,
     ]
     .into_iter()
+    .take(required)
     .enumerate()
     {
         let step = view
@@ -157,7 +164,7 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
             role: role.as_str(),
             operator: person.operator_id,
             device: person.device_id,
-            amount: total / 3 + i64::from((index as i64) < total % 3),
+            amount: total / required as i64 + i64::from((index as i64) < total % required as i64),
             reported_duration_ms: i64::try_from(duration)
                 .map_err(|_| "earning_duration_invalid")?,
             reported_model: model.clone(),
@@ -171,9 +178,31 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
         .map(|r| r.device)
         .collect::<std::collections::HashSet<_>>()
         .len()
-        != 3
+        != required
     {
         return Err("earning_duplicate_device");
+    }
+    if let Some(context) = &view.pentest
+        && !context.review_policy.is_legacy()
+        && !view.retention.as_ref().is_some_and(|r| r.content_deleted)
+    {
+        let result = |role| {
+            view.steps
+                .iter()
+                .find(|s| s.role == role)
+                .and_then(|s| match &s.result {
+                    Some(WorkResult::Pentest(r)) => Some(r),
+                    _ => None,
+                })
+        };
+        let decision = patchriot_protocol::pentests::review_policy::decide(
+            &context.scope,
+            result(ReviewRole::Investigator).ok_or("earning_result_mismatch")?,
+            result(ReviewRole::Reproducer).ok_or("earning_result_mismatch")?,
+        );
+        if context.third_review.as_ref() != Some(&decision) {
+            return Err("earning_policy_mismatch");
+        }
     }
     Ok(output)
 }
@@ -221,9 +250,18 @@ async fn allocate(
             Err(PaymentError::InvalidResponse)
         };
     }
-    sqlx::query("INSERT INTO earning_allocations(invoice_id,review_id,asset,gross_amount,platform_amount,operator_amount,result_hash,policy) VALUES($1,$2,$3,$4,$5,$6,$7,'three_roles_90_10_v1')")
+    let policy = if view
+        .pentest
+        .as_ref()
+        .is_some_and(|c| !c.review_policy.is_legacy())
+    {
+        "investigate_verify_90_10_v1"
+    } else {
+        "three_roles_90_10_v1"
+    };
+    sqlx::query("INSERT INTO earning_allocations(invoice_id,review_id,asset,gross_amount,platform_amount,operator_amount,result_hash,policy,completed_roles) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)")
         .bind(candidate.invoice_id).bind(candidate.review_id).bind(&candidate.asset).bind(candidate.amount)
-        .bind(candidate.amount/10).bind(candidate.amount-candidate.amount/10).bind(result_hash).execute(&mut *tx).await?;
+        .bind(candidate.amount/10).bind(candidate.amount-candidate.amount/10).bind(result_hash).bind(policy).bind(roles.len() as i16).execute(&mut *tx).await?;
     for role in roles {
         sqlx::query("INSERT INTO operator_earnings(invoice_id,role,operator_id,device_id,amount,reported_duration_ms,reported_model,inference_calls,terminal_calls,http_requests) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
             .bind(candidate.invoice_id).bind(role.role).bind(role.operator).bind(role.device).bind(role.amount)

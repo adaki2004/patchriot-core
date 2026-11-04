@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import './assessment.css';
-import { findingRequest, reportFindings, stopExplanation, type ReportInput } from './report';
+import { expectedReports, reviewMethod, findingRequest, reportFindings, stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
@@ -15,9 +15,10 @@ const roleDuty = { investigator: 'Map the application and investigate leads.', r
 const phases = { starting: 'Starting the isolated runner', scoped_tools: 'Running scoped tools', investigating: 'Investigating the evidence', finishing: 'Preparing the report' };
 const support: Record<string, string> = { observed: 'Observed behavior', reproduced: 'Agent reports reproduction', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
 
-export function LiveProgress({ steps, state }: { steps: LiveStep[]; state: string }) {
+export function LiveProgress({ steps, state, policy }: { steps: LiveStep[]; state: string; policy?: Pick<ReportInput, 'review_policy' | 'third_review'> }) {
+  const expected = expectedReports(policy ?? {});
   const received = steps.filter(s => s.result !== null).length;
-  return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><h3>The review team</h3><span className="fine">{received} of 3 reports received</span></div><progress aria-label="Role reports received" value={received} max={3} />
+  return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><h3>The review team</h3><span className="fine">{received} of {expected} reports received</span></div><progress aria-label="Role reports received" value={received} max={expected} />
     <ol className="live-stage-list">{steps.map((s, i) => <li key={s.role} data-state={s.state}><span className="stage-number" aria-hidden="true">{s.result && s.evidence_complete ? '✓' : `0${i + 1}`}</span><div><strong>{liveRoles[s.role]}</strong><small>{s.result ? s.evidence_complete ? 'Report received' : 'Needs review' : s.state === 'leased' || s.state === 'running' ? 'Working' : s.state === 'failed' ? 'Stopped' : s.state === 'cancelled' ? 'Not completed' : 'Up next'}</small></div><p>{roleDuty[s.role]}</p>{!s.result && ['leased', 'running'].includes(s.state) && s.progress && <details className="live-activity"><summary>Latest activity</summary><strong>{phases[s.progress.progress.phase]}</strong><p>{s.progress.progress.http_requests} requests · {s.progress.progress.inference_calls} model calls · {s.progress.progress.completed_tools} tool runs recorded</p><small>Last update: {new Date(s.progress.received_at * 1000).toLocaleTimeString()}</small></details>}</li>)}</ol>
     <p className="fine">{state === 'failed' || state === 'cancelled' ? 'This test has stopped. Any reports received remain available below.' : 'Agents work one after another. You can leave this page and return later.'}</p>
   </section>;
@@ -48,9 +49,10 @@ export function saveReportFile(filename: string, content: string, mime: string) 
 // Keep model/target text inert when someone opens the exported Markdown.
 const block = (value: string) => { const fence = '`'.repeat(Array.from(value.matchAll(/`+/g)).reduce((max, m) => Math.max(max, m[0].length + 1), 3)); return `${fence}text\n${value}\n${fence}`; };
 
-export function reportMarkdown(id: string, steps: LiveStep[], origins: string[]) {
+export function reportMarkdown(id: string, steps: LiveStep[], origins: string[], policy: Pick<ReportInput, 'review_policy' | 'third_review'> = {}) {
   const lines = ['# Patchriot — private website review', `Review: ${id}`, 'Scope:', block(origins.join('\n')), 'Role reports and operator-recorded HTTP evidence. Agreement is not proof of safety. Remediation is a recommendation; no production patch was tested.'];
   const findings = reportFindings({ id, steps, origins, state: '', created_at: 0 });
+  lines.push('## Review method', reviewMethod(policy));
   lines.push(`## Observations (${findings.length})`, 'Repeat claims are grouped by title and first cited request. Anonymous and test-account checks stay visible within that observation. Original contributions and role-scoped references are retained. Different severities or support require review; the highest reported severity is shown.');
   for (const row of findings) {
     lines.push(`### ${row.id}`, block(`${row.finding.title}\nSeverity: ${row.finding.severity}`));
@@ -117,7 +119,7 @@ export function LiveReportDownloads({ id, steps, loadReport, disabled }: { id: s
     setBusy(true); setError('');
     try {
       const latest = await loadReport();
-      if (kind === 'markdown') saveReportFile(`patchriot-${id}-report.md`, reportMarkdown(id, latest.steps, latest.origins), 'text/markdown');
+      if (kind === 'markdown') saveReportFile(`patchriot-${id}-report.md`, reportMarkdown(id, latest.steps, latest.origins, latest), 'text/markdown');
       else saveReportFile(`patchriot-${id}-endpoints.postman.json`, JSON.stringify({ info: { name: 'Patchriot observed endpoints', _postman_id: id, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json', description: 'Observed requests, not a complete API specification. Query values and headers are omitted. These observations do not establish authorization or BOLA. Review scope before sending any request.' }, item: inventory(latest.steps).map(e => ({ name: `${e.method} ${e.url}`, request: { method: e.method, url: { raw: e.url, query: e.query.map(key => ({ key, value: '', disabled: true, description: 'Observed name; value omitted from export.' })) }, description: `Observed HTTP status: ${[...e.statuses].join(', ') || 'No response'}. References: ${e.refs.join(', ')}. Credentials and request bodies are omitted; see the private report for account-access evidence.` }, response: [] })) }, null, 2), 'application/json');
     } catch (e) { setError(e instanceof Error ? e.message : 'The export could not be prepared.'); }
     finally { setBusy(false); }
