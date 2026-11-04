@@ -24,6 +24,7 @@ async function setup(page: Page, signedIn = true, permitted = true) {
     if (path === '/api/session') return route.fulfill({ json: { account: signedIn ? account : null, csrf_token: signedIn ? 'fixture-csrf' : null } });
     if (path === '/api/fleet') return route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } });
     if (path === '/api/incidents') return route.fulfill({ json: [] });
+    if (path === '/api/auth/providers') return route.fallback();
     if (!signedIn) return route.fulfill({ status: 401, json: { error: 'sign_in_required' } });
     if (path === '/api/devices') return route.fulfill({ json: [] });
     if (path === '/api/checkout') return route.fulfill({ json: { mode: 'paid', offer: { id: 'b'.repeat(64), price: order.price, destination: token, inputs: [token], payment_window_seconds: 300 } } });

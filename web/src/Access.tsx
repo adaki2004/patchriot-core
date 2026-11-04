@@ -51,7 +51,7 @@ export function AccessPanel({ initialCode = '', onLogin, onBusyChange }: { initi
       {error && <p className="notice error" role="alert">{error}</p>}
       <button className="text-button legacy-toggle" disabled={busy} aria-expanded={showLegacy} onClick={() => setLegacyOpen(!showLegacy)}>Existing pilot account</button>
     </div>
-    {showLegacy && <Login initialCode={initialCode} onLogin={onLogin} onBusy={changeBusy} />}
+    {showLegacy && <fieldset className="legacy-login-fields" disabled={busy}><Login initialCode={initialCode} onLogin={onLogin} onBusy={changeBusy} /></fieldset>}
   </section>;
 }
 

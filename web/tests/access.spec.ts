@@ -147,3 +147,26 @@ test('member bookmarks cannot open the access desk or fetch its contents', async
   await expect(page.getByRole('heading', { name: 'Administrator access required.' })).toBeVisible();
   expect(reads).toBe(0);
 });
+
+
+test('a pending provider redirect cannot race a password sign-in or close the dialog', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/auth/providers', route => route.fulfill({ json: { github: true, google: true } }));
+  let release!: () => void, started = false;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/auth/github/start', async route => { started = true; await pending; return route.fulfill({ status: 503, json: { error: 'sso_unavailable' } }); });
+  try {
+    await page.goto('/'); await page.locator('header').getByRole('button', { name: 'App' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Sign in', exact: true });
+    await dialog.getByRole('button', { name: 'Existing pilot account' }).click();
+    await dialog.getByRole('button', { name: 'Continue with GitHub' }).click();
+    await expect.poll(() => started).toBe(true);
+    await expect(dialog.getByLabel('Username', { exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Open workspace →' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+    await page.keyboard.press('Escape'); await expect(dialog).toBeVisible();
+    release();
+    await expect(dialog.getByRole('alert')).toContainText('not available');
+    await expect(dialog.getByLabel('Username', { exact: true })).toBeEnabled();
+  } finally { release(); }
+});
