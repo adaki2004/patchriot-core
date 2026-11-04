@@ -8,6 +8,9 @@ test('report formatting separates prose, preserves code and indents structured e
   expect(parts[1].language).toBe('json');
   expect(parts[1].text).toBe('{\n  "debug": true,\n  "nested": {\n    "n": 1\n  }\n}');
   expect(reportBlocks('{"debug":false}')[0].kind).toBe('code');
+  const mixed = reportBlocks('A response was recorded.\n\n{"debug":true}\n\nRetest the route.');
+  expect(mixed.map(p => p.kind)).toEqual(['prose', 'code', 'prose']);
+  expect(mixed[1].text).toBe('{\n  "debug": true\n}');
   expect(prettyJson('not JSON')).toBe('not JSON');
   expect(reportBlocks('```unfinished\nKeep this visible.')[0].text).toContain('Keep this visible.');
   const shell = 'if true; then\n  printf "done"\nfi';

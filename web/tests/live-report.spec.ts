@@ -6,7 +6,7 @@ import { PDFDocument, PDFName } from 'pdf-lib';
 import type { LiveResult } from '../src/LiveReport';
 
 const id = '00000000-0000-4000-8000-000000000003';
-const fixExample = 'Disable the debug route in production.\n\n```html\n<script>window.fixExecuted=true</script>\n<!-- ' + 'untrusted-example-'.repeat(60) + ' -->\n```\n\nIllustrative only; verify the route returns 404. <img src=x onerror="window.fixExecuted=true">';
+const fixExample = 'Disable the debug route in production.\n\n```html\n<script>window.fixExecuted=true</script>\n<!-- ' + 'untrusted-example-'.repeat(60) + ' -->\n```\n\nIllustrative only; verify the route returns 404. <img src=x onerror="window.fixExecuted=true">' + '\n\n```nginx\nlocation = /debug {\n    return 404;\n}\n```\n\n```json\n{"debug":true}\n```';
 const result: LiveResult = {
   kind: 'pentest_agent_v1', scope_sha256: 'a'.repeat(64),
   execution: { state: 'completed', model: 'fixture-model', provider: 'fixture-provider', duration_ms: 30000, http_requests: 2, inference_calls: 4, cost_upper_microusd: 0, cleanup_confirmed: true },
@@ -204,7 +204,10 @@ test('finding text and suggested code remain inert and fit mobile', async ({ pag
   const finding = page.locator('.report-finding').first();
   await finding.locator('summary').first().click();
   await expect(finding.getByText('Code / evidence · html', { exact: true })).toBeVisible();
-  await expect(finding.locator('.remediation-example code')).toHaveText(fixExample.split('```html\n')[1].split('```')[0]);
+  await expect(finding.locator('.remediation-example code')).toHaveCount(3);
+  await expect(finding.locator('.remediation-example code').nth(0)).toHaveText(fixExample.split('```html\n')[1].split('```')[0]);
+  await expect(finding.locator('.remediation-example code').nth(1)).toContainText('return 404;');
+  await expect(finding.locator('.remediation-example code').nth(2)).toHaveText('{\n  "debug": true\n}');
   await expect(finding.locator('.report-prose').nth(1)).toContainText('<img src=x onerror="window.fixExecuted=true">');
   await expect(finding.locator('.report-prose script, .report-prose img')).toHaveCount(0);
   expect(await page.evaluate(() => 'fixExecuted' in window)).toBe(false);

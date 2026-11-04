@@ -89,7 +89,9 @@ async function asset(path: string) {
 
 /** Generated locally from the authorized report. No customer data leaves the browser. */
 export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
-  const [fontBytes, logoBytes, monoBytes] = await Promise.all([asset('/fonts/ibm-plex-sans-variable.ttf'), asset('/brand/white-hat.png'), asset('/fonts/ibmplexmono-400.woff2')]);
+  // Use the original TrueType font for PDF subsets. The browser WOFF2 font's
+  // compound glyph offsets can make fontkit throw and leave export unfinished.
+  const [fontBytes, logoBytes, monoBytes] = await Promise.all([asset('/fonts/ibm-plex-sans-variable.ttf'), asset('/brand/white-hat.png'), asset('/fonts/ibmplexmono-400.ttf')]);
   const doc = await PDFDocument.create(); doc.registerFontkit(fontkit);
   const font = await doc.embedFont(fontBytes, { subset: true });
   const logo = await doc.embedPng(logoBytes);
