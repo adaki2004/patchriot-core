@@ -66,16 +66,16 @@ test('workspace separates requests and pairing from the public introduction', as
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('public page uses the supplied logo and access requests remain a deliberate action', async ({ page }) => {
+test('public page uses the supplied logo and account access is a deliberate action', async ({ page }) => {
   const calls = await setup(page);
   await page.goto('/');
   const logo = page.locator('img.brand-mark');
   await expect.poll(() => logo.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
   await expect(page.getByRole('heading', { name: 'Recent hacks & incidents.' })).toBeVisible();
   await page.locator('header').getByRole('button', { name: 'App' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Sign in or request access' });
-  await dialog.getByRole('button', { name: 'Request access', exact: true }).click();
-  await expect(dialog.getByLabel('Your name')).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Sign in' });
+  await expect(dialog.getByRole('heading', { name: 'Sign in to Patchriot.' })).toBeVisible();
+  await expect(dialog.getByLabel('Your name')).toHaveCount(0);
   expect(calls).not.toContain('/api/access-requests');
   await page.keyboard.press('Escape');
   await expect(page.locator('header').getByRole('button', { name: 'App' })).toBeFocused();
@@ -87,15 +87,14 @@ test('the access link reopens account access after closing the sign-in popup', a
   await setup(page);
   await page.goto('/');
   const access = page.getByRole('region', { name: 'Account access' });
-  const contribute = page.locator('.access-invitation').getByRole('button', { name: 'Request access', exact: false });
+  const contribute = page.locator('.access-invitation').getByRole('button', { name: 'Get started', exact: false });
   await contribute.click();
-  await expect(access.getByLabel('Your name')).toBeVisible();
-  await access.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(access.getByRole('heading', { name: 'Sign in to Patchriot.' })).toBeVisible();
   await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await contribute.click();
-  await expect(access.getByLabel('Your name')).toBeVisible();
-  await expect(page.getByRole('dialog', { name: 'Sign in or request access' })).toBeVisible();
+  await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
 });
 
 test('members cannot load connection details or open a pairing dialog', async ({ page }) => {

@@ -202,3 +202,8 @@ footer { margin-top: 55px; color: var(--muted); font-size: 12px; }
   .pair-step-content .fine { font-size: 12px; }.pair-step-content p { font-size: 14px; }.pair-hardware { gap: 18px; }.pair-command pre { font-size: 10px; }.pair-step-actions button { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+.sso-buttons { display: grid; gap: 10px; margin: 20px 0 12px; }
+.sso-buttons button { display: flex; justify-content: space-between; align-items: center; min-height: 48px; border: 1px solid var(--line); padding: 12px 16px; }
+.sso-entry .legacy-toggle { margin: 12px 0 24px; text-align: left; }
+.sso-entry + .access-form { padding-top: 24px; border-top: 1px solid var(--line); }

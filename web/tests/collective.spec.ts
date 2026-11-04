@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { emptyDashboard } from './helpers';
 
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
+
 test('Collective shows the selected hero, logo and consistent navigation', async ({ page }) => {
   await page.route('**/api/session', route => route.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: {} }));
@@ -13,7 +15,7 @@ test('Collective shows the selected hero, logo and consistent navigation', async
   const navigation = page.getByRole('navigation', { name: 'Website' });
   await expect(navigation.getByRole('button')).toHaveText(['Home', 'Recent events', 'Docs', 'App ↗']);
   await navigation.getByRole('button', { name: 'App', exact: false }).click();
-  await expect(page.getByRole('dialog', { name: 'Sign in or request access' }).getByLabel('Username', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Sign in' }).getByLabel('Username', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
 });
 
@@ -44,17 +46,15 @@ test('managed/dedicated comparison, motion and access work with a keyboard', asy
   await expect(page.getByRole('heading', { name: 'OWASP BLACK-BOX ETHICAL HACKING ENGINE.' })).toBeVisible();
   await expect(page.getByText('NO SOLO', { exact: false })).toHaveCount(0);
   await page.getByRole('button', { name: 'TEST MY WEB APP', exact: false }).click();
-  const access = page.getByRole('dialog', { name: 'Sign in or request access' });
-  await expect(access.getByLabel('Your name', { exact: true })).toBeInViewport();
-  await access.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const access = page.getByRole('dialog', { name: 'Sign in' });
+  await expect(access.getByRole('heading', { name: 'Sign in to Patchriot.' })).toBeInViewport();
   await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(access).toHaveCount(0);
   const opener = page.locator('header').getByRole('button', { name: 'App' });
   await opener.click();
   await expect(access.getByLabel('Username', { exact: true })).toBeFocused();
-  await access.getByRole('button', { name: 'Request access', exact: true }).click();
-  await expect(access.getByLabel('Your name', { exact: true })).toBeVisible();
+  await expect(access.getByLabel('Your name', { exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(opener).toBeFocused();
   await page.locator('.tm-workspace-preview').getByRole('button', { name: 'SIGN IN', exact: false }).click();

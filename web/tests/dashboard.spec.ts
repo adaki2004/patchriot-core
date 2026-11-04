@@ -283,7 +283,7 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
     await expect.poll(() => loginStarted).toBe(true);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('region', { name: 'Account access' })).toBeVisible();
-    await expect(page.getByRole('dialog').getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Existing pilot account', exact: true })).toBeDisabled();
     await expect(page.getByLabel('Invitation code', { exact: true })).toBeDisabled();
     const startupReply = page.waitForResponse(response => response.url().endsWith('/api/session') && response.headers()['x-fixture-startup'] === 'true');
     if (startupFirst) {
@@ -331,7 +331,7 @@ test('an accepted invitation can retry loading the workspace without redeeming t
     await dialog.getByRole('button', { name: 'Retry opening workspace', exact: true }).click();
     await expect.poll(() => retryStarted).toBe(true);
     await expect(dialog.getByLabel('Invitation code', { exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Existing pilot account', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     release();
