@@ -478,3 +478,20 @@ pub async fn request_report_check(
     )
     .await
 }
+
+/// Staff metrics must retain the server-verified role; query/header input cannot
+/// turn a member into an administrator.
+pub(crate) async fn review_stats(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<patchriot_protocol::ReviewStats>, ApiError> {
+    let session = crate::access::admin(&state, &headers, false).await?;
+    request::<(), _>(
+        &state,
+        reqwest::Method::GET,
+        "/internal/admin/review-stats",
+        Some(&session),
+        None,
+    )
+    .await
+}

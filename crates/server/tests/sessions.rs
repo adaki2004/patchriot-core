@@ -15,6 +15,63 @@ use uuid::Uuid;
 const ORIGIN: &str = "https://patchriot.example";
 
 #[tokio::test]
+async fn review_stats_gateway_only_forwards_the_authenticated_administrator() {
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let captured = seen.clone();
+    let downstream = Router::new().route("/internal/admin/review-stats", get(move |headers: HeaderMap| {
+        let captured = captured.clone();
+        async move {
+            captured.lock().unwrap().push(headers);
+            Json(json!({"requested":126,"live_requested":120,"awaiting_verification":4,"review_runs":200,"awaiting_payment":2,"queued":3,"running":2,"completed":180,"needs_review":10,"failed":1,"cancelled":2,"as_of":1793808000}))
+        }
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let path = "/api/admin/review-stats";
+    assert_eq!(
+        test.request("GET", path, Value::Null, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (member, _) = test.login("member").await;
+    assert_eq!(
+        test.request(
+            "GET",
+            path,
+            Value::Null,
+            &[("cookie", &member), ("x-patchriot-role", "admin")]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert!(seen.lock().unwrap().is_empty());
+    let (admin, account) = test.login("admin").await;
+    let response = test
+        .request(
+            "GET",
+            path,
+            Value::Null,
+            &[("cookie", &admin), ("x-patchriot-account", "forged")],
+        )
+        .await;
+    assert_eq!(response.0, StatusCode::OK);
+    assert_eq!(response.2["requested"], 126);
+    assert_eq!(response.2["completed"], 180);
+    let forwarded = seen.lock().unwrap().clone();
+    assert_eq!(forwarded.len(), 1);
+    assert_eq!(
+        forwarded[0]["x-patchriot-account"],
+        account["account"]["id"].as_str().unwrap()
+    );
+    assert_eq!(forwarded[0]["x-patchriot-role"], "admin");
+    assert!(!forwarded[0].contains_key("cookie"));
+    server.abort();
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn report_check_gateway_requires_session_csrf_and_uses_only_session_identity() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let records = seen.clone();

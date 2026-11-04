@@ -623,3 +623,272 @@ async fn live_coupon_waits_for_scope_consent_and_recovers_a_lost_reply_without_a
     assert_eq!(count, 0);
     test.finish().await;
 }
+
+#[tokio::test]
+async fn trial_claims_are_explicit_account_bound_and_capped_under_concurrency() {
+    let test = TestApp::with_access("http://127.0.0.1:1", ReviewAccess::Coupons).await;
+    let (admin_cookie, admin) = test.login("admin").await;
+    let (cookie, member) = test.login("member").await;
+    let (other_cookie, other) = test.login("member").await;
+    let ah = headers(&admin_cookie, &admin);
+    let mh = headers(&cookie, &member);
+    let oh = headers(&other_cookie, &other);
+    assert_eq!(
+        test.request("GET", "/api/trial", Value::Null, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            "/api/trial",
+            json!({"accepts_trial":true}),
+            &[("cookie", &cookie)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request("GET", "/api/admin/trial", Value::Null, &mh)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let config = json!({"action":"start","hours":24,"claim_limit":1});
+    assert_eq!(
+        test.request("POST", "/api/admin/trial", config.clone(), &mh)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            "/api/admin/trial",
+            json!({"action":"start","hours":25,"claim_limit":1}),
+            &ah
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        test.request("POST", "/api/admin/trial", config.clone(), &ah)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        test.request("POST", "/api/admin/trial", config, &ah)
+            .await
+            .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        test.request("GET", "/api/trial", Value::Null, &mh).await.2["available"],
+        true
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM trial_claims")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap(),
+        0,
+        "reading the offer never claims it"
+    );
+    assert_eq!(
+        test.request("POST", "/api/trial", json!({"accepts_trial":false}), &mh)
+            .await
+            .0,
+        StatusCode::BAD_REQUEST
+    );
+    let body = json!({"accepts_trial":true});
+    let (a, b) = tokio::join!(
+        test.request("POST", "/api/trial", body.clone(), &mh),
+        test.request("POST", "/api/trial", body.clone(), &mh)
+    );
+    assert_eq!(a.0, StatusCode::OK);
+    assert_eq!(a.2, b.2, "retry recovers exactly the same coupon");
+    let code = a.2["code"].as_str().unwrap();
+    assert!(code.starts_with("pr-"));
+    assert_eq!(code.len(), 67);
+    assert_eq!(
+        test.request("POST", "/api/trial", body.clone(), &oh)
+            .await
+            .2["error"],
+        "trial_unavailable"
+    );
+    assert!(test.request("GET", "/api/trial", Value::Null, &oh).await.2["claim"].is_null());
+    let stats = test
+        .request("GET", "/api/admin/trial", Value::Null, &ah)
+        .await
+        .2;
+    assert_eq!(stats["total_claimed"], 1);
+    assert_eq!(stats["campaign"]["claimed"], 1);
+    assert!(!stats.to_string().contains(code));
+    assert_eq!(
+        test.request("POST", "/api/admin/trial", json!({"action":"stop"}), &ah)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            "/api/admin/trial",
+            json!({"action":"start","hours":48,"claim_limit":2}),
+            &ah
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        test.request("POST", "/api/trial", body.clone(), &mh)
+            .await
+            .2,
+        a.2,
+        "another campaign never gives the same account more work"
+    );
+    assert_eq!(
+        test.request("POST", "/api/trial", body, &oh).await.0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        test.request("GET", "/api/admin/trial", Value::Null, &ah)
+            .await
+            .2["campaign"]["claimed"],
+        1
+    );
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn trial_redemption_still_requires_verified_scope_and_cannot_be_shared_or_reused() {
+    let network = Network::for_kind(false, true).await;
+    let test = TestApp::with_access(&network.origin, ReviewAccess::Coupons).await;
+    let (ac, a) = test.login("admin").await;
+    let (mc, m) = test.login("member").await;
+    let (oc, o) = test.login("member").await;
+    let ah = headers(&ac, &a);
+    let mh = headers(&mc, &m);
+    let oh = headers(&oc, &o);
+    test.request(
+        "POST",
+        "/api/admin/trial",
+        json!({"action":"start","hours":24,"claim_limit":3}),
+        &ah,
+    )
+    .await;
+    let claim = test
+        .request("POST", "/api/trial", json!({"accepts_trial":true}), &mh)
+        .await
+        .2;
+    let target = Uuid::new_v4();
+    let path = format!("/api/pentests/{target}/review-code");
+    let body = json!({"code":claim["code"],"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":network.live_devices,"accepts_operator_access":true,"accepts_provider_access":true}});
+    network.live_ready.store(false, Ordering::SeqCst);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &mh).await.0,
+        StatusCode::CONFLICT
+    );
+    assert!(
+        test.request("GET", "/api/trial", Value::Null, &mh).await.2["claim"]["reserved_at"]
+            .is_null()
+    );
+    assert!(network.calls.lock().unwrap().is_empty());
+    network.live_ready.store(true, Ordering::SeqCst);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &oh).await.2["error"],
+        "invalid_or_used_review_code"
+    );
+    let mut bad = body.clone();
+    bad["consent"]["accepts_operator_access"] = json!(false);
+    assert_eq!(
+        test.request("POST", &path, bad, &mh).await.0,
+        StatusCode::BAD_REQUEST
+    );
+    assert!(network.calls.lock().unwrap().is_empty());
+    let started = test.request("POST", &path, body.clone(), &mh).await;
+    assert_eq!(started.0, StatusCode::OK, "{}", started.2);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &mh).await.2,
+        started.2
+    );
+    assert_eq!(network.calls.lock().unwrap().len(), 1);
+    let mut changed = body;
+    changed["consent"]["request_id"] = json!(Uuid::new_v4());
+    assert_eq!(
+        test.request("POST", &path, changed, &mh).await.2["error"],
+        "review_code_bound"
+    );
+    let stats = test
+        .request("GET", "/api/admin/trial", Value::Null, &ah)
+        .await
+        .2;
+    assert_eq!(stats["reserved"], 1);
+    assert_eq!(stats["started"], 1);
+    let (ec, e) = test.login("member").await;
+    let eh = headers(&ec, &e);
+    let expired = test
+        .request("POST", "/api/trial", json!({"accepts_trial":true}), &eh)
+        .await
+        .2;
+    sqlx::query("UPDATE review_codes SET expires_at=now()-interval '1 second' WHERE id=$1")
+        .bind(Uuid::parse_str(expired["id"].as_str().unwrap()).unwrap())
+        .execute(&test.pool)
+        .await
+        .unwrap();
+    let expired_claim = test
+        .request("POST", "/api/trial", json!({"accepts_trial":true}), &eh)
+        .await
+        .2;
+    assert_eq!(expired_claim["id"], expired["id"]);
+    let input = json!({"code":expired["code"],"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":network.live_devices,"accepts_operator_access":true,"accepts_provider_access":true}});
+    assert_eq!(
+        test.request("POST", &path, input, &eh).await.2["error"],
+        "invalid_or_used_review_code"
+    );
+    assert_eq!(network.calls.lock().unwrap().len(), 1);
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn concurrent_trial_accounts_cannot_overrun_the_campaign_and_expiry_closes_claims() {
+    let test = TestApp::with_access("http://127.0.0.1:1", ReviewAccess::Coupons).await;
+    let (ac, a) = test.login("admin").await;
+    let ah = headers(&ac, &a);
+    let (mc, m) = test.login("member").await;
+    let mh = headers(&mc, &m);
+    let (bc, b) = test.login("member").await;
+    let bh = headers(&bc, &b);
+    test.request(
+        "POST",
+        "/api/admin/trial",
+        json!({"action":"start","hours":24,"claim_limit":1}),
+        &ah,
+    )
+    .await;
+    let body = json!({"accepts_trial":true});
+    let (x, y) = tokio::join!(
+        test.request("POST", "/api/trial", body.clone(), &mh),
+        test.request("POST", "/api/trial", body.clone(), &bh)
+    );
+    assert_eq!(
+        [x.0, y.0].iter().filter(|s| **s == StatusCode::OK).count(),
+        1
+    );
+    assert_eq!(
+        test.request("GET", "/api/admin/trial", Value::Null, &ah)
+            .await
+            .2["total_claimed"],
+        1
+    );
+    sqlx::query("UPDATE trial_campaign SET started_at=now()-interval '2 days',ends_at=now()-interval '1 day'").execute(&test.pool).await.unwrap();
+    let h = if x.0 == StatusCode::OK { &bh } else { &mh };
+    assert_eq!(
+        test.request("POST", "/api/trial", body, h).await.2["error"],
+        "trial_unavailable"
+    );
+    test.finish().await;
+}
