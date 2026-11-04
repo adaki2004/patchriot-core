@@ -23,6 +23,7 @@ export function stopExplanation(reason?: string): string {
     case 'timed_out': case 'timeout': return 'The allowed testing time ended before this work finished.';
     case 'provider_unavailable': case 'provider_rejected_request': case 'provider_stream_interrupted': return 'The AI provider did not complete a request. The agent could not finish this stage.';
     case 'provider_authentication_failed': return 'The AI provider rejected the configured account access. Staff must check it before another assessment can run.';
+    case 'provider_repetition': return 'The model repeated itself instead of producing a usable answer. No repeated output was executed. The saved website evidence is still available.';
     case 'provider_rate_limited': return 'The AI provider limited a request. This stage stopped before completing; saved website evidence remains available.';
     case 'provider_context_limit': return 'The request exceeded the AI provider’s input limit. This stage could not finish.';
     case 'provider_invalid_json': case 'provider_missing_completion_id': case 'provider_missing_message': case 'unexpected_provider_response': return 'The AI provider returned a response the runner could not interpret. This stage is incomplete; it is not a finding about your website.';
@@ -96,9 +97,10 @@ export function reportSummary(input: ReportInput) {
   const finished = !['awaiting_payment', 'queued', 'running'].includes(input.state);
   const expected = expectedReports(input);
   const partial = complete < expected || input.state !== 'completed' || input.review_policy === 'investigate_verify_v1' && !input.third_review;
-  const headline = !finished ? 'Assessment in progress' : partial ? 'Partial assessment' : 'Assessment received';
+  const headline = !finished ? 'Assessment in progress' : partial ? 'Run ended · some checks missing' : 'Report ready';
   const claims = findings.reduce((n, f) => n + f.contributions.length, 0);
-  const description = `${assessments} of ${expected} agents returned usable assessments. ${findings.length} ${findings.length === 1 ? 'observation is' : 'observations are'} listed below${claims > findings.length ? `, grouping ${claims} agent claims` : ''}${partial ? '; unfinished work is listed separately' : ''}. ${partial ? 'This run cannot establish that your website is safe.' : 'These are agent-reported findings, not a certification of security.'}`;
+  const missing = input.steps.filter(s => (expected === 3 || s.role !== 'challenger') && (!s.result?.assessment || !s.evidence_complete)).map(s => reportRoles[s.role]);
+  const description = `${assessments} of ${expected} agent reports are available. ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} to inspect${claims > findings.length ? ` from ${claims} agent observations` : ''}. ${!finished ? 'Work is still running.' : partial ? `Nothing is still running. ${missing.length ? missing.join(', ') + ' did not finish every required check. ' : ''}You can use the findings below; missing checks remain untested.` : 'The requested stages finished. Findings still need your review.'}`;
   return { findings, assessments, complete, expected, requests, finished, partial, headline, description };
 }
 

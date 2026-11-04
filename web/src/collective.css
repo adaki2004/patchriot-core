@@ -290,3 +290,45 @@
 .tm-inference .fine { color: var(--muted); }
 .request-ownership { max-width: 72ch; padding-left: 16px; border-left: 2px solid var(--accent); line-height: 1.65; }
 @media (max-width: 740px) { .textmode-ui .tm-inference { grid-template-columns: 1fr; gap: 8px; } }
+.service-flow { border: 1px solid #35465b; background: #101821; }
+.service-map { padding: clamp(20px,4vw,44px); color: #dce6f6; }
+.flow-permission { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 32px; font-size: .88rem; }
+.flow-permission > span:first-child { color: #91b3ff; font-family: var(--font-mono,monospace); font-size: .7rem; letter-spacing: .04em; }
+.flow-permission strong { font-weight: 500; }
+.flow-nodes { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 24px; }
+.flow-node { position: relative; min-width: 0; padding: 18px; border: 1px solid #425770; background: #182432; }
+.flow-node:not(:last-child)::after { content: '→'; position: absolute; right: -22px; top: 44%; color: #91b3ff; }
+.flow-node-top { display: flex; align-items: center; justify-content: space-between; color: #91b3ff; font: .75rem var(--font-mono,monospace); }
+.flow-node h3 { margin: 24px 0 8px; font-size: clamp(1rem,1.4vw,1.4rem); letter-spacing: 0; color: #f5f7fb; }
+.flow-node p,.docs-article .flow-node p { margin: 0; font-size: .84rem; line-height: 1.6; text-align: left; }
+.flow-node small { display: block; margin-top: 15px; font-size: .72rem; line-height: 1.5; color: #a6b9d4; }
+.flow-agent-stack { display: flex; gap: 6px; align-items: center; margin-top: 16px; color: #91b3ff; font: .72rem var(--font-mono,monospace); }
+.flow-agent-stack i { width: 12px; height: 12px; border: 1px solid #91b3ff; animation: agent-pulse 3s ease-in-out infinite; }
+.flow-agent-stack i:nth-child(2) { animation-delay: .5s; }.flow-agent-stack i:nth-child(3) { animation-delay: 1s; }
+.flow-return { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 28px; padding-top: 20px; border-top: 1px dashed #425770; font-size: .85rem; }
+.flow-return > span:first-child { color: #91b3ff; font-size: 1.7rem; }.flow-return strong { font-weight: 500; }.flow-return > span:last-child { color: #a6b9d4; }
+.flow-caption,.docs-article .flow-caption { color: #a6b9d4; margin: 22px 0 0; font-size: .8rem; text-align: left; }
+.flow-actions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; border-top: 1px solid #35465b; padding: 20px clamp(20px,4vw,44px); }
+.docs-article p { text-align: justify; hyphens: auto; overflow-wrap: anywhere; }
+.signin-provider-icon { flex: 0 0 auto; }.sso-buttons button { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.service-map[data-paused="true"] * { animation-play-state: paused; }
+@keyframes agent-pulse { 0%,100% { background: transparent; } 50% { background: #91b3ff; } }
+@media (max-width: 760px) { .flow-nodes { grid-template-columns: repeat(2,minmax(0,1fr)); } .flow-node:nth-child(2)::after { display: none; } }
+@media (max-width: 440px) { .flow-nodes { grid-template-columns: 1fr; gap: 25px; } .flow-node:not(:last-child)::after { content: '↓'; display: block; right: 50%; top: auto; bottom: -24px; } .flow-node h3 { margin-top: 12px; } }
+@media (prefers-reduced-motion: reduce) { .flow-agent-stack i { animation: none; } }
+
+.report-check-summary { display: flex; flex-wrap: wrap; gap: .7rem 1.5rem; align-items: baseline; margin: 1rem 0; }
+.report-check-summary strong { color: var(--ink); font-size: 1.05rem; }
+.report-check-summary span { color: var(--muted); font-size: .9rem; }
+
+.wallet-page { max-width: 520px; width: calc(100% - 40px); margin: 28px auto; }
+.wallet-brand { display:flex;align-items:center;gap:16px;font-size:28px;text-decoration:none;margin-bottom:36px; }
+.wallet-page h1 { font-size:36px;line-height:1.1; }
+.wallet-page p { line-height:1.6; }
+.wallet-connect-options { display:grid;gap:12px;margin:24px 0; }
+.wallet-address,.wallet-quote code { display:block;overflow-wrap:anywhere;margin:12px 0 24px; }
+.wallet-quote { padding:22px;border:1px solid var(--line);margin:24px 0; }
+.wallet-quote strong { font-size:26px; }
+.wallet-quote small { display:block; }
+.wallet-qr { text-align:center; }.wallet-qr img { max-width:100%;height:auto; }
+.wallet-page .fine { margin-top:24px; }

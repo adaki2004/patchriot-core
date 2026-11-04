@@ -16,6 +16,7 @@ mod review_target;
 mod sites;
 mod sources;
 mod sso;
+mod wallet;
 
 use axum::{
     Json, Router,
@@ -58,9 +59,21 @@ pub struct Config {
     pub ga_measurement_id: Option<String>,
     pub analytics_origin: Option<String>,
     pub sso: SsoConfig,
+    pub wallet_project_id: Option<String>,
 }
 
 impl Config {
+    pub fn with_wallet_project_id(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        if value
+            .as_ref()
+            .is_some_and(|id| id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()))
+        {
+            return Err("invalid WC_REOWNED_PRJ_ID");
+        }
+        self.wallet_project_id = value;
+        Ok(self)
+    }
+
     pub fn with_sso(mut self, sso: SsoConfig) -> Self {
         self.sso = sso;
         self
@@ -166,6 +179,7 @@ impl Config {
             ga_measurement_id: None,
             analytics_origin: None,
             sso: SsoConfig::default(),
+            wallet_project_id: None,
             internal_key,
             web_root,
         })
@@ -297,6 +311,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/redeem", post(auth::redeem))
         .route("/api/auth/login", post(access::login))
         .route("/api/auth/providers", get(sso::providers))
+        .route("/api/wallet/config", get(wallet::settings))
+        .route("/api/auth/wallet/challenge", post(wallet::challenge))
+        .route("/api/auth/wallet/verify", post(wallet::verify))
         .route("/api/auth/{provider}/start", post(sso::start))
         .route("/api/auth/{provider}/callback", get(sso::callback))
         .route("/api/auth/activate", post(access::activate))
@@ -404,8 +421,8 @@ pub fn router(state: AppState) -> Router {
             ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
         );
     }
-    // Only the isolated analytics frame supplies its own CSP. Application pages
-    // keep the default policy, which cannot load third-party scripts.
+    // The analytics frame and explicit wallet page have narrower-purpose policies.
+    // The console keeps self-only connections and no third-party scripts.
     routes
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(SetResponseHeaderLayer::overriding(
@@ -427,6 +444,10 @@ pub fn router(state: AppState) -> Router {
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             analytics::host_boundary,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            wallet::page_policy,
         ))
         .with_state(state)
 }

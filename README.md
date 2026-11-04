@@ -1,5 +1,5 @@
 # Patchriot
-**Defense before you ship.**
+**Defense before going live.**
 
 Patchriot runs managed security assessments for web applications. Verify your own domain, start a bounded test and inspect private findings with recorded evidence. Businesses can arrange a dedicated installation.
 
@@ -117,6 +117,14 @@ At expiry, report reads hide findings, HTTP evidence and tool output immediately
 
 Deploy dispatcher and its migration before core. Clients using the previous GET download route must use the explicit POST; this prevents prefetching or cross-site links from starting deletion.
 
+## Wallet sign-in and checkout
+
+Set `WC_REOWNED_PRJ_ID` to your Reown project ID and allow your exact website origin in that project. This enables Ethereum and Solana personal-wallet sign-in and WalletConnect/browser-wallet payments. Wallet code and its network connections load only after the user opens the wallet window. Contract-wallet sign-in is not supported in this release.
+
+Sign-in verifies a five-minute, single-use message bound to this website and browser. It creates a member account; it does not grant operator access or authorize payment. Google, GitHub and wallet identities stay separate. Connect a wallet during checkout to pay an existing account's order, or send the displayed amount manually without connecting. The server confirms payment through the existing NEAR Intents reconciliation before work starts; a browser transaction hash cannot credit an order.
+
+The wallet sends only the saved quote's exact USDC/USDT transfer on Ethereum or Solana mainnet, plus network gas. It requests no token allowance. Expired, changed or unsupported quotes stop before signing. An uncertain send result stays marked locally to prevent an accidental second payment; check the order and wallet before retrying. This local guard is not shared across browsers or devices.
+
 ## Optional public page counts
 
 **Off by default.** Set `PATCHRIOT_ANALYTICS_ENABLED=true`, `PATCHRIOT_GA_MEASUREMENT_ID` and `PATCHRIOT_ANALYTICS_ORIGIN` to offer opt-in Google Analytics. Old measurement settings alone do not enable it. Leave the switch unset or set it to `false` to disable all analytics routes and delivery. Job, payment and service metrics do not require Google Analytics.
@@ -137,12 +145,12 @@ The [testing FAQ](https://patchriot.tech/#/docs/safety) explains actual tools, s
 | --- | --- |
 | Website | Collective design, one App entry, personal dashboard, private reports and recent-events feed |
 | Enterprise | Public inquiry form and private staff inbox; optional configured contact email |
-| Access | Configurable GitHub/Google sign-in and existing pilot accounts; staff-only pairing; domain verification before checkout and execution |
+| Access | GitHub/Google and personal-wallet sign-in, plus existing pilot accounts; staff-only pairing; domain verification before checkout and execution |
 | Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
 | Agents | Isolated Hermes on managed Kali; two required live roles and a third for escalation; legacy three-role reviews preserved |
-| Payments | Single-use codes and NEAR Intents checkout for live, snapshot and source reviews; 90/10 accounting and reserved operator withdrawals |
+| Payments | Single-use codes, manual transfer or wallet checkout through NEAR Intents; 90/10 accounting and reserved operator withdrawals |
 | Existing tools | Approved saved-page and source-text reviews remain accessible |
-| In development | Broader OWASP checks, clearer evidence packs and public deployment |
+| In development | Broader OWASP checks and stronger reproduction coverage |
 | Later | Browser login flows, recurring checks, managed private networks and confidential execution |
 
 ## Developer setup: run your own copy
@@ -555,3 +563,5 @@ When the dispatcher enables Venice recovery, checkout names NEAR as primary and 
 A temporary NEAR failure can use one backup completion, then keep that role on Venice. It consumes one logical model call; both provider attempts still count toward the spending cap. Reports and exports identify the backup, its trigger and completed replies. Venice inference is not presented as NEAR TEE execution. Invalid signatures, scope failures and exhausted budgets remain hard stops.
 
 Deployment: update core, dispatcher/gateway and relay; configure the private Venice key on managed NEAR relays; then set `PATCHRIOT_VENICE_FALLBACK_ENABLED=true` on dispatcher. See the relay README for exact configuration and provider pricing. No new migration is needed.
+
+The relay also checks buffered NEAR responses for the repetition pattern that stops Hermes. With prior Venice consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.

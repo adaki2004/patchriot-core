@@ -36,8 +36,8 @@ export function ReportCheck({ id, csrf, beforeExport }: { id: string; csrf: stri
   if (!check.data || check.data.state === 'deleted' || check.data.state === 'not_requested' && !check.data.can_request) return null;
   const result = check.data.state === 'verified' && check.data.result?.receipt.kind === 'provider_tee' ? check.data.result : null;
   return <details className="assessment-disclosure report-technical" aria-label="NEAR AI report check">
-    <summary>Optional report check · NEAR AI</summary>
-    <p>A separate model can flag possible duplicate findings and claims that need closer review. It does not run more website tests or change this report.</p>
+    <summary>Second look at the findings · NEAR AI</summary>
+    <p>Checks whether agents reported the same issue or made conflicting claims. It adds no website tests.</p>
     {check.data.state === 'not_requested' && <>
       <label className="check"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /><span>Send finding excerpts and request metadata to NEAR AI for this check. Raw HTTP captures and saved login credentials are excluded.</span></label>
       <p className="fine">One attempt per finished report, included in this pilot. The check and receipt share the report’s deletion time.</p>
@@ -46,14 +46,17 @@ export function ReportCheck({ id, csrf, beforeExport }: { id: string; csrf: stri
     {active(check.data) && <p role="status">{check.data.state === 'queued' ? 'Waiting for the report checker.' : 'Checking the summaries and verifying the model’s signature.'}</p>}
     {check.data.state === 'unavailable' && <p className="notice">This check could not be completed and verified. The original report remains available. It will not be charged or run again automatically.</p>}
     {result && <>
-      <h3>Model-signed advice</h3><p>{result.advice.explanation}</p>
-      {result.advice.duplicate_groups.length > 0 && <><h4>Possible duplicates to compare</h4><ul>{result.advice.duplicate_groups.map((group, index) => <li key={index}>{group.map(name).join(' · ')}</li>)}</ul></>}
-      {result.advice.review_ids.length > 0 && <p><strong>Look more closely at:</strong> {result.advice.review_ids.map(name).join(', ')}. These numbers refer to each agent’s original finding order.</p>}
+      <div className="report-check-summary"><strong>{result.advice.duplicate_groups.length ? `${result.advice.duplicate_groups.length} possible overlap${result.advice.duplicate_groups.length === 1 ? "" : "s"}` : 'No overlapping findings flagged'}</strong><span>{result.advice.review_ids.length ? `${result.advice.review_ids.length} claim${result.advice.review_ids.length === 1 ? " needs" : "s need"} a closer look` : 'No other claims flagged'}</span></div>
+      {result.advice.duplicate_groups.length > 0 && <p className="fine">Several agents may be describing the same weakness. These are suggestions to compare, not additional vulnerabilities.</p>}
+      <details><summary>What was compared?</summary>
+        {result.advice.duplicate_groups.length > 0 && <ul>{result.advice.duplicate_groups.map((group, index) => <li key={index}>{group.map(name).join(' · ')}</li>)}</ul>}
+        {result.advice.review_ids.length > 0 && <p><strong>Needs review:</strong> {result.advice.review_ids.map(name).join(', ')}.</p>}
+        <p className="fine">Numbers refer to the original findings in each agent report.</p><p>{result.advice.explanation}</p>
+      </details>
       {result.omitted_findings > 0 && <p className="notice">{result.omitted_findings} findings were outside this bounded check.</p>}
-      <p className="fine">NEAR’s SDK verified model attestation and a signature over the exact check input and output. This does not attest to the Kali agents, identify a particular physical machine or prove any vulnerability. No claim of audited model code or end-to-end encryption is made.</p>
-      <button className="quiet" disabled={busy} onClick={() => void download()}>Download check & signature ↓</button>
+      <details><summary>Verification receipt</summary><p className="fine">NEAR verified the model environment and signed check. This authenticates the advice; it does not prove a finding is correct.</p><button className="quiet" disabled={busy} onClick={() => void download()}>Download check & signature ↓</button></details>
     </>}
-    <p className="fine">Model: {check.data.model}. The signed receipt contains the exact check messages; share it as carefully as the report.</p>
+    <p className="fine">Summary checker: {check.data.model}. This is separate from the investigating agents shown in Agent reports.</p>
     {(error || check.error) && <p className="notice error" role="alert">{error || check.error}</p>}
   </details>;
 }
