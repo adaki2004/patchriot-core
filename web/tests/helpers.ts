@@ -7,6 +7,9 @@ export async function emptyDashboard(page: Page) {
     if (route.request().method() === 'GET') {
       if (path === '/api/auth/providers') return route.fulfill({ json: { github: false, google: false } });
       if (path === '/api/wallet/config') return route.fulfill({ json: { enabled: false } });
+      if (path === '/api/trial') return route.fulfill({ json: { available: false, ends_at: null, claim: null } });
+      if (path === '/api/admin/trial') return route.fulfill({ json: { campaign: null, total_claimed: 0, reserved: 0, started: 0 } });
+      if (path === '/api/admin/review-stats') return route.fulfill({ json: { requested: 0, live_requested: 0, awaiting_verification: 0, review_runs: 0, awaiting_payment: 0, queued: 0, running: 0, completed: 0, needs_review: 0, failed: 0, cancelled: 0, as_of: 1793808000 } });
       if (path === '/api/analytics') return route.fulfill({ json: { enabled: false } });
       if (['/api/pentests', '/api/pentest-tools', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/agents'].includes(path)) return route.fulfill({ json: [] });
       if (path === '/api/withdrawals') return route.fulfill({ json: { enabled: false, minimum_claim: '10000000', balance: { earned: '0', available: '0', reserved: '0', paid: '0' }, destinations: [], claims: [], receipts: [] } });
