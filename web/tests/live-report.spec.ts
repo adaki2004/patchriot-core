@@ -163,7 +163,10 @@ test('PDF, original report and endpoint downloads keep their distinct purposes',
   expect(md).toContain('https://owned.example');
   expect(md).toContain('investigator#1');
   expect(md).toContain('Recommended fix (not tested)');
-  expect(md).toContain(fixExample);
+  expect(md).toContain('```html\n<script>window.fixExecuted=true</script>');
+  expect(md).toContain('&lt;img src=x');
+  expect(md).not.toContain('\n<img src=x');
+  expect(md).toContain('```json');
 });
 
 test('large evidence stays intact while the report and PDF stay concise', async ({ page }) => {
@@ -200,10 +203,10 @@ test('finding text and suggested code remain inert and fit mobile', async ({ pag
   await setup(page);
   const finding = page.locator('.report-finding').first();
   await finding.locator('summary').first().click();
-  await expect(finding.getByText('Suggested example · html', { exact: true })).toBeVisible();
+  await expect(finding.getByText('Code / evidence · html', { exact: true })).toBeVisible();
   await expect(finding.locator('.remediation-example code')).toHaveText(fixExample.split('```html\n')[1].split('```')[0]);
-  await expect(finding.locator('.remediation')).toContainText('<img src=x onerror="window.fixExecuted=true">');
-  await expect(finding.locator('.remediation script, .remediation img')).toHaveCount(0);
+  await expect(finding.locator('.report-prose').nth(1)).toContainText('<img src=x onerror="window.fixExecuted=true">');
+  await expect(finding.locator('.report-prose script, .report-prose img')).toHaveCount(0);
   expect(await page.evaluate(() => 'fixExecuted' in window)).toBe(false);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.locator('.report-finding > summary').nth(1).click();

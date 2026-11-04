@@ -1,4 +1,6 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { ReportText } from './ReportText';
+import { prettyJson, fencedText, reportMarkdownText } from './reportFormatting';
+import { useRef, useState } from 'react';
 import './assessment.css';
 import { expectedReports, reviewMethod, findingRequest, reportFindings, stopExplanation, type ReportInput } from './report';
 
@@ -49,7 +51,7 @@ export function saveReportFile(filename: string, content: string, mime: string) 
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 // Keep model/target text inert when someone opens the exported Markdown.
-const block = (value: string) => { const fence = '`'.repeat(Array.from(value.matchAll(/`+/g)).reduce((max, m) => Math.max(max, m[0].length + 1), 3)); return `${fence}text\n${value}\n${fence}`; };
+const block = fencedText;
 
 export function reportMarkdown(id: string, steps: LiveStep[], origins: string[], policy: Pick<ReportInput, 'review_policy' | 'third_review'> = {}) {
   const lines = ['# Patchriot — private website review', `Review: ${id}`, 'Scope:', block(origins.join('\n')), 'Role reports and operator-recorded HTTP evidence. Agreement is not proof of safety. Remediation is a recommendation; no production patch was tested.'];
@@ -59,7 +61,7 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
   for (const row of findings) {
     lines.push(`### ${row.id}`, block(`${row.finding.title}\nSeverity: ${row.finding.severity}`));
     if (row.disputed) lines.push('Roles differ — review needed.');
-    for (const c of row.contributions) lines.push(`#### ${liveRoles[c.role]} contribution`, block(`Severity: ${c.finding.severity}\nSupport: ${support[c.finding.support] ?? c.finding.support}\n${c.complete ? 'Assessment received' : 'Partial assessment'}\nFirst cited request: ${findingRequest(c)}`), 'Impact and evidence:', block(c.finding.explanation), 'Reproduction:', block(c.finding.reproduction), 'Recommended fix (not tested):', block(c.finding.suggested_action), `HTTP references: ${c.finding.evidence_ids.map(n => `${c.role}#${n}`).join(', ')}`);
+    for (const c of row.contributions) lines.push(`#### ${liveRoles[c.role]} contribution`, block(`Severity: ${c.finding.severity}\nSupport: ${support[c.finding.support] ?? c.finding.support}\n${c.complete ? 'Assessment received' : 'Partial assessment'}\nFirst cited request: ${findingRequest(c)}`), 'Impact and evidence:', reportMarkdownText(c.finding.explanation), 'Reproduction:', reportMarkdownText(c.finding.reproduction), 'Recommended fix (not tested):', reportMarkdownText(c.finding.suggested_action), `HTTP references: ${c.finding.evidence_ids.map(n => `${c.role}#${n}`).join(', ')}`);
   }
   for (const s of steps) {
     lines.push(`## ${liveRoles[s.role]}`, s.evidence_complete ? 'Report received with recorded requests.' : 'Incomplete role: inspect the evidence and missing checks.');
@@ -67,15 +69,15 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
     const r = s.result;
     if (r.execution.fallback) lines.push(block(fallbackDescription(r.execution.fallback)));
     if (r.assessment) {
-      lines.push(block(r.assessment.summary));
+      lines.push(reportMarkdownText(r.assessment.summary));
       lines.push('### Coverage limits', block(r.assessment.limitations.join('\n')));
     } else lines.push('No usable structured assessment was returned.');
     if (r.tool_runs?.length) {
       lines.push('### Recorded tools', 'Scanner matches are leads. Check the target request and controls before accepting a finding.');
-      for (const run of r.tool_runs) lines.push(block(JSON.stringify(run, null, 2)));
+      for (const run of r.tool_runs) lines.push(block(JSON.stringify(run, null, 2), 'json'));
     }
     lines.push('### Recorded requests');
-    for (const e of r.evidence) lines.push(block(JSON.stringify(e, null, 2)));
+    for (const e of r.evidence) lines.push(block(JSON.stringify(e, null, 2), 'json'));
   }
   return lines.join('\n\n');
 }
@@ -135,27 +137,14 @@ function RequestEvidence({ entry }: { entry: HttpRecord }) {
     {entry.error && <p className="notice">Request did not complete: {entry.error.replaceAll('_', ' ')}.</p>}
     {entry.observed_at && <p className="fine">Recorded {new Date(entry.observed_at * 1000).toLocaleString()}</p>}
     <details><summary>Request and response headers</summary><h5>Request</h5><pre>{JSON.stringify(entry.request_headers ?? {}, null, 2)}</pre><h5>Recorded response headers</h5><pre>{JSON.stringify(entry.headers, null, 2)}</pre></details>
-    {entry.request_body_excerpt != null && <details><summary>Submitted body (redacted excerpt)</summary><pre>{entry.request_body_excerpt}</pre></details>}
-    <details><summary>Response excerpt</summary><pre>{entry.body_excerpt || 'No text excerpt recorded.'}</pre></details>
+    {entry.request_body_excerpt != null && <details><summary>Submitted body (redacted excerpt)</summary><pre><code>{prettyJson(entry.request_body_excerpt)}</code></pre></details>}
+    <details><summary>Response excerpt</summary><pre><code>{prettyJson(entry.body_excerpt || 'No text excerpt recorded.')}</code></pre></details>
     {entry.truncated && <p className="fine">Shortened excerpt; it does not show the complete response.</p>}
     {entry.body_sha256 && <details><summary>Response fingerprint</summary><p className="fine">SHA-256 of the bytes retained by the relay. It helps compare responses; it is not a vulnerability verdict.</p><code className="evidence-url">{entry.body_sha256}</code></details>}
   </article>;
 }
 
-export function Remediation({ text }: { text: string }) {
-  // Recognize fenced examples only. Model prose, HTML and links stay literal
-  // React text; a security report must never execute the payload it describes.
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  for (const match of text.matchAll(/^(`{3,})[ \t]*([a-z0-9_+.-]*)[ \t]*\r?\n([\s\S]*?)^\1[ \t]*$/gmi)) {
-    const before = text.slice(cursor, match.index);
-    if (before.trim()) parts.push(<p className="finding-prose" key={`text-${cursor}`}>{before.trim()}</p>);
-    parts.push(<figure className="remediation-example" key={`code-${match.index}`}><figcaption>Suggested example{match[2] ? ` · ${match[2]}` : ''}</figcaption><pre><code>{match[3]}</code></pre></figure>);
-    cursor = match.index + match[0].length;
-  }
-  if (text.slice(cursor).trim()) parts.push(<p className="finding-prose" key={`text-${cursor}`}>{text.slice(cursor).trim()}</p>);
-  return <div className="remediation">{parts}</div>;
-}
+export function Remediation({ text }: { text: string }) { return <ReportText text={text} />; }
 
 export function LiveEvidence({ result, complete, technicalOnly = false }: { result: LiveResult; complete?: boolean | null; technicalOnly?: boolean }) {
   const evidence = useRef<HTMLDetailsElement>(null);
@@ -172,9 +161,9 @@ export function LiveEvidence({ result, complete, technicalOnly = false }: { resu
     {result.execution.fallback && <p className="notice" role="status">{fallbackDescription(result.execution.fallback)}</p>}
     <dl className="role-metrics"><div><dt>Requests recorded</dt><dd>{result.execution.http_requests}</dd></div><div><dt>Model calls</dt><dd>{result.execution.inference_calls}</dd></div><div><dt>Run time</dt><dd>{Math.round(result.execution.duration_ms / 1000)}s</dd></div></dl>
     {!!result.tool_runs?.length && <details className="tool-evidence"><summary>Tools run ({result.tool_runs.length})</summary><p>The pinned runner recorded these checks before the agent investigated their output. Matches are leads, not confirmed vulnerabilities. Open the referenced requests to see what the target actually returned.</p>{result.tool_runs.map((run, i) => <article className="request-evidence" key={i}><div className="section-heading"><strong>{run.tool} · {run.version}</strong><span className="pill">{run.failure ? run.failure.replaceAll('_', ' ') : run.exit_code === 0 ? 'Finished' : 'Tool error'}</span></div><p className="fine">{new Date(run.started_at * 1000).toLocaleString()} · {Math.round(run.duration_ms / 1000)}s · {run.evidence_ids.length} recorded requests</p><details><summary>Command arguments</summary><pre>{JSON.stringify(run.arguments, null, 2)}</pre></details><details><summary>Tool output</summary><pre>{run.output_excerpt || (run.exit_code === 0 && !run.failure ? 'No matching observations were printed. This does not prove the site is safe.' : 'No tool output was retained.')}</pre></details>{run.output_truncated && <p className="fine">Output was shortened; inspect the request evidence for the recorded response excerpts.</p>}{run.evidence_ids.length > 0 && <button className="text-button" onClick={() => inspect(run.evidence_ids)}>Inspect tool requests →</button>}</article>)}</details>}
-    {!technicalOnly && result.assessment && <><p className="assessment-summary">{result.assessment.summary}</p>
+    {!technicalOnly && result.assessment && <><ReportText text={result.assessment.summary} />
       {findings.length > 0 ? <><div className="finding-controls"><h4>Findings from this role</h4><label>Show<select aria-label="Filter findings" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All claims ({findings.length})</option><option value="reproduced">Reported reproduced</option><option value="unconfirmed">Unconfirmed or not reproduced</option></select></label></div>
-      {shown.map((f, i) => <article className="live-finding" data-severity={f.severity} key={`${f.title}:${i}`}><div className="finding-heading"><h4>{f.title}</h4><span className="pill">{f.severity} severity</span></div><p className="finding-support">{support[f.support] ?? f.support}</p><h5>Why it matters / what was observed</h5><p className="finding-prose">{f.explanation}</p><details><summary>Reproduce the observation</summary><p>These are the agent’s instructions. Inspect the scope and evidence before running them.</p><pre>{f.reproduction}</pre></details><details><summary>Recommended fix</summary><p className="fine">A recommendation based on the observed behavior. No production patch was tested.</p><Remediation text={f.suggested_action} /></details><button className="text-button" onClick={() => inspect(f.evidence_ids)}>Inspect {f.evidence_ids.length} supporting request{f.evidence_ids.length === 1 ? '' : 's'} →</button></article>)}
+      {shown.map((f, i) => <article className="live-finding" data-severity={f.severity} key={`${f.title}:${i}`}><div className="finding-heading"><h4>{f.title}</h4><span className="pill">{f.severity} severity</span></div><p className="finding-support">{support[f.support] ?? f.support}</p><h5>Why it matters / what was observed</h5><ReportText text={f.explanation} /><details><summary>Reproduce the observation</summary><p>These are the agent’s instructions. Inspect the scope and evidence before running them.</p><ReportText text={f.reproduction} /></details><details><summary>Recommended fix</summary><p className="fine">A recommendation based on the observed behavior. No production patch was tested.</p><Remediation text={f.suggested_action} /></details><button className="text-button" onClick={() => inspect(f.evidence_ids)}>Inspect {f.evidence_ids.length} supporting request{f.evidence_ids.length === 1 ? '' : 's'} →</button></article>)}
       {shown.length === 0 && <p>No findings match this filter.</p>}
       <p className="fine">Severity and reproduction labels are the agent’s assessment. Other roles may disagree. Review every role before deciding what to fix.</p></> : <p className="notice">This role reported no findings. That is not proof the site has no vulnerabilities.</p>}
       <details className="coverage-limits"><summary>What this role could not check</summary><ul>{result.assessment.limitations.map((v, i) => <li key={i}>{v}</li>)}</ul></details>
