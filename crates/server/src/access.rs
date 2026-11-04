@@ -129,7 +129,7 @@ pub(crate) async fn rate(
 
 // Do not accept a caller-supplied forwarding header as its identity. Behind a
 // proxy this deliberately shares the peer limit; username/global limits remain.
-async fn public_rate(
+pub(crate) async fn public_rate(
     state: &AppState,
     peer: Option<Extension<ConnectInfo<SocketAddr>>>,
     action: &str,
@@ -342,6 +342,7 @@ pub(crate) struct RequestView {
 }
 #[derive(Serialize, FromRow)]
 pub(crate) struct AccountView {
+    auth_method: String,
     id: Uuid,
     display_name: String,
     contact_email: Option<String>,
@@ -363,7 +364,7 @@ pub(crate) async fn list(
 ) -> Result<Json<Desk>, ApiError> {
     admin(&state, &headers, false).await?;
     let requests = sqlx::query_as("SELECT id,display_name,email,note,status,account_id,created_at,decided_at FROM access_requests ORDER BY (status = 'pending') DESC, created_at DESC LIMIT 100").fetch_all(&state.pool).await?;
-    let accounts = sqlx::query_as("SELECT a.id,a.display_name,a.contact_email,c.username,a.role,a.disabled,a.created_at,(SELECT count(*) FROM review_codes r WHERE r.issued_to = a.id AND r.account_id IS NULL AND r.revoked_at IS NULL AND r.expires_at > now()) AS unused_coupons FROM accounts a LEFT JOIN account_credentials c ON c.account_id = a.id ORDER BY a.created_at DESC LIMIT 100").fetch_all(&state.pool).await?;
+    let accounts = sqlx::query_as("SELECT a.id,a.display_name,COALESCE(a.contact_email,(SELECT verified_email FROM oauth_identities WHERE account_id=a.id ORDER BY created_at LIMIT 1)) AS contact_email,c.username,a.auth_method,a.role,a.disabled,a.created_at,(SELECT count(*) FROM review_codes r WHERE r.issued_to = a.id AND r.account_id IS NULL AND r.revoked_at IS NULL AND r.expires_at > now()) AS unused_coupons FROM accounts a LEFT JOIN account_credentials c ON c.account_id = a.id ORDER BY a.created_at DESC LIMIT 100").fetch_all(&state.pool).await?;
     Ok(Json(Desk { requests, accounts }))
 }
 

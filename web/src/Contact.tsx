@@ -21,7 +21,7 @@ export function EnterpriseContact() {
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <section className="enterprise-contact">
-    <div className="enterprise-intro"><img src="/brand/collective.png" alt="" width="1536" height="1024" /><p className="eyebrow">SIAAS / YOUR PRIVATE NETWORK</p><h1>Your agents.<br />Your infrastructure.</h1><p>Build a defense network for your business. Tell us what you want to test and where your agents need to run.</p><p>Kali Linux environments, supported agent runtimes, private connections and reports for your team.</p></div>
+    <div className="enterprise-intro"><img src="/brand/collective.png" alt="" width="1536" height="1024" /><p className="eyebrow">DEDICATED / BUSINESS & ENTERPRISE</p><h1>Your application.<br />A dedicated setup.</h1><p>Tell us what you want to test and where the agents should run. We’ll discuss a separate installation for your organization.</p><p>Agreed operator access, isolated Kali environments, private model inference and report storage.</p></div>
     <div className="panel contact-form"><p className="eyebrow">LET’S TALK</p><h2>Plan your network.</h2>
       {sent ? <div role="status"><h3>Inquiry received.</h3><p>Your message is saved in our private staff inbox. We’ll review it and use your email to get back to you. This does not create an account or start a test.</p><a className="text-button" href="#/home">Back to Patchriot →</a></div> : <form onSubmit={submit}>
         <label>Your name<input name="name" autoComplete="name" maxLength={80} required disabled={busy} /></label>

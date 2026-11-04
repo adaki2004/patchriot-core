@@ -37,6 +37,8 @@ async fn completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
         pentest_id: None,
         presentation: None,
         consent: patchriot_protocol::website_reviews::CreateWebsiteReview {
+            allows_venice_fallback: false,
+            review_policy: Default::default(),
             request_id: payment.request_id,
             snapshot_sha256: "a".repeat(64),
             device_ids: devices.to_vec(),
@@ -227,11 +229,9 @@ async fn database_rejects_partial_or_unbacked_allocation() {
     db.finish().await;
 }
 
-#[tokio::test]
-async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unpaid() {
+async fn live_completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
     use patchriot_protocol::pentests::{LiveScope, PentestContext, PentestResult};
-    let db = TestDb::new().await;
-    let (mut candidate, mut view) = completed(&db, 10_000_000).await;
+    let (mut candidate, mut view) = completed(db, amount).await;
     let scope: LiveScope = serde_json::from_value(json!({"origins":["https://example.com"],"profile":"web_baseline_v1","tools":["artex_engine_v1"],"methods":["GET","HEAD","OPTIONS"]})).unwrap();
     let scope = scope.normalized().unwrap();
     let hash = scope.hash().unwrap();
@@ -247,6 +247,9 @@ async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unp
     view.mode = "pentest_agent".into();
     view.scenario = patchriot_protocol::FixtureScenario::LiveHttpV1;
     view.pentest = Some(PentestContext {
+        allows_venice_fallback: false,
+        review_policy: Default::default(),
+        third_review: None,
         pentest_id: website.site_check_id,
         scope: scope.clone(),
         scope_sha256: hash.clone(),
@@ -265,6 +268,13 @@ async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unp
     if let Some(WorkResult::Pentest(scout)) = &mut view.steps[0].result {
         scout.tool_runs.push(serde_json::from_value(json!({"tool":"artex-engine","version":"owned-test","arguments":["/opt/artex/artex","https://example.com"],"started_at":1,"duration_ms":1,"exit_code":0,"failure":null,"evidence_ids":[1],"output_sha256":format!("{:x}",Sha256::digest(b"")),"output_excerpt":"","output_truncated":false})).unwrap());
     }
+    (candidate, view)
+}
+
+#[tokio::test]
+async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unpaid() {
+    let db = TestDb::new().await;
+    let (candidate, view) = live_completed(&db, 10_000_000).await;
     let mut incomplete = view.clone();
     incomplete.steps[0].evidence_complete = Some(false);
     assert!(allocate(&db.pool, &candidate, &incomplete).await.is_err());
@@ -274,4 +284,106 @@ async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unp
         .fetch_one(&db.pool).await.unwrap();
     assert_eq!(totals, (9_000_000, 36, 0, 3));
     db.finish().await;
+}
+
+#[tokio::test]
+async fn adaptive_earnings_follow_actual_roles_preserve_units_and_reject_changed_consent() {
+    use patchriot_protocol::pentests::{LiveReviewPolicy, review_policy};
+    use patchriot_protocol::reports::{ReportRetention, WorkReceipt};
+    for third in [false, true] {
+        let db = TestDb::new().await;
+        let (mut candidate, mut view) = live_completed(&db, 10_000_002).await;
+        let context = view.pentest.as_mut().unwrap();
+        context.review_policy = LiveReviewPolicy::InvestigateVerifyV1;
+        assert!(context.resolved_role_count().is_none());
+        if third {
+            for step in &mut view.steps {
+                let Some(WorkResult::Pentest(result)) = &mut step.result else {
+                    panic!()
+                };
+                result.assessment.as_mut().unwrap().findings.push(serde_json::from_value(json!({"title":"Synthetic high finding","severity":"high","support":"observed","explanation":"Owned fixture","reproduction":"GET the fixture","suggested_action":"Apply access controls","evidence_ids":[1]})).unwrap());
+            }
+        } else {
+            view.steps.pop();
+        }
+        let (Some(WorkResult::Pentest(first)), Some(WorkResult::Pentest(second))) =
+            (&view.steps[0].result, &view.steps[1].result)
+        else {
+            panic!()
+        };
+        context.third_review = Some(review_policy::decide(&context.scope, first, second));
+        assert_eq!(
+            context.resolved_role_count(),
+            Some(if third { 3 } else { 2 })
+        );
+        // Dispatcher cannot shorten an already-paid legacy order by changing
+        // only its result. The saved checkout must name this new policy too.
+        assert!(allocate(&db.pool, &candidate, &view).await.is_err());
+        candidate.terms["consent"]["review_policy"] = json!("investigate_verify_v1");
+        let shares = credits(&view, candidate.amount).unwrap();
+        assert_eq!(shares.iter().map(|r| r.amount).sum::<i64>(), 9_000_002);
+        assert_eq!(shares.len(), if third { 3 } else { 2 });
+        let mut bad = view.clone();
+        bad.pentest.as_mut().unwrap().third_review = None;
+        assert!(credits(&bad, candidate.amount).is_err());
+        let mut bad = view.clone();
+        bad.steps.swap(0, 1); // role lookup, not array order, determines earnings
+        assert_eq!(credits(&bad, candidate.amount).unwrap().len(), shares.len());
+        let mut bad = view.clone();
+        if third {
+            bad.pentest
+                .as_mut()
+                .unwrap()
+                .third_review
+                .as_mut()
+                .unwrap()
+                .reasons
+                .clear();
+        } else {
+            bad.pentest
+                .as_mut()
+                .unwrap()
+                .third_review
+                .as_mut()
+                .unwrap()
+                .reasons
+                .push(patchriot_protocol::pentests::ThirdReviewReason::SeriousFinding);
+        }
+        assert!(credits(&bad, candidate.amount).is_err());
+        // After privacy deletion, the accepted role receipts preserve earnings.
+        for step in &mut view.steps {
+            step.receipt = WorkReceipt::from_result(step.result.as_ref().unwrap());
+            step.result = None;
+        }
+        view.retention = Some(ReportRetention {
+            first_downloaded_at: 1,
+            expires_at: 43201,
+            content_deleted: true,
+        });
+        let (one, two) = tokio::join!(
+            allocate(&db.pool, &candidate, &view),
+            allocate(&db.pool, &candidate, &view)
+        );
+        assert_eq!(usize::from(one.unwrap()) + usize::from(two.unwrap()), 1);
+        let row: (String, i16, i64) = sqlx::query_as(
+            "SELECT policy,completed_roles,operator_amount FROM earning_allocations",
+        )
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+        assert_eq!(
+            row,
+            (
+                "investigate_verify_90_10_v1".into(),
+                shares.len() as i16,
+                9_000_002
+            )
+        );
+        let count: i64 = sqlx::query_scalar("SELECT count(*) FROM operator_earnings")
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+        assert_eq!(count, shares.len() as i64);
+        db.finish().await;
+    }
 }

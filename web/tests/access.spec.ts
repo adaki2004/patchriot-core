@@ -28,7 +28,7 @@ test('password login is persistent and clears sensitive fields after success', a
   await page.goto('/#/home');
   await page.locator('header').getByRole('button', { name: 'App' }).click();
   await expect(page.getByLabel('Username', { exact: true })).toBeVisible();
-  await expect(page.getByRole('dialog', { name: 'Sign in or request access' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Sign in' })).toBeVisible();
   await page.getByLabel('Username', { exact: true }).fill('owner_example');
   await page.getByLabel('Password', { exact: true }).fill('browser-test-password');
   await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
@@ -67,20 +67,50 @@ test('an activation fragment is removed and a failed session read does not redee
   expect(activations).toBe(1);
 });
 
-test('requesting access submits a short note without claiming automatic approval', async ({ page }) => {
+test('SSO replaces public registration while pilot sign-in stays available', async ({ page }) => {
   await setup(page);
-  let sent: unknown;
-  await page.route('**/api/access-requests', route => { sent = route.request().postDataJSON(); return route.fulfill({ status: 202, json: { ok: true } }); });
+  await page.route('**/api/auth/providers', route => route.fulfill({ json: { github: true, google: true } }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'Request access', exact: true }).click();
-  await page.getByLabel('Your name').fill('New person');
-  await page.getByLabel('Email', { exact: true }).fill('person@example.com');
-  await page.getByLabel('What would you like to do?').fill('Check my own website.');
-  await page.getByRole('button', { name: 'Send request' }).click();
-  await expect(page.getByRole('status')).toContainText('review requests by hand');
-  expect(sent).toEqual({ display_name: 'New person', email: 'person@example.com', note: 'Check my own website.' });
-  await page.getByRole('button', { name: 'Done', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await page.locator('.access-invitation').getByRole('button', { name: 'Get started' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Sign in', exact: true });
+  await expect(dialog.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  await expect(dialog.getByLabel('Username', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('Your name')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Existing pilot account' }).click();
+  await expect(dialog.getByLabel('Username', { exact: true })).toBeVisible();
+});
+
+for (const provider of ['github', 'google']) test(`starts ${provider} only through the same-origin POST`, async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/auth/providers', route => route.fulfill({ json: { github: true, google: true } }));
+  const destination = provider === 'github' ? 'https://github.com/login/oauth/authorize' : 'https://accounts.google.com/o/oauth2/v2/auth';
+  let started = 0;
+  await page.route(`**/api/auth/${provider}/start`, route => {
+    started++; expect(route.request().method()).toBe('POST'); expect(route.request().postDataJSON()).toEqual({});
+    const url = new URL(destination); url.searchParams.set('redirect_uri', `${new URL(route.request().url()).origin}/api/auth/${provider}/callback`); url.searchParams.set('state', 'a'.repeat(64)); url.searchParams.set('response_type', 'code');
+    return route.fulfill({ json: { authorization_url: url.href } });
+  });
+  // A local fixture answers navigation; this test never calls a provider.
+  await page.route(`${destination}**`, route => route.fulfill({ contentType: 'text/html', body: '<p>Provider sign-in fixture</p>' }));
+  await page.goto('/'); await page.locator('header').getByRole('button', { name: 'App' }).click();
+  await page.getByRole('button', { name: `Continue with ${provider === 'github' ? 'GitHub' : 'Google'}` }).click();
+  await expect(page).toHaveURL(new RegExp(provider === 'github' ? '^https://github\\.com/login/oauth/authorize' : '^https://accounts\\.google\\.com/o/oauth2/v2/auth'));
+  expect(started).toBe(1);
+});
+
+test('rejects an unexpected OAuth destination and clears generic callback failure from the URL', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/auth/providers', route => route.fulfill({ json: { github: true, google: false } }));
+  await page.route('**/api/auth/github/start', route => route.fulfill({ json: { authorization_url: 'https://attacker.example/?secret=bad' } }));
+  await page.goto('/?signin=failed#/request');
+  await expect(page).toHaveURL(/\/#\/request$/);
+  await expect(page.getByText('Sign-in was not completed. Please try again.')).toBeVisible();
+  const dialog = page.getByRole('dialog', { name: 'Sign in', exact: true });
+  await dialog.getByRole('button', { name: 'Continue with GitHub' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Sign-in could not be started');
+  await expect(page).toHaveURL(/\/#\/request$/);
+  await expect(dialog.getByRole('button', { name: 'Continue with GitHub' })).toBeEnabled();
 });
 
 test('admin can approve access and share an account-specific setup link and coupon', async ({ page }) => {
@@ -116,4 +146,27 @@ test('member bookmarks cannot open the access desk or fetch its contents', async
   await page.goto('/#/access-desk');
   await expect(page.getByRole('heading', { name: 'Administrator access required.' })).toBeVisible();
   expect(reads).toBe(0);
+});
+
+
+test('a pending provider redirect cannot race a password sign-in or close the dialog', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/auth/providers', route => route.fulfill({ json: { github: true, google: true } }));
+  let release!: () => void, started = false;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/auth/github/start', async route => { started = true; await pending; return route.fulfill({ status: 503, json: { error: 'sso_unavailable' } }); });
+  try {
+    await page.goto('/'); await page.locator('header').getByRole('button', { name: 'App' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Sign in', exact: true });
+    await dialog.getByRole('button', { name: 'Existing pilot account' }).click();
+    await dialog.getByRole('button', { name: 'Continue with GitHub' }).click();
+    await expect.poll(() => started).toBe(true);
+    await expect(dialog.getByLabel('Username', { exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Open workspace →' })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+    await page.keyboard.press('Escape'); await expect(dialog).toBeVisible();
+    release();
+    await expect(dialog.getByRole('alert')).toContainText('not available');
+    await expect(dialog.getByLabel('Username', { exact: true })).toBeEnabled();
+  } finally { release(); }
 });

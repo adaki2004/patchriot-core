@@ -1,7 +1,8 @@
+import { fallbackDescription } from './LiveReport';
 import { coverageChecks, checkLabels, findingRequest } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { reportSummary, reportRoles, roleMethods, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
+import { reportSummary, reviewMethod, reportRoles, roleMethods, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
 
 const ink = rgb(.09, .12, .19), muted = rgb(.36, .40, .48), blue = rgb(.25, .40, .75), red = rgb(.82, .26, .27);
 const width = 595.28, height = 841.89, margin = 48, lineWidth = width - margin * 2;
@@ -87,13 +88,14 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.paragraph(summary.headline, 15, rgb(1, .65, .57));
   p.y = 215;
   p.paragraph(`Started ${new Date(input.created_at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`, 10, rgb(.78, .82, .88));
-  p.paragraph(`${summary.findings.length} observations / ${summary.assessments} of 3 usable assessments`, 12, rgb(.94, .95, .98));
+  p.paragraph(`${summary.findings.length} observations / ${summary.assessments} of ${summary.expected} usable assessments`, 12, rgb(.94, .95, .98));
   p.paragraph(`Report ${input.id}`, 9, rgb(.66, .73, .84));
   p.paragraph('Prepared from saved agent reports. Incomplete work is disclosed; this is not a certification of security.', 10, rgb(.78, .82, .88));
 
   p.newPage('Contents'); const contentsPage = p.page;
   p.begin('01 / Executive summary');
   p.paragraph(summary.description, 12);
+  p.paragraph(reviewMethod(input));
   p.label('Status', summary.headline);
   p.label('Results at a glance', `${summary.assessments} usable assessments. ${summary.complete} roles with complete recorded evidence. ${summary.requests} recorded HTTP requests.`);
   p.heading('Reported severity');
@@ -110,7 +112,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.label('Approved HTTP methods', input.methods?.join(', ') ?? 'See the saved scope');
   p.label('Scope fingerprint (SHA-256)', input.scope_sha256 ?? 'Not recorded');
   p.heading('Assessment process');
-  p.paragraph('Scout investigates the application and records leads. Recon attempts to reproduce or challenge them. Verifier reviews the evidence and impact. Requests are constrained by the approved target scope and execution budget. Tool executions, final assessments and coverage limitations are recorded separately.');
+  p.paragraph('Scout investigates the application and records leads. Recon attempts to reproduce or challenge them. When scheduled, Verifier reviews the evidence and impact. Requests are constrained by the approved target scope and execution budget. Tool executions, final assessments and coverage limitations are recorded separately.');
   p.paragraph(teamDescription(input));
   p.paragraph('Evidence is reported by the operators. This document does not attest their honesty, independently verify a model’s identity or demonstrate that a suggested fix works.');
 
@@ -121,7 +123,8 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.paragraph(roleOutcome(s).detail);
     if (!s.result) continue;
     p.paragraph(`${s.result.evidence.length} recorded requests · ${s.result.execution.inference_calls} model calls · ${Math.round(s.result.execution.duration_ms / 1000)} seconds`, 9, muted);
-    p.label('Provider / model', `${s.result.execution.provider} / ${s.result.execution.model}`);
+    if (s.result.execution.fallback) p.paragraph(fallbackDescription(s.result.execution.fallback), 9, muted);
+    p.label('Primary provider / model', `${s.result.execution.provider} / ${s.result.execution.model}`);
     p.paragraph(s.result.assessment?.summary ?? 'No usable assessment was returned. Request and tool records do not by themselves establish a vulnerability.');
     const refs = summary.findings.filter(f => f.contributions.some(c => c.role === s.role)).map(f => f.id);
     if (refs.length) p.paragraph(`Observations: ${refs.join(', ')}`, 10, blue);

@@ -72,7 +72,16 @@ impl ReviewTarget {
         }
     }
     pub fn matches(self, view: &ReviewView, consent: &CreateWebsiteReview) -> bool {
-        if view.id.is_nil() || view.request_id != consent.request_id {
+        if view.id.is_nil()
+            || view.request_id != consent.request_id
+            || match self {
+                Self::Pentest(_) => view.pentest.as_ref().is_none_or(|c| {
+                    c.review_policy != consent.review_policy
+                        || c.allows_venice_fallback != consent.allows_venice_fallback
+                }),
+                _ => !consent.review_policy.is_legacy() || consent.allows_venice_fallback,
+            }
+        {
             return false;
         }
         let material = match self {

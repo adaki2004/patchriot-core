@@ -1,3 +1,4 @@
+import type { ReviewPolicy, ThirdReview } from './Pentests';
 import type { LiveFinding, LiveResult, LiveRole, LiveStep } from './LiveReport';
 
 export const reportRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
@@ -10,7 +11,7 @@ export const roleMethods = {
 } as const;
 export const severities = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export const supportLabels: Record<string, string> = { observed: 'Observed', reproduced: 'Reproduction reported', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
-export type ReportInput = { id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
+export type ReportInput = { review_policy?: ReviewPolicy; third_review?: ThirdReview; id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
 export type FindingContribution = { id: string; role: LiveRole; finding: LiveFinding; result: LiveResult; complete: boolean };
 export type ReportFinding = FindingContribution & { contributions: FindingContribution[]; disputed: boolean };
 
@@ -21,7 +22,11 @@ export function stopExplanation(reason?: string): string {
     case 'provider_budget_reached': case 'engine_budget_reached': return 'The agent reached its allowed AI usage budget. Saved evidence is available, but the remaining checks were not completed.';
     case 'timed_out': case 'timeout': return 'The allowed testing time ended before this work finished.';
     case 'provider_unavailable': case 'provider_rejected_request': case 'provider_stream_interrupted': return 'The AI provider did not complete a request. The agent could not finish this stage.';
-    case 'near_attestation_unavailable': case 'near_model_attestation_required': case 'near_signature_unavailable': case 'near_model_signature_required': case 'near_verification_timeout': return 'NEAR AI verification could not be completed. The agent stopped rather than trust an unverified model response. Saved website requests remain available; this stage needs another assessment.';
+    case 'provider_authentication_failed': return 'The AI provider rejected the configured account access. Staff must check it before another assessment can run.';
+    case 'provider_rate_limited': return 'The AI provider limited a request. This stage stopped before completing; saved website evidence remains available.';
+    case 'provider_context_limit': return 'The request exceeded the AI provider’s input limit. This stage could not finish.';
+    case 'provider_invalid_json': case 'provider_missing_completion_id': case 'provider_missing_message': case 'unexpected_provider_response': return 'The AI provider returned a response the runner could not interpret. This stage is incomplete; it is not a finding about your website.';
+    case 'near_attestation_invalid': case 'near_signature_invalid': case 'near_attestation_unavailable': case 'near_model_attestation_required': case 'near_signature_unavailable': case 'near_model_signature_required': case 'near_verification_timeout': return 'NEAR AI verification could not be completed. The agent stopped rather than trust an unverified model response. Saved website requests remain available; this stage needs another assessment.';
     case 'cancelled': return 'This stage was cancelled. Work already recorded remains available.';
     case 'invalid_tool_records': return 'The runner could not validate the recorded tool output. Its conclusions need review.';
     case undefined: return 'Some checks or supporting evidence are incomplete. Review the recorded limits before relying on these findings.';
@@ -72,17 +77,29 @@ export function reportFindings(input: ReportInput): ReportFinding[] {
   }).sort((a, b) => rank(a.finding) - rank(b.finding));
 }
 
+export function expectedReports(input: Pick<ReportInput, 'review_policy' | 'third_review'>) {
+  return input.review_policy === 'investigate_verify_v1' && !input.third_review?.reasons.length ? 2 : 3;
+}
+export function reviewMethod(input: Pick<ReportInput, 'review_policy' | 'third_review'>) {
+  if (input.review_policy !== 'investigate_verify_v1') return 'This saved request uses three required agents.';
+  const decision = input.third_review;
+  if (!decision) return 'Two required agents: investigation and verification. A third review may follow for serious findings, disagreement or incomplete evidence.';
+  if (!decision.reasons.length) return 'Both required reports are in. The escalation checks did not request a third review; this is not a guarantee of safety.';
+  const labels: Record<string, string> = { serious_finding: 'a high or critical claim', disagreement: 'disputed evidence or severity', unchecked_claim: 'a claim still needing a matching check', incomplete_evidence: 'incomplete evidence' };
+  return `A third review was requested for ${decision.reasons.map(r => labels[r] ?? 'further review').join(', ')}. The original findings and limitations remain visible.`;
+}
 export function reportSummary(input: ReportInput) {
   const findings = reportFindings(input);
   const assessments = input.steps.filter(s => !!s.result?.assessment).length;
   const complete = input.steps.filter(s => !!s.result?.assessment && s.evidence_complete).length;
   const requests = input.steps.reduce((sum, s) => sum + (s.result?.evidence.length ?? 0), 0);
   const finished = !['awaiting_payment', 'queued', 'running'].includes(input.state);
-  const partial = complete < 3 || input.state !== 'completed';
+  const expected = expectedReports(input);
+  const partial = complete < expected || input.state !== 'completed' || input.review_policy === 'investigate_verify_v1' && !input.third_review;
   const headline = !finished ? 'Assessment in progress' : partial ? 'Partial assessment' : 'Assessment received';
   const claims = findings.reduce((n, f) => n + f.contributions.length, 0);
-  const description = `${assessments} of 3 agents returned usable assessments. ${findings.length} ${findings.length === 1 ? 'observation is' : 'observations are'} listed below${claims > findings.length ? `, grouping ${claims} agent claims` : ''}${partial ? '; unfinished work is listed separately' : ''}. ${partial ? 'This run cannot establish that your website is safe.' : 'These are agent-reported findings, not a certification of security.'}`;
-  return { findings, assessments, complete, requests, finished, partial, headline, description };
+  const description = `${assessments} of ${expected} agents returned usable assessments. ${findings.length} ${findings.length === 1 ? 'observation is' : 'observations are'} listed below${claims > findings.length ? `, grouping ${claims} agent claims` : ''}${partial ? '; unfinished work is listed separately' : ''}. ${partial ? 'This run cannot establish that your website is safe.' : 'These are agent-reported findings, not a certification of security.'}`;
+  return { findings, assessments, complete, expected, requests, finished, partial, headline, description };
 }
 
 export function toolOutcome(run: NonNullable<LiveResult['tool_runs']>[number]) {

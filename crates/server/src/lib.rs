@@ -1,6 +1,6 @@
 //! Browser sessions and an authenticated gateway to the private dispatcher.
-//! Prototype access uses approved invitations and passwords. Google federation is a separate
-//! integration; an invitation must never be presented as a verified Google identity.
+//! GitHub/Google sign-in creates member accounts. Legacy invitations/passwords
+//! remain separate identities and never become verified provider identities.
 
 mod access;
 mod analytics;
@@ -15,6 +15,7 @@ pub mod review_codes;
 mod review_target;
 mod sites;
 mod sources;
+mod sso;
 
 use axum::{
     Json, Router,
@@ -33,6 +34,7 @@ use tower_http::{
 
 pub use access::bootstrap_admin;
 pub use auth::{create_invite, disable_account, invite_account};
+pub use sso::SsoConfig;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -55,9 +57,14 @@ pub struct Config {
     pub contact_email: Option<String>,
     pub ga_measurement_id: Option<String>,
     pub analytics_origin: Option<String>,
+    pub sso: SsoConfig,
 }
 
 impl Config {
+    pub fn with_sso(mut self, sso: SsoConfig) -> Self {
+        self.sso = sso;
+        self
+    }
     pub fn with_ga_measurement_id(mut self, value: Option<String>) -> Result<Self, &'static str> {
         if value.as_ref().is_some_and(|id| !analytics::valid_id(id)) {
             return Err("invalid PATCHRIOT_GA_MEASUREMENT_ID");
@@ -158,6 +165,7 @@ impl Config {
             contact_email: None,
             ga_measurement_id: None,
             analytics_origin: None,
+            sso: SsoConfig::default(),
             internal_key,
             web_root,
         })
@@ -288,6 +296,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/admin/incidents/{id}", post(incidents::edit))
         .route("/api/auth/redeem", post(auth::redeem))
         .route("/api/auth/login", post(access::login))
+        .route("/api/auth/providers", get(sso::providers))
+        .route("/api/auth/{provider}/start", post(sso::start))
+        .route("/api/auth/{provider}/callback", get(sso::callback))
         .route("/api/auth/activate", post(access::activate))
         .route("/api/access-requests", post(access::request_access))
         .route("/api/admin/access", get(access::list))

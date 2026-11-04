@@ -15,6 +15,15 @@ const result: LiveResult = {
   evidence: [{ id: 1, method: 'GET', url: 'https://owned.example/debug?token=synthetic-value', status: 200, request_headers: {}, headers: { 'content-type': 'application/json' }, body_excerpt: '{"debug":"fixture"}', body_sha256: 'b'.repeat(64), observed_at: 1793640000, truncated: false, error: null }, { id: 2, method: 'GET', url: 'https://owned.example/control', status: 404, headers: {}, body_excerpt: 'Not found', truncated: false, error: null }], raw_summary: '',
 };
 
+test('two completed reports are complete only for the resolved conditional policy', async () => {
+  const report: ReportInput = { id, state:'completed', created_at:1793640000, origins:['https://owned.example'], review_policy:'investigate_verify_v1', third_review:{reasons:[]}, steps: (['investigator','reproducer'] as const).map(role=>({role,state:'completed',result,evidence_complete:true})) };
+  expect(reportSummary(report).partial).toBe(false);
+  expect(reportSummary(report).description).toContain('2 of 2 agents');
+  expect(reportSummary({...report,third_review:undefined}).partial).toBe(true);
+  expect(reportSummary({...report,review_policy:undefined,third_review:undefined}).partial).toBe(true);
+  expect(reportSummary({...report,third_review:{reasons:['serious_finding']}}).description).toContain('2 of 3 agents');
+});
+
 async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false) {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role: 'member' }, csrf_token: 'test-csrf' } }));
@@ -282,7 +291,7 @@ test('stopped tests retain a report without fake motion or example actions', asy
   await expect(page.getByRole('heading', { name: 'The test stopped early.' })).toBeVisible();
   await expect(page.getByText(/Scout stopped before its report arrived/)).toBeVisible();
   await expect(page.getByRole('button', { name: /New example|Run example|Cancel test/ })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Test a website' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Test a web application' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No findings available yet' })).toBeVisible();
   expect(await page.locator('.assessment-orbit-signal').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
 });
@@ -414,4 +423,27 @@ test('queue waiting and active role deadlines are explained separately', async (
   await page.getByText('Timing & permission', { exact: true }).click();
   await expect(page.getByText(/Work must stop if permission or test-account access expires/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('Venice recovery is disclosed on the report and readable export', async ({page}) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r=>r.fulfill({json:{account:{id,display_name:'Owner',role:'member'},csrf_token:'test-csrf'}}));
+  const routed={...result,execution:{...result.execution,provider:'near.ai',model:'deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated',fallback:{model:'deepseek-v4-1-flash-1017-uncensored',reason:'provider_rate_limited',primary_attempts:1,fallback_attempts:4,fallback_completed:4}}};
+  const review={id,mode:'pentest_agent',state:'needs_review',created_at:1793640000,deadline_at:1793643000,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Owned fixture'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'near.ai',allows_venice_fallback:true},
+    steps:[{role:'investigator',state:'completed',evidence_complete:true,result:routed}]};
+  await mockExport(page,review);
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  await expect(page.getByRole('status').filter({hasText:'Venice recovery was attempted'})).toContainText('Backup inference is not NEAR TEE execution.');
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'Venice fallback:'})).toContainText('4 completed replies');
+  await page.getByText('Other downloads & test details', {exact:true}).click();
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report ↓'}).click();
+  const file=await download;
+  const body=await readFile((await file.path())!,'utf8');
+  expect(body).toContain('deepseek-v4-1-flash-1017-uncensored');
+  expect(body).toContain('4 completed replies from 4 attempts; 1 NEAR attempts.');
+  expect(body).toContain('not NEAR TEE execution');
 });

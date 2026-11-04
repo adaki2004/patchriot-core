@@ -20,7 +20,7 @@ function Command({ children }: { children: string }) {
 }
 
 export function PairingClosed() {
-  return <section className="panel"><p className="eyebrow">MANAGED NETWORK</p><h1 className="page-title">Public pairing is not open yet.</h1><p>Patchriot operates the agents in this beta. You can request a review; contributing your own machine is disabled.</p><p>For a network operated by your team, <a href="#/contact">contact us about private infrastructure →</a>.</p></section>;
+  return <section className="panel"><p className="eyebrow">MANAGED SERVICE</p><h1 className="page-title">Agent pairing is staff-only.</h1><p>We operate the testing agents. Use your account to request a web application assessment; public machines cannot join this service.</p><p>For a separate business installation, <a href="#/contact">discuss dedicated infrastructure →</a>.</p></section>;
 }
 
 export function Guide({ onPair }: { onPair: () => void }) {
@@ -34,7 +34,7 @@ export function Guide({ onPair }: { onPair: () => void }) {
   const mesh = available && (() => { try { const url = new URL(info.data!.relay_origin); return url.protocol === 'https:' && url.hostname.endsWith('.ts.net'); } catch { return false; } })();
   const steps = ['Your machine', 'Install the relay', 'Connect', 'Get approved', 'Keep it online'];
   return <section className="pair-guide" aria-labelledby="setup-title">
-    <div className="dashboard-title"><div><p className="eyebrow">CONTRIBUTE AN AGENT</p><h1 id="setup-title">Your machine. Our shared defense.</h1><p className="subtle">The relay connects your agent to Patchriot. It does not include a model.</p></div></div>
+    <div className="dashboard-title"><div><p className="eyebrow">STAFF ONLY / MANAGED AGENTS</p><h1 id="setup-title">Pair through your approved account.</h1><p className="subtle">Connect a machine you administer. The hosted service uses Hermes on Kali with NEAR AI Private TEE inference.</p></div></div>
     {loopback && <aside className="pair-production-note"><strong>Local pilot address.</strong> Before public deployment, configure a distinct, reachable HTTPS relay address. Remote contributors must never be given localhost or 127.0.0.1. <a href="#/docs/deployment">Deployment checklist ↗</a></aside>}
     <nav className="pair-steps" aria-label="Pairing steps">{steps.map((name, index) => <button key={name} aria-current={step === index ? 'step' : undefined} onClick={() => setStep(index)}><span>{index + 1}</span>{name}</button>)}</nav>
     {info.error && <div className="notice error" role="alert">{info.error} <button className="inline" onClick={info.refresh}>Retry</button></div>}
@@ -43,7 +43,7 @@ export function Guide({ onPair }: { onPair: () => void }) {
         <span className="eyebrow">01 / PREPARE</span><h2>Use a separate machine.</h2><p>A Linux VPS is a good place to start. Keep personal files and production credentials off it.</p>
         <fieldset className="pair-modes"><legend>What would you like to connect?</legend><label><input type="radio" name="setup-mode" checked={!agent} onChange={() => setAgent(false)} /><span><strong>Try the connection first</strong><small>A built-in example. No model, GPU or Docker required.</small></span></label><label><input type="radio" name="setup-mode" checked={agent} onChange={() => setAgent(true)} /><span><strong>Local agent with Hermes</strong><small>A Linux host, Docker and your own local model.</small></span></label></fieldset>
         <div className="pair-hardware"><article><h3>CPU VPS</h3><p>Enough for pairing and the supplied example. Local model reviews can be slow.</p></article><article><h3>GPU machine</h3><p>For faster local inference. Choose RAM and VRAM to fit the model you install.</p></article></div>
-        <p className="fine">The current runner supports a local Ollama-compatible model. API-backed runtimes are a later integration; a provider key alone cannot pair an agent.</p>
+        <p className="fine">This walkthrough starts with an offline connection check. For hosted web tests, follow the relay README’s NEAR AI setup: Hermes on Kali with DeepSeek V4.1 Flash 1017 Abliterated. Keep the provider key outside the task container. A key alone does not pair or approve an agent.</p>
         <details><summary>What does the relay do?</summary><p>It keeps a device identity, receives scoped assignments, starts isolated work and returns the result. You can pause it locally. Approved operators can read assigned material; model declarations are not proof of honesty or skill.</p></details>
       </>}
       {step === 1 && <>

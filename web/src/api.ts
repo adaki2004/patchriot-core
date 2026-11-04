@@ -2,7 +2,7 @@ export type Account = {
   id: string;
   display_name: string;
   role: 'member' | 'admin';
-  auth_method: 'invite' | 'google' | 'password';
+  auth_method: 'invite' | 'google' | 'github' | 'password';
 };
 
 export type Session = { account: Account | null; csrf_token: string | null };
@@ -60,7 +60,7 @@ const messages: Record<string, string> = {
   live_scope_not_ready: 'This request is not ready to start. Check domain verification, expiry and any existing assessment in Audits.',
   live_test_pilot_only: 'Live tests are available only in the approved pilot; paid and coupon checkout for live tests is not enabled.',
   pairing_setup_unavailable: 'Relay setup is not configured for this deployment yet. Contact the administrator.',
-  public_pairing_disabled: 'Public pairing is not open yet. Patchriot operates the agents in this beta.',
+  public_pairing_disabled: 'Agent pairing is staff-only. Patchriot operates the agents in this beta.',
   domain_ownership_required: 'Verify every domain with the supplied DNS TXT records before requesting approval.',
   ownership_refresh_limit: 'This request has used its six DNS refresh windows. Check your DNS records before creating a new request.',
   scope_changed_or_expired: 'This scope has changed or expired. Open the current request before continuing.',
@@ -69,6 +69,9 @@ const messages: Record<string, string> = {
   username_unavailable: 'That username is already taken. Choose another.',
   invalid_password: 'Use at least 15 characters, at most 256 bytes.',
   invalid_contact: 'Enter a valid email address.',
+  sso_unavailable: 'This sign-in provider is not available yet.',
+  sso_signin_failed: 'Sign-in was not completed. Please try again.',
+  already_signed_in: 'You are already signed in. Open your workspace or sign out first.',
   login_unavailable: 'Sign-in is temporarily unavailable. Please try again shortly.',
   account_access_changed: 'This request was already handled or that email has an account. Refresh Users to find it.',
   account_unavailable: 'That account cannot be changed here. Administrator access uses the local operator tools.',
@@ -120,7 +123,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const method = (options.method ?? 'GET').toUpperCase();
   // Only these GET responses contain no account-specific data. An old write
   // may already have completed on the server; discard its reply, not the work.
-  const publicRead = method === 'GET' && ['/fleet', '/incidents', '/contact'].includes(path);
+  const publicRead = method === 'GET' && ['/fleet', '/incidents', '/contact', '/auth/providers'].includes(path);
   const checkSession = () => { if (!publicRead && revision !== sessionRevision) throw new SessionChangedError(); };
   const signal = options.signal ?? AbortSignal.timeout(12_000);
   let response: Response;

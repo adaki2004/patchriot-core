@@ -1,23 +1,25 @@
 import { expect, test } from '@playwright/test';
 import { emptyDashboard } from './helpers';
 
+test.beforeEach(async ({ page }) => { await emptyDashboard(page); });
+
 test('Collective shows the selected hero, logo and consistent navigation', async ({ page }) => {
   await page.route('**/api/session', route => route.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: {} }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.goto('/#/home');
   await expect(page.locator('html')).toHaveAttribute('data-design', 'collective');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('BUILD YOURDEFENSE MESH.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DEFENSE BEFOREYOU SHIP.');
   await expect(page.locator('header .brand-mark')).toHaveAttribute('src', '/brand/white-hat.png');
   expect((await page.locator('header .brand-mark').boundingBox())!.width).toBeGreaterThanOrEqual(64);
   const navigation = page.getByRole('navigation', { name: 'Website' });
   await expect(navigation.getByRole('button')).toHaveText(['Home', 'Recent events', 'Docs', 'App ↗']);
   await navigation.getByRole('button', { name: 'App', exact: false }).click();
-  await expect(page.getByRole('dialog', { name: 'Sign in or request access' }).getByLabel('Username', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Sign in' }).getByLabel('Username', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
 });
 
-test('Public/private comparison, motion and access work with a keyboard', async ({ page }) => {
+test('managed/dedicated comparison, motion and access work with a keyboard', async ({ page }) => {
   await page.route('**/api/session', route => route.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 3, online_operators: 2, online_compute_groups: 2 } }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
@@ -26,12 +28,12 @@ test('Public/private comparison, motion and access work with a keyboard', async 
   await expect(page.locator('.textmode-landing')).toHaveAttribute('data-paused', 'true');
   await expect(page.locator('animateMotion')).toHaveCount(0);
   await expect(page.getByLabel('Live fleet counts')).toContainText('3 AGENTS ONLINE');
-  await expect(page.locator('.compare-heading')).toHaveText('PUBLIC NETWORKYOUR PRIVATE NETWORK');
-  await expect(page.locator('.tm-swarms .blueprint-deployments h4')).toHaveText(['Public network', 'Your private network']);
+  await expect(page.locator('.compare-heading')).toHaveText('MANAGED SERVICEDEDICATED INSTALLATION');
+  await expect(page.locator('.tm-swarms .blueprint-deployments h4')).toHaveText(['For your web application', 'For your business']);
   const geometry = await page.locator('.coordination-map').evaluateAll(maps => maps.map(map => [...map.querySelectorAll('.map-boundary, .map-link, .map-node, .map-target')].map(shape => [...shape.attributes].map(attribute => `${attribute.name}=${attribute.value}`).join(';'))));
   expect(geometry).toHaveLength(2);
   expect(geometry[0]).toEqual(geometry[1]);
-  const slider = page.getByRole('slider', { name: 'Compare public and private swarms' });
+  const slider = page.getByRole('slider', { name: 'Compare managed and dedicated installations' });
   await slider.focus();
   await page.keyboard.press('Home');
   await expect(slider).toHaveValue('0');
@@ -43,18 +45,16 @@ test('Public/private comparison, motion and access work with a keyboard', async 
   expect(await slider.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
   await expect(page.getByRole('heading', { name: 'OWASP BLACK-BOX ETHICAL HACKING ENGINE.' })).toBeVisible();
   await expect(page.getByText('NO SOLO', { exact: false })).toHaveCount(0);
-  await page.getByRole('button', { name: 'PUT THE SWARM TO WORK', exact: false }).click();
-  const access = page.getByRole('dialog', { name: 'Sign in or request access' });
-  await expect(access.getByLabel('Your name', { exact: true })).toBeInViewport();
-  await access.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'TEST MY WEB APP', exact: false }).click();
+  const access = page.getByRole('dialog', { name: 'Sign in' });
+  await expect(access.getByRole('heading', { name: 'Sign in to Patchriot.' })).toBeInViewport();
   await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(access).toHaveCount(0);
   const opener = page.locator('header').getByRole('button', { name: 'App' });
   await opener.click();
   await expect(access.getByLabel('Username', { exact: true })).toBeFocused();
-  await access.getByRole('button', { name: 'Request access', exact: true }).click();
-  await expect(access.getByLabel('Your name', { exact: true })).toBeVisible();
+  await expect(access.getByLabel('Your name', { exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(opener).toBeFocused();
   await page.locator('.tm-workspace-preview').getByRole('button', { name: 'SIGN IN', exact: false }).click();

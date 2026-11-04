@@ -602,7 +602,9 @@ async fn existing_quote_retries_preserve_terms_across_config_changes_and_reject_
     let network = Network::start().await;
     let policy = policy();
     let browser = Browser::new(&db, &network, network.access(&policy)).await;
-    let body = input(&policy);
+    let mut body = input(&policy);
+    body["consent"]["allows_venice_fallback"] = json!(false);
+    body["consent"]["review_policy"] = json!("legacy_three");
     let path = format!("/api/site-checks/{}/checkout", Uuid::new_v4());
     let (code, first) = browser.call("POST", &path, body.clone()).await;
     assert_eq!(code, StatusCode::OK);
@@ -613,6 +615,8 @@ async fn existing_quote_retries_preserve_terms_across_config_changes_and_reject_
         ("/origin_asset", json!(policy.inputs[1].asset_id)),
         ("/consent/snapshot_sha256", json!("b".repeat(64))),
         ("/consent/accepts_operator_access", json!(false)),
+        ("/consent/allows_venice_fallback", json!(true)),
+        ("/consent/review_policy", json!("investigate_verify_v1")),
     ] {
         let mut changed = body.clone();
         *changed.pointer_mut(pointer).unwrap() = value;

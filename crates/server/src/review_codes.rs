@@ -145,6 +145,8 @@ async fn reserve(
     }
     let consent = &input.consent;
     if (target.pentest_id().is_some() && !consent.accepts_provider_access)
+        || (target.pentest_id().is_none()
+            && (!consent.review_policy.is_legacy() || consent.allows_venice_fallback))
         || !consent.accepts_operator_access
         || consent.device_ids.len() != 3
         || consent
@@ -350,6 +352,9 @@ pub(crate) async fn redeem_pentest(
             .await?;
         if plan.scope_sha256 != consent.snapshot_sha256
             || !consent.accepts_provider_access
+            || (consent.allows_venice_fallback
+                && plan.venice_fallback_model.as_deref()
+                    != Some(patchriot_protocol::pentests::VENICE_FALLBACK_MODEL))
             || consent
                 .device_ids
                 .iter()

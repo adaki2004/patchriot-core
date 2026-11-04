@@ -103,8 +103,9 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [sessionError, setSessionError] = useState('');
   const [initialCode, setInitialCode] = useState(() => window.location.pathname === '/activate' && /^[0-9a-f]{64}$/i.test(window.location.hash.slice(1)) ? window.location.hash.slice(1) : '');
-  const [entryMode, setEntryMode] = useState<'signin' | 'request'>('signin');
-  const [accessOpen, setAccessOpen] = useState(Boolean(initialCode));
+  const [signinFailed] = useState(() => new URLSearchParams(window.location.search).get('signin') === 'failed');
+  const [accessOpen, setAccessOpen] = useState(Boolean(initialCode) || signinFailed);
+  useEffect(() => { if (signinFailed) { const url = new URL(window.location.href); url.searchParams.delete('signin'); window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`); } }, [signinFailed]);
   const [startAudit, setStartAudit] = useState<'sites' | 'sources' | null>(null);
   useEffect(() => { if (window.location.pathname === '/activate') window.history.replaceState(null, '', `/${window.location.search}`); }, []);
   const [pairing, setPairing] = useState(false);
@@ -113,7 +114,7 @@ function App() {
   const view = route.view;
   const setView = useCallback((next: View) => navigate(next), [navigate]);
   const [decision, setDecision] = useState<{ device: Device; action: DecisionAction } | null>(null);
-  const [notice, setNotice] = useState('');
+  const [notice, setNotice] = useState(signinFailed ? 'Sign-in was not completed. Please try again.' : '');
   const workspaceNav = useRef<HTMLElement>(null);
   const fleet = useLive<Fleet>('/fleet');
   const devices = useLive<Device[]>('/devices', Boolean(session?.account));
@@ -139,7 +140,7 @@ function App() {
   const endSession = useCallback((message = '') => {
     sessionChanged();
     setSession({ account: null, csrf_token: null }); navigate('overview', null, false, true);
-    setPairing(false); setDecision(null); setAccessOpen(false); setEntryMode('signin'); setCheckout(null); setSessionError(''); setNotice(message);
+    setPairing(false); setDecision(null); setAccessOpen(false); setCheckout(null); setSessionError(''); setNotice(message);
   }, [navigate]);
   useEffect(() => {
     const expired = () => endSession('Your session has ended. Sign in again to continue.');
@@ -156,15 +157,13 @@ function App() {
     catch (error) { if (!(error instanceof SessionExpiredError || error instanceof SessionChangedError)) setSessionError((error as Error).message); }
   }
   function changed(message: string) { devices.refresh(); fleet.refresh(); setNotice(message); }
-  function openAccess(mode: 'signin' | 'request') {
-    setEntryMode(mode); setAccessOpen(true);
-  }
+  function openAccess() { setAccessOpen(true); }
   async function signedIn() {
     await loadSession(); setInitialCode(''); setAccessOpen(false);
     if (!privateView || view === 'home') setView('overview');
   }
-  const access = <AccessPanel initialCode={initialCode} mode={entryMode} onMode={setEntryMode} onLogin={signedIn} />;
-  const landingAccess = <section className="access-invitation"><p className="tm-kicker">JOIN THE PRIVATE BETA</p><h3>Bring something<br />worth protecting.</h3><p>Request a test for a domain you control.</p><button className="primary" onClick={() => openAccess('request')}>Request access <span aria-hidden="true">↗</span></button><button className="text-button" onClick={() => openAccess('signin')}>Already a member? Sign in →</button></section>;
+  const access = <AccessPanel initialCode={initialCode} onLogin={signedIn} />;
+  const landingAccess = <section className="access-invitation"><p className="tm-kicker">YOUR PRIVATE WORKSPACE</p><h3>Bring something<br />worth protecting.</h3><p>Request a test for a domain you control.</p><button className="primary" onClick={() => openAccess()}>Get started <span aria-hidden="true">↗</span></button><button className="text-button" onClick={() => openAccess()}>Sign in →</button></section>;
   const auditView = ['audits', 'sites', 'pentests', 'sources', 'reviews', 'request'].includes(view);
   const publicPage = view === 'home' || (view === 'overview' && ['', '#/', '#/overview'].includes(window.location.hash)) ? 'home' : view === 'docs' ? 'docs' : view === 'incidents' ? 'events' : null;
   const analyticsPage = session && !account && !accessOpen && !initialCode && window.location.pathname === '/' ? publicPage : null;
@@ -176,7 +175,7 @@ function App() {
         <button aria-current={view === 'home' ? 'page' : undefined} onClick={() => setView('home')}>Home</button>
         <button aria-current={view === 'incidents' ? 'page' : undefined} onClick={() => setView('incidents')}>Recent events</button>
         <button aria-current={view === 'docs' ? 'page' : undefined} onClick={() => navigate('docs', 'start')}>Docs</button>
-        <button className="dashboard-destination" aria-current={view === 'overview' && account ? 'page' : undefined} onClick={() => account ? setView('overview') : openAccess('signin')}>App <span aria-hidden="true">↗</span></button>
+        <button className="dashboard-destination" aria-current={view === 'overview' && account ? 'page' : undefined} onClick={() => account ? setView('overview') : openAccess()}>App <span aria-hidden="true">↗</span></button>
       </nav>
       {account && <div className="header-account"><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></div>}
     </header>
@@ -211,7 +210,7 @@ function App() {
         <section className="section-heading fleet-heading"><div><p className="eyebrow">{isAdmin ? 'OPERATOR CONSOLE' : 'YOUR CONTRIBUTION'}</p><h1 className="page-title">{isAdmin ? 'Agent approvals' : 'Your agents'}</h1><p className="subtle">Pairing proves a device key. Approval is a separate decision.</p></div>{isAdmin && <button className="primary" onClick={() => setPairing(true)}>Pair a relay +</button>}</section>
         {devices.error && <Notice error>{devices.error} <button className="inline" onClick={devices.refresh}>Retry</button></Notice>}
         <section className="panel fleet-panel"><div className="table-toolbar"><strong>{devices.data ? `${devices.data.length} ${isAdmin ? 'registered' : 'paired'} relays` : 'Loading relays…'}</strong><button className="quiet" onClick={devices.refresh}>Refresh ↻</button></div>
-          {devices.data?.length === 0 && <div className="empty"><Mark /><h2>{isAdmin ? 'Your first relay starts here.' : 'Public pairing is not open yet.'}</h2><p>{isAdmin ? 'Initialize the relay on a computer you control. Enter its pairing code, then wait for approval.' : 'Patchriot operates the agents in this beta. Existing approved agents can continue their work.'}</p><button className="text-button" onClick={() => setView('guide')}>Open setup instructions →</button></div>}
+          {devices.data?.length === 0 && <div className="empty"><Mark /><h2>{isAdmin ? 'Your first relay starts here.' : 'Agent pairing is staff-only.'}</h2><p>{isAdmin ? 'Initialize the relay on a computer you control. Enter its pairing code, then wait for approval.' : 'Patchriot operates the agents in this beta. Existing approved agents can continue their work.'}</p><button className="text-button" onClick={() => setView('guide')}>Open setup instructions →</button></div>}
           {Boolean(devices.data?.length) && <div className="table-scroll"><table><thead><tr><th>Relay / operator</th><th>Agent / model</th><th>Access</th><th>Presence</th><th><span className="sr-only">Actions</span></th></tr></thead><tbody>{devices.data!.map(device => <tr key={device.id}><td><strong>{device.label}</strong><small>{device.operator_name}</small><small>Reports received: {device.reports_received == null ? "—" : device.reports_received.toLocaleString()}</small></td><td><strong>{device.runtime === 'owned_fixture' ? 'Owned fixture' : 'Hermes'}</strong><small>Runner {device.runtime_version}</small><small>{device.system ? [device.system.os_name, device.system.os_version, device.system.architecture].filter(Boolean).join(" · ") : device.reported_os ?? "OS not reported"}</small>{device.system && <small>Relay {device.system.relay_version}</small>}{device.declared_model && <small className="model-name">Declared model: {device.declared_model}</small>}<small>Compute: {device.compute_group}</small></td><td><span className={`badge ${device.approval}`}>{device.approval === 'pending' ? 'Awaiting approval' : device.approval}</span>{device.runtime === 'hermes' && <small>{device.private_work_approved ? 'Private reviews allowed' : 'Demo work only'} · {device.live_tests ? 'Live test opt-in on' : device.website_reviews ? 'Snapshot opt-in on' : 'Snapshot opt-in off'}</small>}</td><td><span className={`presence ${device.state}`} >{device.state.replaceAll('_', ' ')}</span><small>{device.last_seen_at ? new Date(device.last_seen_at * 1000).toLocaleTimeString() : 'No heartbeat yet'}</small></td><td className="row-actions">{isAdmin && device.approval === 'pending' && <button className="approve" onClick={() => setDecision({ device, action: 'approve' })}>Approve</button>}{device.approval === 'approved' && device.runtime === 'hermes' && (device.private_work_approved ? <button className="quiet" onClick={() => setDecision({ device, action: 'revoke_private' })}>Remove private access</button> : isAdmin && <button className="quiet" onClick={() => setDecision({ device, action: 'approve_private' })}>Allow private reviews</button>)}{device.approval !== 'revoked' && <button className="quiet" onClick={() => setDecision({ device, action: 'revoke' })}>Revoke</button>}</td></tr>)}</tbody></table></div>}
         </section><p className="fine">Online means the relay sent a recent heartbeat. Agent versions and model names are operator declarations. Pause and resume from the machine; presence expires after 30 seconds. Counts cover received role reports, including incomplete results. They do not measure verified findings or earnings.</p>
       </>}
@@ -232,7 +231,7 @@ function App() {
     </main>
     <Analytics page={analyticsPage} />
     <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><span>Inspect the code. Question the evidence.</span></footer>
-    {!account && accessOpen && <AccessDialog initialCode={initialCode} mode={entryMode} onMode={setEntryMode} onLogin={signedIn} onClose={() => setAccessOpen(false)} />}
+    {!account && accessOpen && <AccessDialog initialCode={initialCode} onLogin={signedIn} onClose={() => setAccessOpen(false)} />}
     {pairing && isAdmin && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => { setView('devices'); changed('Relay paired. Check its approval and connection status below.'); }} onClose={() => setPairing(false)} />}
     {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(`${decisionLabels[decision.action]}: saved.`)} onClose={() => setDecision(null)} />}
   </>;

@@ -103,13 +103,17 @@ impl Session {
 }
 
 fn cookie_token(headers: &HeaderMap, config: &Config) -> Option<String> {
+    cookie_value(headers, config.cookie_name())
+}
+
+pub(crate) fn cookie_value(headers: &HeaderMap, cookie_name: &str) -> Option<String> {
     let mut found = None;
     for header in headers.get_all(header::COOKIE) {
         for pair in header.to_str().ok()?.split(';') {
             let Some((name, value)) = pair.trim().split_once('=') else {
                 continue;
             };
-            if name == config.cookie_name() {
+            if name == cookie_name {
                 if found.is_some()
                     || value.len() != 64
                     || !value.bytes().all(|b| b.is_ascii_hexdigit())

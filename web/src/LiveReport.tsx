@@ -1,13 +1,15 @@
 import { useRef, useState, type ReactNode } from 'react';
 import './assessment.css';
-import { findingRequest, reportFindings, stopExplanation, type ReportInput } from './report';
+import { expectedReports, reviewMethod, findingRequest, reportFindings, stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
 export type HttpRecord = { id: number; method: string; url: string; status: number | null; request_headers?: Record<string, string>; headers: Record<string, string>; body_excerpt: string; body_sha256?: string | null; observed_at?: number; authenticated?: boolean; login?: boolean; request_body_excerpt?: string; request_body_sha256?: string; truncated: boolean; error: string | null };
 export type LiveFinding = { title: string; severity: string; support: string; explanation: string; reproduction: string; suggested_action: string; evidence_ids: number[] };
 export type LiveToolRun = { tool: string; version: string; arguments: string[]; started_at: number; duration_ms: number; exit_code: number | null; failure: string | null; evidence_ids: number[]; output_sha256: string; output_excerpt: string; output_truncated: boolean };
-export type LiveResult = { kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
+export type FallbackReceipt = { model: string; reason: string; primary_attempts: number; fallback_attempts: number; fallback_completed: number };
+export function fallbackDescription(receipt: FallbackReceipt) { return `Venice fallback: ${receipt.model}. ${receipt.fallback_completed} completed replies from ${receipt.fallback_attempts} attempts; ${receipt.primary_attempts} NEAR attempts. Trigger: ${receipt.reason.replaceAll('_', ' ')}. Backup inference is not NEAR TEE execution. Recovery attempts share one logical call; both providers count toward the cost limit.`; }
+export type LiveResult = { kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
 export type LiveActivity = { received_at: number; progress: { phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number } };
 export type LiveStep = { role: LiveRole; state: string; result: LiveResult | null; evidence_complete?: boolean | null; progress?: LiveActivity | null };
 export type LiveTiming = { role_limit_seconds: number; started_at: number | null; active_role_deadline_at: number | null; requests_ahead: number };
@@ -15,9 +17,10 @@ const roleDuty = { investigator: 'Map the application and investigate leads.', r
 const phases = { starting: 'Starting the isolated runner', scoped_tools: 'Running scoped tools', investigating: 'Investigating the evidence', finishing: 'Preparing the report' };
 const support: Record<string, string> = { observed: 'Observed behavior', reproduced: 'Agent reports reproduction', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
 
-export function LiveProgress({ steps, state }: { steps: LiveStep[]; state: string }) {
+export function LiveProgress({ steps, state, policy }: { steps: LiveStep[]; state: string; policy?: Pick<ReportInput, 'review_policy' | 'third_review'> }) {
+  const expected = expectedReports(policy ?? {});
   const received = steps.filter(s => s.result !== null).length;
-  return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><h3>The review team</h3><span className="fine">{received} of 3 reports received</span></div><progress aria-label="Role reports received" value={received} max={3} />
+  return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><h3>The review team</h3><span className="fine">{received} of {expected} reports received</span></div><progress aria-label="Role reports received" value={received} max={expected} />
     <ol className="live-stage-list">{steps.map((s, i) => <li key={s.role} data-state={s.state}><span className="stage-number" aria-hidden="true">{s.result && s.evidence_complete ? '✓' : `0${i + 1}`}</span><div><strong>{liveRoles[s.role]}</strong><small>{s.result ? s.evidence_complete ? 'Report received' : 'Needs review' : s.state === 'leased' || s.state === 'running' ? 'Working' : s.state === 'failed' ? 'Stopped' : s.state === 'cancelled' ? 'Not completed' : 'Up next'}</small></div><p>{roleDuty[s.role]}</p>{!s.result && ['leased', 'running'].includes(s.state) && s.progress && <details className="live-activity"><summary>Latest activity</summary><strong>{phases[s.progress.progress.phase]}</strong><p>{s.progress.progress.http_requests} requests · {s.progress.progress.inference_calls} model calls · {s.progress.progress.completed_tools} tool runs recorded</p><small>Last update: {new Date(s.progress.received_at * 1000).toLocaleTimeString()}</small></details>}</li>)}</ol>
     <p className="fine">{state === 'failed' || state === 'cancelled' ? 'This test has stopped. Any reports received remain available below.' : 'Agents work one after another. You can leave this page and return later.'}</p>
   </section>;
@@ -48,9 +51,10 @@ export function saveReportFile(filename: string, content: string, mime: string) 
 // Keep model/target text inert when someone opens the exported Markdown.
 const block = (value: string) => { const fence = '`'.repeat(Array.from(value.matchAll(/`+/g)).reduce((max, m) => Math.max(max, m[0].length + 1), 3)); return `${fence}text\n${value}\n${fence}`; };
 
-export function reportMarkdown(id: string, steps: LiveStep[], origins: string[]) {
+export function reportMarkdown(id: string, steps: LiveStep[], origins: string[], policy: Pick<ReportInput, 'review_policy' | 'third_review'> = {}) {
   const lines = ['# Patchriot — private website review', `Review: ${id}`, 'Scope:', block(origins.join('\n')), 'Role reports and operator-recorded HTTP evidence. Agreement is not proof of safety. Remediation is a recommendation; no production patch was tested.'];
   const findings = reportFindings({ id, steps, origins, state: '', created_at: 0 });
+  lines.push('## Review method', reviewMethod(policy));
   lines.push(`## Observations (${findings.length})`, 'Repeat claims are grouped by title and first cited request. Anonymous and test-account checks stay visible within that observation. Original contributions and role-scoped references are retained. Different severities or support require review; the highest reported severity is shown.');
   for (const row of findings) {
     lines.push(`### ${row.id}`, block(`${row.finding.title}\nSeverity: ${row.finding.severity}`));
@@ -61,6 +65,7 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[])
     lines.push(`## ${liveRoles[s.role]}`, s.evidence_complete ? 'Report received with recorded requests.' : 'Incomplete role: inspect the evidence and missing checks.');
     if (!s.result) { lines.push('No report received.'); continue; }
     const r = s.result;
+    if (r.execution.fallback) lines.push(block(fallbackDescription(r.execution.fallback)));
     if (r.assessment) {
       lines.push(block(r.assessment.summary));
       lines.push('### Coverage limits', block(r.assessment.limitations.join('\n')));
@@ -117,7 +122,7 @@ export function LiveReportDownloads({ id, steps, loadReport, disabled }: { id: s
     setBusy(true); setError('');
     try {
       const latest = await loadReport();
-      if (kind === 'markdown') saveReportFile(`patchriot-${id}-report.md`, reportMarkdown(id, latest.steps, latest.origins), 'text/markdown');
+      if (kind === 'markdown') saveReportFile(`patchriot-${id}-report.md`, reportMarkdown(id, latest.steps, latest.origins, latest), 'text/markdown');
       else saveReportFile(`patchriot-${id}-endpoints.postman.json`, JSON.stringify({ info: { name: 'Patchriot observed endpoints', _postman_id: id, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json', description: 'Observed requests, not a complete API specification. Query values and headers are omitted. These observations do not establish authorization or BOLA. Review scope before sending any request.' }, item: inventory(latest.steps).map(e => ({ name: `${e.method} ${e.url}`, request: { method: e.method, url: { raw: e.url, query: e.query.map(key => ({ key, value: '', disabled: true, description: 'Observed name; value omitted from export.' })) }, description: `Observed HTTP status: ${[...e.statuses].join(', ') || 'No response'}. References: ${e.refs.join(', ')}. Credentials and request bodies are omitted; see the private report for account-access evidence.` }, response: [] })) }, null, 2), 'application/json');
     } catch (e) { setError(e instanceof Error ? e.message : 'The export could not be prepared.'); }
     finally { setBusy(false); }
@@ -164,6 +169,7 @@ export function LiveEvidence({ result, complete, technicalOnly = false }: { resu
       {result.execution.failure_reason && <p>{stopExplanation(result.execution.failure_reason)}</p>}
       <details><summary>What does this status mean?</summary><p>“Received” means the server accepted a structured report and recorded requests. It does not mean the findings are correct. Missing evidence, interrupted execution or unconfirmed cleanup keep a role marked for review.</p></details>
     </div>
+    {result.execution.fallback && <p className="notice" role="status">{fallbackDescription(result.execution.fallback)}</p>}
     <dl className="role-metrics"><div><dt>Requests recorded</dt><dd>{result.execution.http_requests}</dd></div><div><dt>Model calls</dt><dd>{result.execution.inference_calls}</dd></div><div><dt>Run time</dt><dd>{Math.round(result.execution.duration_ms / 1000)}s</dd></div></dl>
     {!!result.tool_runs?.length && <details className="tool-evidence"><summary>Tools run ({result.tool_runs.length})</summary><p>The pinned runner recorded these checks before the agent investigated their output. Matches are leads, not confirmed vulnerabilities. Open the referenced requests to see what the target actually returned.</p>{result.tool_runs.map((run, i) => <article className="request-evidence" key={i}><div className="section-heading"><strong>{run.tool} · {run.version}</strong><span className="pill">{run.failure ? run.failure.replaceAll('_', ' ') : run.exit_code === 0 ? 'Finished' : 'Tool error'}</span></div><p className="fine">{new Date(run.started_at * 1000).toLocaleString()} · {Math.round(run.duration_ms / 1000)}s · {run.evidence_ids.length} recorded requests</p><details><summary>Command arguments</summary><pre>{JSON.stringify(run.arguments, null, 2)}</pre></details><details><summary>Tool output</summary><pre>{run.output_excerpt || (run.exit_code === 0 && !run.failure ? 'No matching observations were printed. This does not prove the site is safe.' : 'No tool output was retained.')}</pre></details>{run.output_truncated && <p className="fine">Output was shortened; inspect the request evidence for the recorded response excerpts.</p>}{run.evidence_ids.length > 0 && <button className="text-button" onClick={() => inspect(run.evidence_ids)}>Inspect tool requests →</button>}</article>)}</details>}
     {!technicalOnly && result.assessment && <><p className="assessment-summary">{result.assessment.summary}</p>
@@ -174,7 +180,7 @@ export function LiveEvidence({ result, complete, technicalOnly = false }: { resu
       <details className="coverage-limits"><summary>What this role could not check</summary><ul>{result.assessment.limitations.map((v, i) => <li key={i}>{v}</li>)}</ul></details>
     </>}
     <details className="http-evidence" ref={evidence}><summary>Request evidence ({result.evidence.length})</summary><p>These are the requests made to your website and the responses retained by the relay. They let you check a claim against what actually came back. The operator reports these records; a response code alone does not prove a vulnerability.</p>{selected.length > 0 && <p className="notice">Showing references {selected.join(', ')}. <button className="inline" onClick={() => setSelected([])}>Show every request</button></p>}{result.evidence.filter(e => !selected.length || selected.includes(e.id)).map(e => <RequestEvidence key={e.id} entry={e} />)}</details>
-    <details className="execution-details"><summary>Agent and execution details</summary><dl><dt>Provider / model</dt><dd>{result.execution.provider} / {result.execution.model}</dd><dt>Container cleanup</dt><dd>{result.execution.cleanup_confirmed ? 'Reported complete by relay' : 'Not confirmed'}</dd>{result.execution.image_digest && <><dt>Runtime image</dt><dd><code>{result.execution.image_digest}</code></dd></>}</dl></details>
+    <details className="execution-details"><summary>Agent and execution details</summary><dl><dt>Primary provider / model</dt><dd>{result.execution.provider} / {result.execution.model}</dd><dt>Container cleanup</dt><dd>{result.execution.cleanup_confirmed ? 'Reported complete by relay' : 'Not confirmed'}</dd>{result.execution.image_digest && <><dt>Runtime image</dt><dd><code>{result.execution.image_digest}</code></dd></>}</dl></details>
     {!result.assessment && result.raw_summary && <details><summary>Unformatted model reply</summary><pre>{result.raw_summary}</pre></details>}
   </div>;
 }

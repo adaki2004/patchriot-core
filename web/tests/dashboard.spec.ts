@@ -41,7 +41,7 @@ for (const dialog of [
 test('shows real fleet dimensions, prototype scope and usable mobile layout', async ({ page }) => {
   await setup(page);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE MESH.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE YOU SHIP.' })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
   await expect(page.locator('.tm-footnote')).toContainText('An automated first check, before a human penetration test.');
@@ -56,7 +56,7 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
 test('relay setup explains installation, remote addresses and private-work consent', async ({ page }) => {
   await setup(page, true, 'admin');
   await page.goto('/#/guide');
-  const guide = page.getByRole('region', { name: 'Your machine. Our shared defense.' });
+  const guide = page.getByRole('region', { name: 'Pair through your approved account.' });
   const steps = page.getByRole('navigation', { name: 'Pairing steps' });
   const commands = guide.locator('pre');
   await expect(guide.getByRole('radio', { name: 'Try the connection first', exact: false })).toBeChecked();
@@ -283,7 +283,7 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
     await expect.poll(() => loginStarted).toBe(true);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('region', { name: 'Account access' })).toBeVisible();
-    await expect(page.getByRole('dialog').getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Existing pilot account', exact: true })).toBeDisabled();
     await expect(page.getByLabel('Invitation code', { exact: true })).toBeDisabled();
     const startupReply = page.waitForResponse(response => response.url().endsWith('/api/session') && response.headers()['x-fixture-startup'] === 'true');
     if (startupFirst) {
@@ -331,7 +331,7 @@ test('an accepted invitation can retry loading the workspace without redeeming t
     await dialog.getByRole('button', { name: 'Retry opening workspace', exact: true }).click();
     await expect.poll(() => retryStarted).toBe(true);
     await expect(dialog.getByLabel('Invitation code', { exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Request access', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Existing pilot account', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     release();
