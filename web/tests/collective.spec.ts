@@ -33,6 +33,9 @@ test('the hero prefills the owned-site form without creating or authorizing work
   await page.goto('/#/home');
   await page.getByLabel('A domain you own').fill('https://EXAMPLE.com/path?draft=example');
   await page.getByRole('button', { name: 'Start a test', exact: false }).click();
+  await expect(page).toHaveURL(/#\/request$/);
+  await expect(page.locator('.request-website')).toContainText('https://example.com');
+  await page.getByRole('button', { name: 'Choose black-box', exact: true }).click();
   await expect(page).toHaveURL(/#\/pentests$/);
   await expect(page.getByLabel('Website URL')).toHaveValue('https://example.com');
   await expect(page.locator('input[name=permissionConfirmed]')).not.toBeChecked();
@@ -68,6 +71,9 @@ for (const signIn of ['password', 'redirect']) test('the hero retains only the o
     // Simulate returning to the app after the provider callback has set the session.
     await page.goto('/');
   }
+  await expect(page).toHaveURL(/#\/request$/);
+  await expect(page.locator('.request-website')).toContainText('https://example.com');
+  await page.getByRole('button', { name: 'Choose black-box', exact: true }).click();
   await expect(page).toHaveURL(/#\/pentests$/);
   await expect(page.getByLabel('Website URL')).toHaveValue('https://example.com');
   await expect(page.locator('input[name=permissionConfirmed]')).not.toBeChecked();
@@ -177,9 +183,9 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.goto('/#/request');
-  const choices = page.locator('button.request-option');
+  const choices = page.locator('button.assessment-mode');
   await expect(choices).toHaveCount(2);
-  await expect(page.locator('.roadmap-product[aria-disabled=true]')).toHaveCount(2);
+  await expect(page.locator('.assessment-mode.roadmap-product')).toHaveCount(1);
   await expect(choices.first()).toBeVisible();
   await expect(choices.nth(1)).toBeVisible();
   for (const choice of await choices.all()) {
@@ -194,7 +200,7 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
         return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
       }
       const paper = light(getComputedStyle(button).backgroundColor);
-      return [...button.querySelectorAll('h2, p, strong')].map(text => {
+      return [...button.querySelectorAll('h3, p, strong')].map(text => {
         const ink = light(getComputedStyle(text).color);
         return (Math.max(ink, paper) + .05) / (Math.min(ink, paper) + .05);
       });
@@ -204,21 +210,38 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
 });
 
 
-test('the restored diagram animates and can be paused on both the landing and docs', async ({ page }) => {
+test('the architecture animation stops by itself and needs no pause control', async ({ page }) => {
   await page.route('**/api/session', r => r.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/incidents', r => r.fulfill({ json: [] }));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/#/home');
-  const map = page.locator('.service-map');
-  await expect(map).toHaveAttribute('data-paused', 'false');
-  await expect(map.locator('animateMotion')).toHaveCount(5);
-  await page.getByRole('button', { name: 'Pause diagram' }).click();
-  await expect(map).toHaveAttribute('data-paused', 'true');
-  await expect(map.locator('animateMotion')).toHaveCount(0);
-  await page.goto('/#/docs/workflow');
-  await expect(map.locator('animateMotion')).toHaveCount(5);
-  await page.getByRole('button', { name: 'Pause diagram' }).click();
-  await expect(map.locator('animateMotion')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Play diagram' }).click();
-  await expect(map.locator('animateMotion')).toHaveCount(5);
+  for (const path of ['/#/home', '/#/docs/workflow']) {
+    await page.goto(path);
+    const map = page.locator('.service-map');
+    await map.scrollIntoViewIfNeeded();
+    await expect(map.locator('animateMotion')).toHaveCount(5);
+    await expect(map.getByRole('button')).toHaveCount(0);
+    await expect(map).toHaveAttribute('data-paused', 'true', { timeout: 6000 });
+    await expect(map.locator('animateMotion')).toHaveCount(0);
+  }
+});
+
+test('mode selection preserves an edited domain and keeps white-box unavailable', async ({ page }, info) => {
+  await page.route('**/api/session', r => r.fulfill({ json: { account: { id: 'mode-member', display_name: 'Member', role: 'member' }, csrf_token: 'test-only' } }));
+  await page.goto('/#/request');
+  await expect(page.getByRole('button', { name: 'Choose black-box' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Choose grey-box' })).toBeVisible();
+  await expect(page.locator('.assessment-mode.roadmap-product')).toContainText('Coming later');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path: `test-results/v009-mode-picker-${info.project.name}.png`, fullPage: true});
+  await page.getByRole('button', { name: 'Choose black-box' }).click();
+  await expect(page.getByLabel('Access method')).toHaveCount(0);
+  await page.getByLabel('Website URL').fill('https://example.com/secret?token=not-kept');
+  await page.getByRole('button', { name: 'Change test type' }).click();
+  await expect(page.locator('.request-website')).toContainText('https://example.com');
+  await page.getByRole('button', { name: 'Choose grey-box' }).click();
+  await expect(page.getByLabel('Website URL')).toHaveValue('https://example.com');
+  await expect(page.getByLabel('Access method')).toHaveValue('session');
+  await expect(page.getByLabel('Login page', {exact: false})).toBeVisible();
+  await expect(page.getByLabel('Username field name')).toHaveCount(0);
+  await expect(page.getByLabel('Test password', {exact: true})).toHaveCount(0);
 });

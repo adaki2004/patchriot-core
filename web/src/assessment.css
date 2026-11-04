@@ -105,3 +105,12 @@
 .assessment-coverage p, .assessment-boundary p { font-size: 14px; line-height: 1.65; }
 .assessment-boundary { border-top: 1px solid var(--line); padding-top: 18px; }
 @media (max-width: 720px) { .assessment-coverage { grid-template-columns: 1fr; } .dns-setup-note { padding: 16px; } }
+.assessment-mode-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 24px; }
+.assessment-mode-heading > span { font-size: 11px; letter-spacing: .04em; color: var(--muted); }
+.assessment-login { border-top: 1px solid var(--line); margin: 24px 0; padding: 24px 0 0; }
+.assessment-login h2 { margin: 0 0 8px; font-size: 24px; }
+.assessment-login > p { margin: 0 0 20px; font-size: 14px; color: var(--muted); }
+.assessment-login .login-advanced { margin: 12px 0 20px; }
+.login-targets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.login-targets > label:only-child { grid-column: 1 / -1; }
+@media (max-width: 640px) { .login-targets { grid-template-columns: 1fr; gap: 0; } }
