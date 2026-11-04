@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { UIIcon } from './UIIcon';
 
@@ -61,31 +61,39 @@ export function SwarmSignal({ paused }: { paused: boolean }) {
 }
 
 const paths = [
-  'M100 180 L250 100 L400 200', 'M105 315 L250 300 L400 200',
-  'M400 200 L550 100 L700 180', 'M400 200 L550 300 L695 315',
-  'M250 100 L250 300', 'M550 100 L550 300', 'M250 100 L550 100', 'M250 300 L550 300',
+  'M110 190 L290 190', 'M290 190 L480 190', 'M480 190 L680 190',
+  'M680 215 L480 215', 'M480 235 L480 310 L290 310 L290 235',
 ];
 
-/** Identical geometry on both sides of the comparison; only ownership and colour change. */
+/** Same data path for both deployments. The TEE boundary covers only model inference. */
 export function CoordinationMap({ privateSwarm, paused }: { privateSwarm: boolean; paused: boolean }) {
-  const nodes = [[100, 180], [105, 315], [250, 100], [250, 300], [550, 100], [550, 300], [700, 180], [695, 315]];
+  const grid = useId();
+  const nodes = [
+    { x: 110, title: 'YOUR WEB APP', detail: 'VERIFIED SCOPE' },
+    { x: 290, title: 'DISPATCHER', detail: 'PERMISSION + QUEUE' },
+    { x: 480, title: 'KALI + HERMES', detail: 'ISOLATED TOOLS' },
+    { x: 680, title: 'NEAR AI', detail: 'PRIVATE TEE' },
+  ];
   return <svg className={`coordination-map ${privateSwarm ? 'private-map' : 'public-map'}`} viewBox="0 0 800 400" aria-hidden="true">
-    <defs><pattern id={privateSwarm ? 'private-grid' : 'public-grid'} width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="currentColor" strokeOpacity=".09" /></pattern></defs>
-    <rect width="800" height="400" fill={`url(#${privateSwarm ? 'private-grid' : 'public-grid'})`} />
-    <rect className="map-boundary" x="45" y="88" width="710" height="265" /><text x="62" y="380" className="map-caption">{privateSwarm ? 'YOUR NETWORK / YOUR OPERATORS' : 'PUBLIC NETWORK / APPROVED CONTRIBUTORS'}</text>
-    <g className="map-requester" transform="translate(400 35)"><circle cx="0" cy="-7" r="8" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M-16 18c0-18 32-18 32 0M18-4l4 4 8-10" fill="none" stroke="currentColor" strokeWidth="2" /><text className="map-caption" x="0" y="40" textAnchor="middle">VERIFIED REQUESTER</text><path className="map-link" d="M0 50V120" /></g>
-    {paths.map((path, index) => <g key={path}><path className={`map-link link-${index % 2}`} d={path} />{paused ? <rect x={nodes[index][0] - 3} y={nodes[index][1] - 3} width="6" height="6" className="map-packet" /> : <rect x="-3" y="-3" width="6" height="6" className="map-packet"><animateMotion dur={`${4 + index % 3}s`} begin={`${-index * .7}s`} repeatCount="indefinite" path={path} /></rect>}</g>)}
-    {nodes.map(([x, y], index) => <g key={index} transform={`translate(${x},${y})`}><rect className={`map-node node-${index % 2}`} x="-17" y="-17" width="34" height="34" /><path className="map-face" d="M-8-3h4m8 0h4M-6 6H6" /><text className="node-label" y="34" textAnchor="middle">{['INVESTIGATE', 'REPRODUCE', 'CHALLENGE', 'REVIEW'][index % 4]}</text></g>)}
-    <g transform="translate(400 200)"><path className="map-target" d="M0-42 42-20 42 24 0 46-42 24-42-20ZM0 2V46M-42-20 0 2 42-20" /><text className="map-caption" x="0" y="70" textAnchor="middle">YOUR SCOPE</text></g>
+    <defs><pattern id={grid} width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="currentColor" strokeOpacity=".09" /></pattern></defs>
+    <rect width="800" height="400" fill={`url(#${grid})`} />
+    <rect className="map-boundary" x="35" y="105" width="535" height="250" />
+    <text x="55" y="130" className="map-caption">{privateSwarm ? 'DEDICATED BUSINESS INSTALLATION' : 'PATCHRIOT MANAGED SERVICE'}</text>
+    <rect className="map-tee-boundary" x="605" y="105" width="150" height="180" rx="12" />
+    {paths.map((path, index) => <g key={path}><path className={`map-link link-${index % 2}`} d={path} />{!paused && <rect x="-3" y="-3" width="6" height="6" className="map-packet"><animateMotion dur={`${4 + index % 3}s`} begin={`${-index * .7}s`} repeatCount="indefinite" path={path} /></rect>}</g>)}
+    {nodes.map(({ x, title, detail }, index) => <g key={title} transform={`translate(${x},200)`}><rect className={`map-node node-${index % 2}`} x="-24" y="-24" width="48" height="48" /><path className="map-face" d={index === 3 ? 'M-9 0v-7a9 9 0 0 1 18 0v7M-12 0h24v14h-24Z' : 'M-8-3h4m8 0h4M-6 6H6'} /><text className="node-label" y="-43" textAnchor="middle">{title}</text><text className="node-label" y="51" textAnchor="middle">{detail}</text></g>)}
+    <text className="map-caption" x="387" y="337" textAnchor="middle">PRIVATE REPORT + RECORDED EVIDENCE</text>
+    <text className="node-label" x="680" y="315" textAnchor="middle">ENCRYPTED INPUT</text><text className="node-label" x="680" y="337" textAnchor="middle">VERIFIED RESPONSE</text>
+    <text className="map-caption" x="55" y="383">MODEL INFERENCE IS ATTESTED · AGENT HOSTS ARE SEPARATE</text>
   </svg>;
 }
 
 /** The same infrastructure, operated by Patchriot or by the customer's own team. */
 export function NetworkDeployments({ publicAction, privateAction }: { publicAction?: ReactNode; privateAction?: ReactNode }) {
-  return <div className="review-blueprint blueprint-deployments" aria-label="Public and private network deployments">
+  return <div className="review-blueprint blueprint-deployments" aria-label="Managed service and dedicated installations">
     {[
-      { name: 'Public network', tag: 'HOSTED PRIVATE BETA', description: 'Request a test for a domain you control.', owner: 'Patchriot dispatcher', agents: 'Managed agents · public pairing disabled', note: 'Prove domain control with DNS. Confirm the scope and team. Reports stay private to your account.', action: publicAction },
-      { name: 'Your private network', tag: 'SIAAS / ENTERPRISE', description: 'Security Infrastructure as a Service for your team.', owner: 'Your dispatcher', agents: 'Your operators and machines', note: 'Your operators, machines and access rules. Contact us to discuss a private Kali Linux network and supported agent runtimes.', action: privateAction },
-    ].map(item => <section key={item.name}><span>{item.tag}</span><h4>{item.name}</h4><p className="deployment-description">{item.description}</p><div className="deployment-node"><UIIcon name="grid" /><strong>{item.owner}</strong></div><small>↕ PRIVATE MESH CONNECTION</small><div className="deployment-node"><UIIcon name="agent" /><strong>{item.agents}</strong></div><p>{item.note}</p>{item.action && <footer>{item.action}</footer>}</section>)}
+      { name: 'For your web application', tag: 'MANAGED SERVICE', description: 'You bring the URL. We operate the testing agents.', owner: 'Patchriot manages the work', agents: 'Kali + Hermes · NEAR AI inference', note: 'Verify your domain, confirm access and start. Findings stay private. Public agents cannot join this service.', action: publicAction },
+      { name: 'For your business', tag: 'DEDICATED / BY ARRANGEMENT', description: 'A separate installation with agreed access and infrastructure.', owner: 'A dispatcher dedicated to your organization', agents: 'Separate agents and report storage', note: 'We help deploy and configure your setup. Discuss hosting, operator access and the model route with us before sharing data.', action: privateAction },
+    ].map(item => <section key={item.name}><span>{item.tag}</span><h4>{item.name}</h4><p className="deployment-description">{item.description}</p><div className="deployment-node"><UIIcon name="grid" /><strong>{item.owner}</strong></div><small>↕ SCOPED ASSIGNMENTS</small><div className="deployment-node"><UIIcon name="agent" /><strong>{item.agents}</strong></div><p>{item.note}</p>{item.action && <footer>{item.action}</footer>}</section>)}
   </div>;
 }

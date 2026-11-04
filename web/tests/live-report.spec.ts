@@ -282,7 +282,7 @@ test('stopped tests retain a report without fake motion or example actions', asy
   await expect(page.getByRole('heading', { name: 'The test stopped early.' })).toBeVisible();
   await expect(page.getByText(/Scout stopped before its report arrived/)).toBeVisible();
   await expect(page.getByRole('button', { name: /New example|Run example|Cancel test/ })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Test a website' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Test a web application' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No findings available yet' })).toBeVisible();
   expect(await page.locator('.assessment-orbit-signal').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
 });

@@ -1,6 +1,6 @@
 export const docPages = [
   { id: 'start', title: 'Start here', group: 'Patchriot' },
-  { id: 'infrastructure', title: 'Public network or private team', group: 'Patchriot' },
+  { id: 'infrastructure', title: 'Managed or dedicated', group: 'Patchriot' },
   { id: 'workflow', title: 'How a review works', group: 'Patchriot' },
   { id: 'privacy', title: 'Who can see your data', group: 'Patchriot' },
   { id: 'request', title: 'Request a review', group: 'Using Patchriot' },

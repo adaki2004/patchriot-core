@@ -50,13 +50,13 @@ export function useNow() {
   return now;
 }
 
-export function PaymentFields({ offer, asset, refund, onAsset, onRefund, label = "Three-agent review" }: { label?: string; offer: CheckoutOffer; asset: string; refund: string; onAsset: (value: string) => void; onRefund: (value: string) => void }) {
+export function PaymentFields({ offer, asset, refund, onAsset, onRefund, label = "Three-agent review", compact = false }: { label?: string; compact?: boolean; offer: CheckoutOffer; asset: string; refund: string; onAsset: (value: string) => void; onRefund: (value: string) => void }) {
   const token = offer.inputs.find(token => token.asset_id === asset);
   return <div className="checkout-fields">
-    <div className="checkout-price"><span>{label}</span><strong>{tokenAmount(offer.price.amount, offer.destination) ?? 'Price unavailable'}</strong><small>Review fee. Your transfer amount includes the quoted swap costs; your wallet may also charge network gas.</small></div>
+    {!compact && <div className="checkout-price"><span>{label}</span><strong>{tokenAmount(offer.price.amount, offer.destination) ?? 'Price unavailable'}</strong><small>Review fee. Your transfer amount includes the quoted swap costs; your wallet may also charge network gas.</small></div>}
     <label>Pay with<select aria-label="Pay with" required value={asset} onChange={event => onAsset(event.target.value)}><option value="">Choose a token and network</option>{offer.inputs.map(token => <option key={token.asset_id} value={token.asset_id}>{token.symbol} · {chainName(token.blockchain)}</option>)}</select></label>
     <label>Refund address{token ? ` on ${chainName(token.blockchain)}` : ''}<input required autoComplete="off" spellCheck={false} maxLength={64} value={refund} onChange={event => onRefund(event.target.value)} placeholder={token?.blockchain === 'near' ? 'your-account.near' : 'An address you control on this network'} /><small>{token?.blockchain === 'sol' ? 'Use your Solana wallet address, not its token account. ' : ''}Used by the payment provider if the swap is refunded. A cancelled review does not automatically refund a settled payment.</small></label>
-    <p className="fine">The quote lasts {Math.floor(offer.payment_window_seconds / 60)} minutes from preparation. Preparing it reserves the chosen review; work starts only after payment is confirmed.</p>
+    <p className="fine">{compact ? `Next: an exact transfer amount, including swap costs. Wallet gas is extra. Your quote lasts ${Math.floor(offer.payment_window_seconds / 60)} minutes; work starts after payment.` : `The quote lasts ${Math.floor(offer.payment_window_seconds / 60)} minutes from preparation. Preparing it reserves the chosen review; work starts only after payment is confirmed.`}</p>
   </div>;
 }
 

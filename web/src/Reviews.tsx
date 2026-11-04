@@ -162,7 +162,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
       {!['completed', 'needs_review'].includes(review.state) && <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} timing={review.timing} />}
       {['awaiting_payment', 'queued', 'running'].includes(review.state) && <LiveProgress steps={liveSteps} state={review.state} />}
       {retentionNotice}<PdfReportDownload report={report} loadReport={loadReport} disabled={!canExport} />
-      <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a website ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
+      <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a web application ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
       <VulnerabilityReport report={report} />
       {['completed', 'needs_review'].includes(review.state) && <ReportCheck key={id} id={id} csrf={csrf} beforeExport={exportReview} />}
       <details className="assessment-disclosure report-technical"><summary>Other downloads & test details</summary>
@@ -200,7 +200,7 @@ export function Reviews({ csrf, selected, onSelect, onOpenOrders, admin = false 
   const reviews = useLive<Review[]>('/reviews?scope=mine');
   const [creating, setCreating] = useState(false);
   return <>
-    {!selected && <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reports</h1><p className="subtle">Follow your tests and review the findings.</p></div><a className="primary" href="#/pentests">Test a website ↗</a></section>}
+    {!selected && <section className="section-heading fleet-heading"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1 className="page-title">Your reports</h1><p className="subtle">Follow your tests and review the findings.</p></div><a className="primary" href="#/pentests">Test a web application ↗</a></section>}
     {reviews.error && <div className="notice error" role="alert">{reviews.error} <button className="inline" onClick={reviews.refresh}>Retry</button></div>}
     {selected && <ReviewDetail key={selected} id={selected} csrf={csrf} onClose={() => onSelect(null)} onChange={reviews.refresh} onOpenOrders={onOpenOrders} />}
     <details className="assessment-disclosure"><summary>Coupon history & interrupted checkouts</summary><SponsoredReviews csrf={csrf} onOpen={id => { reviews.refresh(); onSelect(id); }} /></details>
