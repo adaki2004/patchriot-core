@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { UIIcon } from './UIIcon';
 
 /** Decorative local animation. It never reads, represents or sends customer work. */
@@ -59,18 +59,40 @@ export function SwarmSignal({ paused }: { paused: boolean }) {
   return <canvas ref={ref} className="swarm-signal" aria-hidden="true" />;
 }
 
-/** Managed and dedicated installations use this same permission and evidence flow. */
-export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused: boolean }) {
-  const nodes = [
-    { icon: 'grid' as const, title: 'Patchriot core', detail: 'Your account, scope and payment', number: '01' },
-    { icon: 'clock' as const, title: 'Dispatcher', detail: 'Approved work, queue and limits', number: '02' },
-    { icon: 'agent' as const, title: 'Kali + Hermes', detail: '1 … N isolated agents', number: '03' },
-    { icon: 'lock' as const, title: 'NEAR AI', detail: 'Private TEE inference', number: '04' },
-  ];
-  return <div className="service-map" data-paused={paused} aria-label="From your verified domain to a private security report">
+const paths = [
+  'M110 190 L300 190', 'M300 190 L510 190', 'M510 190 L750 190',
+  'M750 215 L510 215', 'M510 235 L510 325 L300 325 L300 235',
+];
+
+/** Illustrates the architecture, never claims to show live activity. */
+export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: boolean }) {
+  const grid = useId();
+  const [localPaused, setLocalPaused] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => { if (media.matches) setLocalPaused(true); };
+    media.addEventListener('change', update); return () => media.removeEventListener('change', update);
+  }, []);
+  const stopped = paused ?? localPaused;
+  return <div className="service-map animated-map" data-paused={stopped} aria-label="From your verified domain to a private security report">
     <div className="flow-permission"><span>YOU START HERE</span><strong>Verify your domain</strong><span aria-hidden="true">→</span><strong>Confirm access</strong></div>
-    <ol className="flow-nodes">{nodes.map(node => <li key={node.number} className="flow-node"><div className="flow-node-top"><span>{node.number}</span><UIIcon name={node.icon} /></div><h3>{node.title}</h3><p>{node.detail}</p>{node.number === '03' && <div className="flow-agent-stack" aria-hidden="true"><i /><i /><i /><span>… N</span></div>}{node.number === '04' && <small>Encrypted request · verified response</small>}</li>)}</ol>
-    <div className="flow-return"><span aria-hidden="true">↶</span><strong>Private findings return to your console.</strong><span>Recorded requests. Clear next steps.</span></div>
-    <p className="flow-caption">Same architecture. Operated by Patchriot, or a dedicated installation for your business.</p>
+    <svg className="coordination-map" viewBox="0 0 880 410" role="img" aria-label="Your verified website connects through the dispatcher to isolated Hermes agents. Encrypted model requests go to NEAR AI; private evidence returns to you.">
+      <defs><pattern id={grid} width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="currentColor" strokeOpacity=".09" /></pattern></defs>
+      <rect width="880" height="410" fill={`url(#${grid})`} />
+      <rect className="map-boundary" x="30" y="65" width="570" height="300" rx="8" />
+      <text x="50" y="94" className="map-caption">PATCHRIOT / MANAGED AGENTS</text>
+      <rect className="map-tee-boundary" x="655" y="105" width="190" height="180" rx="12" />
+      {paths.map((path, index) => <g key={path}><path className={`map-link link-${index % 2}`} d={path} />{!stopped && <rect x="-3" y="-3" width="6" height="6" className="map-packet"><animateMotion dur={`${4 + index % 3}s`} begin={`${-index * .7}s`} repeatCount="indefinite" path={path} /></rect>}</g>)}
+      {[{x:110,title:'YOUR WEB APP',detail:'VERIFIED SCOPE'}, {x:300,title:'DISPATCHER',detail:'PERMISSION + QUEUE'}, {x:510,title:'KALI + HERMES',detail:'ISOLATED AGENTS'}, {x:750,title:'NEAR AI',detail:'PRIVATE TEE'}].map(({x,title,detail},i) => <g key={title} transform={`translate(${x},200)`}>
+        {i===2 && <><rect className="map-isolation" x="-46" y="-45" width="92" height="88" rx="6" /><rect className="map-node node-1" x="-13" y="-35" width="48" height="48" /></>}
+        <rect className={`map-node node-${i%2}`} x="-24" y="-24" width="48" height="48" /><path className="map-face" d={i===3?'M-9 0v-7a9 9 0 0 1 18 0v7M-12 0h24v14h-24Z':'M-8-3h4m8 0h4M-6 6H6'} />
+        <text className="node-label" y="-60" textAnchor="middle">{title}</text><text className="node-label" y="62" textAnchor="middle">{detail}</text>
+      </g>)}
+      <text className="map-caption" x="405" y="350" textAnchor="middle">PRIVATE REPORT + EVIDENCE</text>
+      <text className="node-label" x="750" y="320" textAnchor="middle">ENCRYPTED REQUEST</text><text className="node-label" x="750" y="343" textAnchor="middle">VERIFIED RESPONSE</text>
+    </svg>
+    <ol className="map-key"><li><strong>1. Your web app</strong><span>Exact domain. Your permission.</span></li><li><strong>2. Dispatcher</strong><span>Sets the scope and queues work.</span></li><li><strong>3. Isolated Hermes agents</strong><span>Investigate, reproduce, review.</span></li><li><strong>4. NEAR AI</strong><span>Private model inference.</span></li></ol>
+    <p className="flow-caption">Model inference is protected by NEAR’s TEE. Agent hosts and report storage are separate. The animation explains the route; it is not live activity.</p>
+    {paused===undefined && <button type="button" className="quiet map-motion" aria-pressed={stopped} onClick={() => setLocalPaused(!stopped)}>{stopped?'Play diagram':'Pause diagram'}</button>}
   </div>;
 }

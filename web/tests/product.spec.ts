@@ -36,9 +36,9 @@ test('public documentation is bookmarkable and never requests private records', 
   await expect(diagram).toContainText('NEAR AI');
   await expect(diagram).toContainText('isolated Hermes agents on Kali');
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Managed or dedicated', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Inside the network', exact: true })).toBeVisible();
   await page.goto('/#/docs/architecture');
-  await expect(page.getByRole('heading', { name: 'Managed or dedicated', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Inside the network', exact: true })).toBeVisible();
   expect(calls.filter(path => !['/api/session', '/api/fleet', '/api/incidents', '/api/analytics'].includes(path))).toEqual([]);
   await page.goto('/#/docs/../../admin');
   await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toBeVisible();
@@ -51,11 +51,9 @@ test('workspace separates requests and pairing from the public introduction', as
   await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'A first check. With evidence.' })).toBeVisible();
-  await page.getByText('Existing snapshot and source tools', { exact: true }).click();
-  await page.getByRole('button', { name: 'Set the scope →', exact: false }).click();
-  await expect(page).toHaveURL(/#\/sites$/);
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Start with a URL', exact: false }).click();
+  await expect(page).toHaveURL(/#\/pentests$/);
+  await expect(page.getByLabel('Website URL')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
   await expect(page.getByRole('heading', { name: 'Agent pairing is staff-only.' })).toBeVisible();

@@ -33,11 +33,11 @@ test('one service diagram explains scope, agents and inference and respects redu
   await expect(page.getByRole('slider')).toHaveCount(0);
   await expect(page.locator('.service-map')).toContainText('Verify your domain');
   await expect(page.locator('.service-map')).toContainText('Confirm access');
-  await expect(page.locator('.service-map h3')).toHaveText(['Patchriot core', 'Dispatcher', 'Kali + Hermes', 'NEAR AI']);
-  await expect(page.locator('.service-map')).toContainText('1 … N');
+  await expect(page.locator('.service-map .map-key strong')).toHaveText(['1. Your web app', '2. Dispatcher', '3. Isolated Hermes agents', '4. NEAR AI']);
+  await expect(page.locator('.service-map')).toContainText('PRIVATE TEE');
   await expect(page.locator('.service-map')).toHaveAttribute('data-paused', 'true');
   await expect(page.locator('link[rel=icon]')).toHaveAttribute('href', '/brand/white-hat.png');
-  await expect(page.getByRole('heading', { name: 'OWASP BLACK-BOX ETHICAL HACKING ENGINE.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'YOUR WEB APP. UNDER REVIEW.' })).toBeVisible();
   await expect(page.getByText('NO SOLO', { exact: false })).toHaveCount(0);
   await page.locator('.tm-hero').getByRole('button', { name: 'TEST MY WEB APP', exact: false }).click();
   const access = page.getByRole('dialog', { name: 'Sign in' });
@@ -106,12 +106,10 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.goto('/#/request');
   const choices = page.locator('button.request-option');
-  await expect(choices).toHaveCount(4);
+  await expect(choices).toHaveCount(2);
   await expect(page.locator('.roadmap-product[aria-disabled=true]')).toHaveCount(2);
   await expect(choices.first()).toBeVisible();
   await expect(choices.nth(1)).toBeVisible();
-  await expect(choices.nth(2)).not.toBeVisible();
-  await page.getByText('Existing snapshot and source tools', { exact: true }).click();
   for (const choice of await choices.all()) {
     await choice.hover();
     await choice.focus();
@@ -131,4 +129,24 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
     });
     for (const ratio of ratios) expect(ratio, 'Audit choice contrast').toBeGreaterThanOrEqual(4.5);
   }
+});
+
+
+test('the restored diagram animates and can be paused on both the landing and docs', async ({ page }) => {
+  await page.route('**/api/session', r => r.fulfill({ json: { account: null, csrf_token: null } }));
+  await page.route('**/api/incidents', r => r.fulfill({ json: [] }));
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/#/home');
+  const map = page.locator('.service-map');
+  await expect(map).toHaveAttribute('data-paused', 'false');
+  await expect(map.locator('animateMotion')).toHaveCount(5);
+  await page.getByRole('button', { name: /pause motion/i }).click();
+  await expect(map).toHaveAttribute('data-paused', 'true');
+  await expect(map.locator('animateMotion')).toHaveCount(0);
+  await page.goto('/#/docs/workflow');
+  await expect(map.locator('animateMotion')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Pause diagram' }).click();
+  await expect(map.locator('animateMotion')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Play diagram' }).click();
+  await expect(map.locator('animateMotion')).toHaveCount(5);
 });
