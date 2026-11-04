@@ -325,13 +325,12 @@ test('repeated findings count once while keeping all roles, citations and confli
   expect(report.steps.every(s => s.result!.assessment!.findings.length === 2)).toBe(true);
 });
 
-test('matching labels do not merge different paths, query values, auth contexts or POST bodies', () => {
-  for (const change of ['path', 'query', 'auth', 'body', 'missing']) {
+test('matching labels do not merge different paths, query values or POST bodies', () => {
+  for (const change of ['path', 'query', 'body', 'missing']) {
     const report = repeatedReport();
     const evidence = report.steps[1].result!.evidence[0];
     if (change === 'path') evidence.url = 'https://owned.example/other?token=synthetic-value';
     if (change === 'query') evidence.url = 'https://owned.example/debug?token=another-value';
-    if (change === 'auth') evidence.authenticated = true;
     if (change === 'body') { evidence.method = 'POST'; evidence.request_body_sha256 = 'c'.repeat(64); }
     if (change === 'missing') report.steps[1].result!.evidence.shift();
     expect(reportFindings(report), change).toHaveLength(4);
@@ -339,6 +338,22 @@ test('matching labels do not merge different paths, query values, auth contexts 
   const report = repeatedReport();
   report.steps[0].result!.assessment!.findings.push(structuredClone(result.assessment!.findings[0]));
   expect(reportFindings(report)).toHaveLength(3); // Never erase two claims by one author.
+});
+
+test('anonymous and account checks group without losing conflicting evidence or changing originals', () => {
+  const report = repeatedReport();
+  report.steps[0].result!.evidence[0].authenticated = true;
+  report.steps[1].result!.evidence[0].authenticated = false;
+  report.steps[1].result!.assessment!.findings[0].support = 'not_reproduced';
+  report.steps[2].evidence_complete = false;
+  const original = JSON.stringify(report);
+  const findings = reportFindings(report);
+  expect(findings).toHaveLength(2);
+  expect(findings[0].disputed).toBe(true);
+  expect(findings[0].complete).toBe(false);
+  expect(findings[0].contributions.map(c => c.result.evidence[0].authenticated)).toEqual([true, false, undefined]);
+  expect(findings[0].contributions[1].finding.support).toBe('not_reproduced');
+  expect(JSON.stringify(report)).toBe(original);
 });
 
 test('only the narrow HSTS spelling variant is normalized, without hiding a different conclusion', () => {
@@ -354,6 +369,7 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   await setup(page);
   const report = repeatedReport();
   report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
+  report.steps[0].result!.evidence[0].authenticated = true;
   const review = { ...report, mode: 'pentest_agent', deadline_at: 1793643000, pentest: { scope: { origins: report.origins, methods: ['GET'] }, reviewers: [] } };
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await mockExport(page, review);
@@ -362,12 +378,16 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   await expect(page.getByText(/Roles differ — review needed/)).toBeVisible();
   await page.locator('.report-finding > summary').first().click();
   await expect(page.getByRole('button', { name: 'Inspect Verifier evidence' })).toBeVisible();
+  await expect(page.locator('.report-finding').first().getByText(/Scout · Test account · GET/)).toBeVisible();
+  await expect(page.locator('.report-finding').first().getByText(/Recon · Anonymous · GET/)).toBeVisible();
   await page.getByText('Other downloads & test details', { exact: true }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download readable report' }).click();
   const md = await readFile((await (await download).path())!, 'utf8');
   expect(md).toContain('## Observations (2)');
   expect(md).toContain('Roles differ — review needed.');
+  expect(md).toContain('First cited request: Test account · GET');
+  expect(md).toContain('First cited request: Anonymous · GET');
   for (const role of ['investigator', 'reproducer', 'challenger']) expect(md).toContain(`${role}#1`);
   expect(md.match(/^### [SRV]-\d+$/gm)).toHaveLength(2);
 });

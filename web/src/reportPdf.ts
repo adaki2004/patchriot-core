@@ -1,4 +1,4 @@
-import { coverageChecks, checkLabels } from './report';
+import { coverageChecks, checkLabels, findingRequest } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { reportSummary, reportRoles, roleMethods, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
@@ -99,7 +99,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.heading('Reported severity');
   for (const severity of severities) p.paragraph(`${severity === 'info' ? 'Informational' : severity[0].toUpperCase() + severity.slice(1)}: ${summary.findings.filter(r => r.finding.severity === severity).length}`, 11);
   p.heading('How to use this report');
-  p.paragraph('Start with the numbered findings. Repeat claims with matching titles and first cited requests are grouped; each original contribution stays available. Differences in severity or support are marked for review, with the highest reported severity shown. Agreement is not independent confirmation. Informational observations may describe intentional behavior.');
+  p.paragraph('Start with the numbered findings. Repeat claims with matching titles and first cited requests are grouped. Anonymous and test-account checks stay visible within that observation. Each original contribution remains available. Differences in severity or support are marked for review, with the highest reported severity shown. Agreement is not independent confirmation. Informational observations may describe intentional behavior.');
   p.paragraph(summary.partial ? 'Follow up on the incomplete stages before treating this assessment as finished. A missing report is not a report of no vulnerabilities.' : 'Validate material findings and retest any changes. A completed automated run cannot establish the absence of vulnerabilities.');
   p.paragraph(reportLimits, 10, muted);
 
@@ -143,13 +143,14 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     for (const c of row.contributions) {
       p.heading(`${reportRoles[c.role]} — supporting contribution`);
       p.paragraph(`${c.finding.severity} · ${supportLabels[c.finding.support] ?? c.finding.support}${c.complete ? '' : ' · Partial assessment'}`, 9, muted);
+      p.label('First cited request', findingRequest(c));
       if (c.finding.explanation !== f.explanation) p.paragraph(c.finding.explanation);
       if (c.finding.reproduction !== f.reproduction) { p.heading('Reproduction'); p.paragraph(c.finding.reproduction); }
       if (c.finding.suggested_action !== f.suggested_action) { p.heading('Suggested action'); p.paragraph(c.finding.suggested_action); }
       for (const id of c.finding.evidence_ids) {
         const e = c.result.evidence.find(e => e.id === id);
         if (!e) { p.paragraph(`${reportRoles[c.role]} #${id}: missing from the recorded evidence.`); continue; }
-        p.paragraph(`${reportRoles[c.role]} #${id} · ${e.method} · HTTP ${e.status ?? 'no response'}`, 10, blue);
+        p.paragraph(`${reportRoles[c.role]} #${id} · ${e.authenticated === true ? 'Test account' : 'Anonymous'} · ${e.method} · HTTP ${e.status ?? 'no response'}`, 10, blue);
         p.paragraph(e.url, 9);
         if (e.body_sha256) p.paragraph(`Response fingerprint: ${e.body_sha256}`, 8, muted);
       }

@@ -35,9 +35,15 @@ export function roleOutcome(step: LiveStep): { label: string; detail: string } {
   return step.evidence_complete ? { label: 'Assessment received', detail: 'Findings and request evidence are available. The agent’s conclusions still need review.' } : { label: 'Partial assessment', detail: stopExplanation(step.result.execution.failure_reason) };
 }
 
-/** Only group a repeated claim about the same first cited request. A shared
- * control URL elsewhere in the evidence must not join unrelated findings.
- * Preserve every original claim; grouping is presentation, never consensus. */
+/** First cited request, with access kept visible inside a grouped observation. */
+export function findingRequest(claim: FindingContribution): string {
+  const evidence = claim.result.evidence.find(e => e.id === claim.finding.evidence_ids[0]);
+  return evidence ? `${evidence.authenticated === true ? 'Test account' : 'Anonymous'} · ${evidence.method} ${evidence.url}` : 'Request evidence unavailable';
+}
+
+/** Match the claim and first request, preserving different access contexts as
+ * contributions to the same observation. A shared control URL elsewhere must
+ * not join unrelated findings. Grouping is presentation, never consensus. */
 export function reportFindings(input: ReportInput): ReportFinding[] {
   const claims = input.steps.flatMap(s => s.result?.assessment?.findings.map((finding, i) => ({
     id: `${({ investigator: 'S', reproducer: 'R', challenger: 'V' })[s.role]}-${String(i + 1).padStart(2, '0')}`,
@@ -47,9 +53,9 @@ export function reportFindings(input: ReportInput): ReportFinding[] {
   for (const claim of claims) {
     const evidence = claim.result.evidence.find(e => e.id === claim.finding.evidence_ids[0]);
     // This spelling variant means the same HTTP header. No semantic/fuzzy
-    // title matching: different causes, paths, queries and auth stay separate.
+    // title matching: different causes, paths, queries and inputs stay separate.
     const title = claim.finding.title.toLowerCase().trim().replace(/\s+/g, ' ').replace(/\bstrict-transport-security header\b/g, 'strict-transport-security');
-    const key = evidence?.status != null ? JSON.stringify([title, evidence.method, evidence.url, evidence.authenticated === true, evidence.request_body_sha256 ?? null]) : claim.id;
+    const key = evidence?.status != null ? JSON.stringify([title, evidence.method, evidence.url, evidence.request_body_sha256 ?? null]) : claim.id;
     const bucket = groups.get(key) ?? [];
     const group = bucket.find(g => !g.contributions.some(c => c.role === claim.role));
     if (group) group.contributions.push(claim);

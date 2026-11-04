@@ -1,6 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import './assessment.css';
-import { reportFindings, stopExplanation, type ReportInput } from './report';
+import { findingRequest, reportFindings, stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
@@ -51,11 +51,11 @@ const block = (value: string) => { const fence = '`'.repeat(Array.from(value.mat
 export function reportMarkdown(id: string, steps: LiveStep[], origins: string[]) {
   const lines = ['# Patchriot — private website review', `Review: ${id}`, 'Scope:', block(origins.join('\n')), 'Role reports and operator-recorded HTTP evidence. Agreement is not proof of safety. Remediation is a recommendation; no production patch was tested.'];
   const findings = reportFindings({ id, steps, origins, state: '', created_at: 0 });
-  lines.push(`## Observations (${findings.length})`, 'Repeat claims are grouped by title and first cited request. Original contributions and role-scoped references are retained. Different severities or support require review; the highest reported severity is shown.');
+  lines.push(`## Observations (${findings.length})`, 'Repeat claims are grouped by title and first cited request. Anonymous and test-account checks stay visible within that observation. Original contributions and role-scoped references are retained. Different severities or support require review; the highest reported severity is shown.');
   for (const row of findings) {
     lines.push(`### ${row.id}`, block(`${row.finding.title}\nSeverity: ${row.finding.severity}`));
     if (row.disputed) lines.push('Roles differ — review needed.');
-    for (const c of row.contributions) lines.push(`#### ${liveRoles[c.role]} contribution`, block(`Severity: ${c.finding.severity}\nSupport: ${support[c.finding.support] ?? c.finding.support}\n${c.complete ? 'Assessment received' : 'Partial assessment'}`), 'Impact and evidence:', block(c.finding.explanation), 'Reproduction:', block(c.finding.reproduction), 'Recommended fix (not tested):', block(c.finding.suggested_action), `HTTP references: ${c.finding.evidence_ids.map(n => `${c.role}#${n}`).join(', ')}`);
+    for (const c of row.contributions) lines.push(`#### ${liveRoles[c.role]} contribution`, block(`Severity: ${c.finding.severity}\nSupport: ${support[c.finding.support] ?? c.finding.support}\n${c.complete ? 'Assessment received' : 'Partial assessment'}\nFirst cited request: ${findingRequest(c)}`), 'Impact and evidence:', block(c.finding.explanation), 'Reproduction:', block(c.finding.reproduction), 'Recommended fix (not tested):', block(c.finding.suggested_action), `HTTP references: ${c.finding.evidence_ids.map(n => `${c.role}#${n}`).join(', ')}`);
   }
   for (const s of steps) {
     lines.push(`## ${liveRoles[s.role]}`, s.evidence_complete ? 'Report received with recorded requests.' : 'Incomplete role: inspect the evidence and missing checks.');
