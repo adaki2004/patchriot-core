@@ -155,7 +155,7 @@ async fn signed_out(state: &AppState, headers: &HeaderMap) -> Result<(), ApiErro
 }
 pub(crate) async fn providers(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(
-        serde_json::json!({"github":state.config.sso.credentials.contains_key(&Provider::Github),"google":state.config.sso.credentials.contains_key(&Provider::Google)}),
+        serde_json::json!({"wallet":state.config.wallet_project_id.is_some(),"github":state.config.sso.credentials.contains_key(&Provider::Github),"google":state.config.sso.credentials.contains_key(&Provider::Google)}),
     )
 }
 pub(crate) async fn start(

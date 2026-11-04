@@ -320,3 +320,15 @@
 .report-check-summary { display: flex; flex-wrap: wrap; gap: .7rem 1.5rem; align-items: baseline; margin: 1rem 0; }
 .report-check-summary strong { color: var(--ink); font-size: 1.05rem; }
 .report-check-summary span { color: var(--muted); font-size: .9rem; }
+
+.wallet-page { max-width: 520px; width: calc(100% - 40px); margin: 28px auto; }
+.wallet-brand { display:flex;align-items:center;gap:16px;font-size:28px;text-decoration:none;margin-bottom:36px; }
+.wallet-page h1 { font-size:36px;line-height:1.1; }
+.wallet-page p { line-height:1.6; }
+.wallet-connect-options { display:grid;gap:12px;margin:24px 0; }
+.wallet-address,.wallet-quote code { display:block;overflow-wrap:anywhere;margin:12px 0 24px; }
+.wallet-quote { padding:22px;border:1px solid var(--line);margin:24px 0; }
+.wallet-quote strong { font-size:26px; }
+.wallet-quote small { display:block; }
+.wallet-qr { text-align:center; }.wallet-qr img { max-width:100%;height:auto; }
+.wallet-page .fine { margin-top:24px; }

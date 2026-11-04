@@ -178,7 +178,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_contact_email(contact_email)?
             .with_ga_measurement_id(ga_measurement_id)?
             .with_analytics_origin(analytics_origin)?
-            .with_sso(patchriot_core::SsoConfig::from_env()?),
+            .with_sso(patchriot_core::SsoConfig::from_env()?)
+            .with_wallet_project_id(std::env::var("WC_REOWNED_PRJ_ID").ok())?,
     )?;
     if let Some(path) = std::env::var_os("PATCHRIOT_TREASURY_CONFIG") {
         use std::io::Read;

@@ -2,7 +2,7 @@ export type Account = {
   id: string;
   display_name: string;
   role: 'member' | 'admin';
-  auth_method: 'invite' | 'google' | 'github' | 'password';
+  auth_method: 'invite' | 'google' | 'github' | 'password' | 'wallet';
 };
 
 export type Session = { account: Account | null; csrf_token: string | null };
@@ -29,6 +29,9 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  wallet_signin_failed: 'The wallet message could not be verified. Start again and sign the new message.',
+  wallet_unavailable: 'Wallet sign-in is not configured on this installation.',
+
   report_content_deleted: "The report’s download window ended and its private content has been deleted.",
   report_not_finished: "Wait for the test to end before downloading its report.",
   invalid_inquiry: 'Add your name, company or team, email and a message of 20–3,000 characters.',

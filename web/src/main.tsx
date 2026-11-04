@@ -237,4 +237,5 @@ function App() {
   </>;
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+if (location.pathname === '/wallet') void import('./WalletPage').then(module => module.mountWallet());
+else createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

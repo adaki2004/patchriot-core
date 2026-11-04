@@ -6,6 +6,7 @@ export async function emptyDashboard(page: Page) {
     const path = new URL(route.request().url()).pathname;
     if (route.request().method() === 'GET') {
       if (path === '/api/auth/providers') return route.fulfill({ json: { github: false, google: false } });
+      if (path === '/api/wallet/config') return route.fulfill({ json: { enabled: false } });
       if (path === '/api/analytics') return route.fulfill({ json: { enabled: false } });
       if (['/api/pentests', '/api/pentest-tools', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/agents'].includes(path)) return route.fulfill({ json: [] });
       if (path === '/api/withdrawals') return route.fulfill({ json: { enabled: false, minimum_claim: '10000000', balance: { earned: '0', available: '0', reserved: '0', paid: '0' }, destinations: [], claims: [], receipts: [] } });

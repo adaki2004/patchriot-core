@@ -195,7 +195,7 @@ async fn start_requires_origin_and_binds_pkce_state_nonce_and_ten_minute_browser
     assert!(!params.to_string().contains("secret"));
     assert_eq!(
         test.request("GET", "/api/auth/providers", &[]).await.2,
-        json!({"github":true,"google":true})
+        json!({"github":true,"google":true,"wallet":false})
     );
     // A new attempt in the same browser invalidates the old one.
     assert_eq!(

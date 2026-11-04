@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { openWallet } from './wallet';
+import { useLive } from './useLive';
 
 export type PaymentToken = { asset_id: string; symbol: string; decimals: number; blockchain: string };
 export type CheckoutOffer = { id: string; price: { asset: string; amount: string }; destination: PaymentToken; inputs: PaymentToken[]; payment_window_seconds: number };
@@ -62,6 +64,10 @@ export function PaymentFields({ offer, asset, refund, onAsset, onRefund, label =
 
 export function DepositInstructions({ quote, onSent }: { quote: Deposit; onSent: () => void }) {
   const [copied, setCopied] = useState('');
+  const [walletBusy, setWalletBusy] = useState(false);
+  const wallet = useLive<{enabled:boolean}>('/wallet/config', true, 60_000);
+  const [walletError, setWalletError] = useState('');
+  async function payWithWallet() { setWalletBusy(true); setWalletError(''); try { await openWallet('payment', quote.order_id); onSent(); } catch(e) { setWalletError((e as Error).message); } finally { setWalletBusy(false); } }
   const amount = tokenAmount(quote.input.amount, quote.input.token);
   async function copy(value: string, label: string) {
     try { await navigator.clipboard.writeText(value); setCopied(`${label} copied.`); }
@@ -71,6 +77,9 @@ export function DepositInstructions({ quote, onSent }: { quote: Deposit; onSent:
   return <section className="deposit-card" aria-label="Payment instructions">
     <p className="eyebrow">NEAR INTENTS / ONE PAYMENT</p>
     <h3>Send {amount}</h3><p className="deposit-network">on <strong>{chainName(quote.input.token.blockchain)}</strong></p>
+    {wallet.data?.enabled && ['eth','sol'].includes(quote.input.token.blockchain) && <button className="primary" disabled={walletBusy} onClick={() => void payWithWallet()}>{walletBusy ? 'Wallet window open…' : 'Pay using a wallet ↗'}</button>}
+    {walletError && <p className="notice error" role="alert">{walletError}</p>}
+    <p className="fine">Or send directly from your wallet using these instructions. No connection required.</p>
     <button className="quiet" onClick={() => void copy(amount.slice(0, -(quote.input.token.symbol.length + 1)), 'Exact amount')}>Copy exact amount</button>
     <p className="fine">Pay before {new Date(quote.expires_at).toLocaleTimeString()}. Send once, using this token and network. If you already sent it, wait for confirmation.</p>
     {quote.provider_app_fee_bps !== undefined && quote.provider_app_fee_bps > 0 && <p className="fine">A {(quote.provider_app_fee_bps / 100).toFixed(2)}% provider app fee is included in the displayed amount. Your wallet may also charge network gas.</p>}
