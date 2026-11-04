@@ -145,12 +145,12 @@ The [testing FAQ](https://patchriot.tech/#/docs/safety) explains actual tools, s
 | --- | --- |
 | Website | Collective design, one App entry, personal dashboard, private reports and recent-events feed |
 | Enterprise | Public inquiry form and private staff inbox; optional configured contact email |
-| Access | Configurable GitHub/Google sign-in and existing pilot accounts; staff-only pairing; domain verification before checkout and execution |
+| Access | GitHub/Google and personal-wallet sign-in, plus existing pilot accounts; staff-only pairing; domain verification before checkout and execution |
 | Dispatch | Signed devices, bounded leases, cancellation, expiry and private evidence access |
 | Agents | Isolated Hermes on managed Kali; two required live roles and a third for escalation; legacy three-role reviews preserved |
-| Payments | Single-use codes and NEAR Intents checkout for live, snapshot and source reviews; 90/10 accounting and reserved operator withdrawals |
+| Payments | Single-use codes, manual transfer or wallet checkout through NEAR Intents; 90/10 accounting and reserved operator withdrawals |
 | Existing tools | Approved saved-page and source-text reviews remain accessible |
-| In development | Broader OWASP checks, clearer evidence packs and public deployment |
+| In development | Broader OWASP checks and stronger reproduction coverage |
 | Later | Browser login flows, recurring checks, managed private networks and confidential execution |
 
 ## Developer setup: run your own copy
