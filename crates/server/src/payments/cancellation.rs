@@ -146,7 +146,7 @@ async fn deliver_claimed(state: &AppState, order: &Order) -> Outcome {
         return Outcome::Review("cancellation_review_missing");
     };
     let path = format!("/internal/reviews/{review}");
-    let view = match gateway::request_for_account::<(), ReviewView>(
+    let view = match gateway::request_review_for_account::<()>(
         state,
         reqwest::Method::GET,
         &path,
@@ -173,7 +173,7 @@ async fn deliver_claimed(state: &AppState, order: &Order) -> Outcome {
     ) {
         return Outcome::Review("cancellation_unknown_review_state");
     }
-    let view = match gateway::request_for_account::<_, ReviewView>(
+    let view = match gateway::request_review_for_account::<_>(
         state,
         reqwest::Method::POST,
         &format!("{path}/cancel"),

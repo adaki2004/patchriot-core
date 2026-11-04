@@ -3,6 +3,7 @@
 //! integration; an invitation must never be presented as a verified Google identity.
 
 mod access;
+mod analytics;
 mod auth;
 mod contact;
 mod diagnostics;
@@ -52,9 +53,38 @@ pub struct Config {
     pub secure_cookies: bool,
     /// Optional public contact address. Inquiry delivery is the private inbox.
     pub contact_email: Option<String>,
+    pub ga_measurement_id: Option<String>,
+    pub analytics_origin: Option<String>,
 }
 
 impl Config {
+    pub fn with_ga_measurement_id(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        if value.as_ref().is_some_and(|id| !analytics::valid_id(id)) {
+            return Err("invalid PATCHRIOT_GA_MEASUREMENT_ID");
+        }
+        self.ga_measurement_id = value;
+        Ok(self)
+    }
+    pub fn with_analytics_origin(mut self, value: Option<String>) -> Result<Self, &'static str> {
+        if self.ga_measurement_id.is_some() != value.is_some() {
+            return Err(
+                "set both PATCHRIOT_GA_MEASUREMENT_ID and PATCHRIOT_ANALYTICS_ORIGIN, or neither",
+            );
+        }
+        self.analytics_origin = value
+            .map(|value| {
+                let analytics = Self::origin(&value, false)?;
+                let public = Self::origin(&self.public_origin, false)?;
+                // Cookies are shared across ports. A different port alone does not
+                // isolate the app's login cookie from third-party script.
+                if analytics.host() == public.host() {
+                    return Err("analytics requires a different hostname from the application");
+                }
+                Ok(analytics.origin().ascii_serialization())
+            })
+            .transpose()?;
+        Ok(self)
+    }
     pub fn with_contact_email(mut self, value: Option<String>) -> Result<Self, &'static str> {
         self.contact_email = value
             .map(|value| access::contact(&value).map_err(|_| "invalid PATCHRIOT_CONTACT_EMAIL"))
@@ -126,6 +156,8 @@ impl Config {
             dispatcher_url: dispatcher.origin().ascii_serialization(),
             relay_origin: None,
             contact_email: None,
+            ga_measurement_id: None,
+            analytics_origin: None,
             internal_key,
             web_root,
         })
@@ -201,6 +233,9 @@ pub async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
 }
 
 pub fn router(state: AppState) -> Router {
+    let frame_origin = state.config.analytics_origin.as_deref().unwrap_or("'none'");
+    let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src {frame_origin}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
+        .expect("validated analytics origin");
     let mut routes = Router::new()
         .route(
             "/api/health",
@@ -209,6 +244,8 @@ pub fn router(state: AppState) -> Router {
             }),
         )
         .route("/api/session", get(auth::session))
+        .route("/api/analytics", get(analytics::settings))
+        .route("/api/analytics/frame/{page}", get(analytics::frame))
         .route("/api/contact", get(contact::details).post(contact::create))
         .route("/api/admin/inquiries", get(contact::inbox))
         .route("/api/admin/inquiries/{id}", post(contact::decide))
@@ -283,7 +320,11 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/reviews/{id}", get(gateway::review))
         .route("/api/reviews/{id}/cancel", post(gateway::cancel_review))
-        .route("/api/reviews/{id}/report", get(gateway::report))
+        .route("/api/reviews/{id}/report", post(gateway::report))
+        .route(
+            "/api/reviews/{id}/consistency-check",
+            get(gateway::report_check).post(gateway::request_report_check),
+        )
         .route(
             "/api/sources",
             get(sources::list)
@@ -294,6 +335,14 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/pentests", get(pentests::list).post(pentests::create))
         .route("/api/pentests/{id}/decision", post(pentests::decide))
+        .route(
+            "/api/pentests/{id}/credentials",
+            post(pentests::set_credentials),
+        )
+        .route(
+            "/api/pentests/{id}/authorize-owned-test",
+            post(pentests::authorize_owned_test),
+        )
         .route("/api/pentests/{id}/review-plan", get(pentests::plan))
         .route("/api/pentest-tools", get(pentests::tools))
         .route("/api/pentests/{id}/review", post(pentests::start))
@@ -344,11 +393,30 @@ pub fn router(state: AppState) -> Router {
             ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
         );
     }
-    routes.layer(DefaultBodyLimit::max(16 * 1024))
-        .layer(SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("no-store")))
-        .layer(SetResponseHeaderLayer::overriding(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff")))
-        .layer(SetResponseHeaderLayer::overriding(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer")))
-        .layer(SetResponseHeaderLayer::overriding(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")))
+    // Only the isolated analytics frame supplies its own CSP. Application pages
+    // keep the default policy, which cannot load third-party scripts.
+    routes
+        .layer(DefaultBodyLimit::max(16 * 1024))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("no-store"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::overriding(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CONTENT_SECURITY_POLICY,
+            page_policy,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            analytics::host_boundary,
+        ))
         .with_state(state)
 }
 

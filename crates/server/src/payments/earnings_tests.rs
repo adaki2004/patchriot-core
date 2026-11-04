@@ -71,6 +71,56 @@ async fn completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
 }
 
 #[tokio::test]
+async fn deleted_findings_preserve_earned_work_but_not_an_unverified_receipt() {
+    use patchriot_protocol::reports::{ReportRetention, WorkReceipt};
+    let db = TestDb::new().await;
+    let (c, mut view) = completed(&db, 10_000_000).await;
+    let before = serde_json::to_value(credits(&view, c.amount).unwrap()).unwrap();
+    for step in &mut view.steps {
+        step.receipt = WorkReceipt::from_result(step.result.as_ref().unwrap());
+        step.result = None;
+    }
+    assert!(
+        credits(&view, c.amount).is_err(),
+        "missing evidence before deletion must not fall back silently"
+    );
+    view.retention = Some(ReportRetention {
+        first_downloaded_at: 1,
+        expires_at: 43201,
+        content_deleted: true,
+    });
+    assert_eq!(
+        serde_json::to_value(credits(&view, c.amount).unwrap()).unwrap(),
+        before
+    );
+    let original = serde_json::to_value(&view).unwrap();
+    for (pointer, value) in [
+        ("/steps/0/receipt/binding_sha256", json!("f".repeat(64))),
+        ("/steps/0/receipt/mode", json!("pentest_agent")),
+        ("/steps/0/receipt/state", json!("failed")),
+        ("/steps/0/receipt/cleanup_confirmed", json!(false)),
+        ("/steps/0/evidence_complete", json!(false)),
+        ("/steps/0/operator_id", json!(Uuid::new_v4())),
+        ("/steps/0/receipt", Value::Null),
+    ] {
+        let mut bad = original.clone();
+        *bad.pointer_mut(pointer).unwrap() = value;
+        assert!(
+            credits(&serde_json::from_value(bad).unwrap(), c.amount).is_err(),
+            "{pointer}"
+        );
+    }
+    assert!(allocate(&db.pool, &c, &view).await.unwrap());
+    assert!(!allocate(&db.pool, &c, &view).await.unwrap());
+    let paid: i64 = sqlx::query_scalar("SELECT sum(amount)::bigint FROM operator_earnings")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(paid, 9_000_000);
+    db.finish().await;
+}
+
+#[tokio::test]
 async fn concurrent_allocation_credits_roles_once_and_balances_receipt() {
     let db = TestDb::new().await;
     let (c, view) = completed(&db, 10_000_000).await;
@@ -182,7 +232,8 @@ async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unp
     use patchriot_protocol::pentests::{LiveScope, PentestContext, PentestResult};
     let db = TestDb::new().await;
     let (mut candidate, mut view) = completed(&db, 10_000_000).await;
-    let scope: LiveScope = serde_json::from_value(json!({"origins":["https://example.com"],"objective":"Owned fixture","methods":["GET","HEAD","OPTIONS"]})).unwrap();
+    let scope: LiveScope = serde_json::from_value(json!({"origins":["https://example.com"],"profile":"web_baseline_v1","tools":["artex_engine_v1"],"methods":["GET","HEAD","OPTIONS"]})).unwrap();
+    let scope = scope.normalized().unwrap();
     let hash = scope.hash().unwrap();
     let website = view.website.take().unwrap();
     candidate
@@ -206,9 +257,13 @@ async fn live_work_allocates_once_with_http_counts_and_keeps_incomplete_work_unp
         "execution":{"state":"completed","provider":"abliteration.ai","model":"abliterated-model-large-v2","image_digest":format!("sha256:{}","c".repeat(64)),"duration_ms":1000,"inference_calls":12,"http_requests":1,"cost_upper_microusd":10,"cleanup_confirmed":true},
         "assessment":{"summary":"Owned fixture inspected","findings":[],"limitations":["One fixture request"]},
         "evidence":[{"id":1,"method":"GET","url":"https://example.com/","request_headers":{},"status":200,"headers":{},"body_excerpt":"fixture","body_sha256":"d".repeat(64),"truncated":false,"error":null,"observed_at":Utc::now().timestamp()}],"raw_summary":""})).unwrap();
-    assert!(result.evidence_complete(&scope));
+    assert!(!result.evidence_complete(&scope));
+    assert!(result.evidence_complete_for_role(&scope, ReviewRole::Reproducer));
     for step in &mut view.steps {
         step.result = Some(WorkResult::Pentest(result.clone()));
+    }
+    if let Some(WorkResult::Pentest(scout)) = &mut view.steps[0].result {
+        scout.tool_runs.push(serde_json::from_value(json!({"tool":"artex-engine","version":"owned-test","arguments":["/opt/artex/artex","https://example.com"],"started_at":1,"duration_ms":1,"exit_code":0,"failure":null,"evidence_ids":[1],"output_sha256":format!("{:x}",Sha256::digest(b"")),"output_excerpt":"","output_truncated":false})).unwrap());
     }
     let mut incomplete = view.clone();
     incomplete.steps[0].evidence_complete = Some(false);

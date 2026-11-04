@@ -36,16 +36,16 @@ test('public documentation is bookmarkable and never requests private records', 
   await expect(page.getByRole('heading', { name: 'Services and boundaries', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Don’t trust. Verify.', exact: true })).toBeVisible();
-  expect(calls.every(path => ['/api/session', '/api/fleet', '/api/incidents'].includes(path))).toBe(true);
+  expect(calls.filter(path => !['/api/session', '/api/fleet', '/api/incidents', '/api/analytics'].includes(path))).toEqual([]);
   await page.goto('/#/docs/../../admin');
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE MESH.' })).toBeVisible();
 });
 
 test('workspace separates requests and pairing from the public introduction', async ({ page }) => {
   await setup(page, true);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE MESH.' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'A first check. With evidence.' })).toBeVisible();
   await page.getByText('Existing snapshot and source tools', { exact: true }).click();
@@ -58,7 +58,7 @@ test('workspace separates requests and pairing from the public introduction', as
   await expect(page.getByRole('heading', { name: 'Public pairing is not open yet.' })).toBeVisible();
   await page.getByRole('button', { name: 'Patchriot home' }).click();
   await expect(page).toHaveURL(/#\/home$/);
-  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE NETWORK.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'BUILD YOUR DEFENSE MESH.' })).toBeVisible();
   await page.getByRole('button', { name: 'OPEN DASHBOARD', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

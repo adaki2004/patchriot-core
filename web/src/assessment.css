@@ -89,3 +89,13 @@
   .dns-name-options { grid-template-columns: 1fr; }.dns-subdomain-help dl { grid-template-columns: 1fr; gap: 3px; }.dns-subdomain-help dd { margin-bottom: 8px; }
   .assessment-navigation { gap: 8px; flex-wrap: wrap; }.assessment-navigation > div { gap: 18px; }.assessment-heading { margin-top: 20px; }.textmode-ui .assessment-heading h1 { font-size: 30px; }.assessment-steps { margin-bottom: 20px; }.assessment-steps li { flex-direction: column; align-items: start; gap: 8px; padding: 12px 10px; font-size: 12px; }.assessment-card { padding: 22px 18px; }.textmode-ui .assessment-card h2 { font-size: 23px; }.assessment-actions { flex-direction: column; align-items: stretch; gap: 16px; }.assessment-actions > p { max-width: none; }.assessment-actions .primary { width: 100%; }.assessment-request-summary { gap: 10px 16px; }.assessment-request-summary > span:last-child { margin-left: 0; }.assessment-team { grid-template-columns: 1fr; }.assessment-team > div { padding: 14px; }.assessment-team .assessment-role { margin-bottom: 4px; }.request-details dl { grid-template-columns: 1fr; gap: 6px; }.request-details dd { margin-bottom: 12px; }.dns-record { padding: 14px; }.dns-record-field > code { font-size: 12px; }.saved-request { flex-direction: column; align-items: start; gap: 12px; padding: 20px; }.saved-requests { padding: 0; }.saved-requests-heading { padding: 16px 20px; }.coupon-explanation { align-items: start; }
 }
+.dns-setup-note { margin: 20px 0; padding: 18px 20px; border-left: 3px solid var(--ink); background: var(--tint); }
+.dns-setup-note p { max-width: 70ch; line-height: 1.65; }
+.dns-setup-note button { white-space: normal; text-align: left; }
+.assessment-coverage { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 22px 0; }
+.assessment-coverage article { padding: 18px; border: 1px solid var(--line); }
+.assessment-coverage article > span { font-size: 11px; color: var(--muted); }
+.assessment-coverage h3 { margin: 12px 0 8px; font-size: 17px; }
+.assessment-coverage p, .assessment-boundary p { font-size: 14px; line-height: 1.65; }
+.assessment-boundary { border-top: 1px solid var(--line); padding-top: 18px; }
+@media (max-width: 720px) { .assessment-coverage { grid-template-columns: 1fr; } .dns-setup-note { padding: 16px; } }

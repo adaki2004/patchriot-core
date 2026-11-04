@@ -7,20 +7,22 @@ Connect agents for tests, reviews and audits. Patchriot coordinates scoped secur
 
 ## First product
 
-**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Enter a public HTTPS website URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Successful DNS verification opens checkout automatically; staff can still block a request. Reports retain the recorded requests, findings and incomplete checks. The report separates numbered findings, each agent’s contribution, coverage and technical evidence. Missing assessments and execution limits stay visible; agent agreement is not presented as independent confirmation. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
+**OWASP Black-Box Ethical Hacking Engine** is our website-testing pilot. Only test websites and systems you own and control. Enter their public HTTPS URL, prove domain control with a temporary DNS TXT record, and confirm the team and model-provider access. Successful DNS verification opens checkout automatically; staff can still block a request. Reports retain the recorded requests, findings and incomplete checks. The report separates numbered findings, each agent’s contribution, coverage and technical evidence. Missing assessments and execution limits stay visible; agent agreement is not presented as independent confirmation. The progress bar counts saved role reports, not elapsed time or estimated website coverage.
 
-The pilot is read-only by default. Dedicated HTTP Basic accounts and bearer API tokens can extend access. An explicit disposable-environment option permits bounded POST submissions. Browser login forms, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
+Repeat findings appear once in the report, with each agent’s contribution and request references retained. Grouping requires matching titles and the same first cited request, including its method, URL and body inputs. Anonymous and test-account checks appear inside the same observation, with each access context labelled. Different severity or support stays marked for review; the highest reported severity is shown. Uncertain matches stay separate. PDF and Markdown use the same grouping; the evidence JSON preserves the original reports.
+
+The pilot is read-only by default. Dedicated test accounts can extend access through cookie-based form/JSON login, HTTP Basic or a bearer token. An explicit disposable-environment option permits bounded POST tests. Interactive browser login, SSO, MFA, load tests and fund movement are unsupported. This is an automated first assessment, not complete OWASP coverage or certification.
 
 | Assessment | What you provide | Status |
 | --- | --- | --- |
 | **Black box** | A website or API URL and proof of control | First product |
-| **Grey box** | The URL and a dedicated HTTP Basic account or bearer API token | Managed pilot; no browser login |
+| **Grey box** | The URL and a dedicated test account | Cookie-based form/JSON login, HTTP Basic or bearer token; no interactive browser login |
 | **White box** | Source code plus an approved test environment | Planned; existing source-text review is a separate, limited tool |
 | **SIaaS** | Your own agents, infrastructure and access rules | Roadmap |
 
 Private repository access is planned through a GitHub App installed on selected repositories, with read-only source access and a fixed commit for each assessment. Repository access does not authorize testing a deployed site. Source-assisted testing still needs explicit target scope and consent to share code with the selected operators and model provider.
 
-**ARTEX** is included in every new website request made through the UI. Checkout requires a team of three compatible agents; older saved requests keep their original tool selection. The pinned full engine runs inside the task container and shares the assessment's existing budgets. It plans checks and uses installed tools; only the approved HTTP methods can reach the target. The report records its version, requests, output and early stops. This does not run every upstream skill or optional tool. An interrupted engine run keeps its evidence and leaves the overall assessment marked for review.
+**Discovery tools** include an adapted ARTEX engine in every new website request made through the UI. We reuse its pinned planner and tools inside Patchriot’s restricted runner; this is not an unrestricted ARTEX deployment. Checkout requires a team of three compatible agents; older saved requests keep their original tool selection. With relay adapter 9, Scout runs the discovery scanners and engine once. Recon and Verifier use that record to choose fresh, targeted checks instead of repeating the full scan. The pinned engine runs inside the task container and shares the assessment's existing budgets. Only approved HTTP methods can reach the target. The report records tool versions, requests, output and early stops. This does not run every upstream skill or optional tool. An interrupted discovery run keeps its evidence and leaves the overall assessment marked for review, even when later roles finish.
 
 | Network | Who it is for |
 | --- | --- |
@@ -29,20 +31,28 @@ Private repository access is planned through a GitHub App installed on selected 
 
 **Public contributor pairing is disabled.** Administrators can connect managed agents. Existing approved devices continue to work. Relay connection details are available only to administrators, and the browser never receives the private core-to-dispatcher address.
 
+## Private inference with NEAR AI
+
+NEAR-backed agents use **DeepSeek V4.1 Flash 1017 Abliterated** on the [Private TEE route](https://near.ai/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated). The relay encrypts model messages, verifies the execution environment and checks signed responses before passing them to the agent. [NEAR AI](https://near.ai/) states that private inference does not log prompts or responses.
+
+This protects the model step, not the entire agent machine. Approved operators handle task content, and Patchriot stores reports under its own deletion policy. Teams may contain other disclosed providers; inspect them before consenting. See [privacy and retention](https://patchriot.tech/#/docs/privacy) and the [testing FAQ](https://patchriot.tech/#/docs/safety).
+
 ## Use Patchriot
 
 Open **App** to sign in or request access. The dashboard brings together your requests, reports and payments. **Audits** links each scope to its reports; **Administration** shows network activity and staff controls. Recent events are separately reviewed public research, never customer findings.
 
 For a live website test:
 
-1. Enter the website URL and confirm your authority to test it. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
-2. Add the supplied TXT record for every domain. Select **Check DNS record**; the server checks for up to five minutes. The page shows the last lookup and remaining time, then offers a retry if no match was found. Returning from your DNS provider’s tab refreshes the status. A repeated click does not extend the window.
+1. Enter your own website URL and confirm that you own and control the target system. The server supplies the versioned `web_baseline_v1` plan: reachable pages and forms, exposed configuration, directory listings, browser policy, cross-origin behavior and safe query probes. The scope covers that exact host; a different subdomain needs its own request.
+2. Add the supplied TXT record for every domain. New requests allow up to seven days to arrange this; **Copy instructions for my developer** prepares the values to share. Select **Check DNS record** after the record is saved; the server checks for up to five minutes. The page shows the last lookup and remaining time, then offers a retry if no match was found. Returning from your DNS provider’s tab refreshes the status. A repeated click does not extend the window.
 3. Wait for domain verification, then confirm the named operators and disclosed model provider. Use a coupon or pay the quoted fee when checkout is enabled. Work queues automatically after access is confirmed.
 4. Inspect the private report, including evidence, gaps and disagreement. Download a PDF with a summary, scope, findings, recommendations, coverage limits and tool register. The PDF is generated in your browser without sending the report elsewhere. Markdown, original evidence JSON and a Postman inventory remain available under other downloads. The inventory omits query values and headers; it does not infer a complete API schema or prove access-control flaws.
 
 Public HTTPS websites and APIs are supported. Knowing a raw IP address or controlling reverse DNS is not proof that you own a server. General port scans and non-web services need a separate infrastructure-verification and testing policy; they are outside this product.
 
-DNS proof belongs to this account and exact request. It expires with the scope after 24 hours, cannot authorize another request, and does not permit testing other domains. Each request allows six refresh windows. Normal DNS propagation may take longer than one window. Access is rechecked when work starts and workers request evidence.
+DNS proof belongs to this account and exact request. New requests allow up to seven days for setup. Successful verification narrows permission to at most 24 hours, capped by the saved expiry. A proof cannot authorize another request or testing on other domains. Each request allows six refresh windows. Normal DNS propagation may take longer than one window. Access is rechecked when work starts and workers request evidence.
+
+Staff can explicitly authorize a configured owned test site for development. This is recorded separately from DNS proof, expires, and can be revoked. It does not start work, replace requester consent or bypass payment. Public requests still require DNS verification.
 
 **Hosted pilot:** [patchriot.tech](https://patchriot.tech). Accounts require approval. Features on a development branch may not be deployed yet; the website shows the options currently available. The local instructions below run a separate installation.
 
@@ -54,11 +64,37 @@ The form accepts 10 submissions per socket peer per 15 minutes, 100 globally per
 
 ## How reviews work
 
+Finished website reports can offer an **optional NEAR AI report check** when dispatcher enables it. With the requester's consent, a separate model reviews finding excerpts for possible duplicates and unsupported claims. This advice does not change findings or run more tests. Download its signed input/output receipt from the same report; that export starts the same 12-hour deletion clock. Verification covers that model response, not the Kali agents, a particular physical machine or the truth of the findings. Finding excerpts can contain sensitive details, even though raw HTTP captures and saved login credentials are excluded.
+
 ![Review flow: scope, permission, team consent, three roles and inspectable evidence.](web/public/diagrams/review-flow.png)
 
 An investigator makes a claim, a reproducer checks it and a challenger questions it. Prefer different operators and models; disclose shared infrastructure. Three devices on one VPS are one shared machine, not three independent operators.
 
+New live tests run ready requests in order on each shared machine, with one active assignment at a time. Paid requests join that order when payment is confirmed. Waiting does not spend an agent's execution allowance: its clock starts when assigned. The report shows waiting, the active agent's deadline and the separate request expiry. Requests remain valid for at most 24 hours after admission or payment, and stop sooner if domain permission or test-account access expires. An unavailable assigned agent can be skipped in favor of other ready work; no replacement operator is silently added. Existing requests keep their original deadlines.
+
 **Private means access-controlled.** Assigned operators, service staff and consented model providers can see the data they process. Findings are not published automatically. The beta has produced incomplete reports and false positives, which remain visible for review.
+
+Live evidence allows up to 4 MiB of compact JSON per agent report. The full three-role report, downloads and internal payment/reward reads accept that combined size. Lists omit report bodies. The PDF remains a readable summary; original recorded evidence is in the JSON export. HTTP capture and excerpt limits still apply and shortening is marked explicitly.
+
+## Report downloads and deletion
+
+The requester’s first export of a finished report starts a fixed 12-hour deletion timer. PDF, Markdown, endpoint and evidence JSON exports all use the same authenticated `POST /api/reviews/:id/report` with `{}`, the session cookie, allowed Origin and CSRF token. A GET does not start an export. The timer records server acceptance, not confirmation that the browser saved the file. Repeated downloads never extend it; ordinary reads and staff exports do not start it.
+
+At expiry, report reads hide findings, HTTP evidence and tool output immediately. Dispatcher cleanup removes those fields from active storage within its next successful 30-second sweep. Small work receipts preserve earnings accounting; job state, consent, hashes and payment records remain. Browser-generated exports are not stored on the server. Existing reports acquire a deadline only when the requester exports them. Source uploads and snapshots retain their separate seven-day policy. Downloaded/operator/provider copies and database recovery media are outside this application-level deletion; configure and document backup retention for the deployment.
+
+Deploy dispatcher and its migration before core. Clients using the previous GET download route must use the explicit POST; this prevents prefetching or cross-site links from starting deletion.
+
+## Optional public page counts
+
+Set `PATCHRIOT_GA_MEASUREMENT_ID` and `PATCHRIOT_ANALYTICS_ORIGIN` together to enable an opt-in Google Analytics prompt. The analytics origin must use a different hostname, routed to this same core service; it serves only the analytics frame, with all app and account routes blocked. A different port on the app hostname is insufficient. Leave both unset to disable analytics. Only signed-out visits to Home, Docs and Recent events qualify; opening sign-in or private work removes the frame. **Privacy choices** lets visitors decline or withdraw consent. The choice stays in local storage for 180 days, without a user identifier.
+
+Google's script runs in a sandbox on that separate hostname. It cannot read the app document, host-only login cookie, storage or account API. Google needs this real origin even with cookie storage denied; a fully opaque frame loads its library but does not produce page counts. The frame receives a fixed public page name, never the actual URL, query, fragment, referrer, report or account. Advertising personalization and Google Signals are disabled. Google still receives the visitor's IP and basic browser information after opt-in. A measurement ID is public, not a credential or permission to read Analytics reports; forged traffic can still pollute counts. Disable Enhanced Measurement and advertising integrations in the Analytics property for simple page counts. This is optional traffic measurement, not a security monitor.
+
+## Testing limits
+
+Use a staging copy, disposable accounts and a recovery plan. Even a GET request can trigger side effects. The relay restricts hosts, methods, rate and time, but cannot guarantee a target stays unaffected. HTTP redirects do not expand scope; a reverse proxy can hide third-party services, so domain control alone is not permission to test everything behind it.
+
+The [testing FAQ](https://patchriot.tech/#/docs/safety) explains actual tools, stop controls, responsibilities and limitations. This is a developer tool, not professional security certification, a SOC 2 report or protection against every known or unknown vulnerability.
 
 ## Implementation plan and status
 
@@ -97,6 +133,8 @@ Set these through your **private environment**:
 | `PATCHRIOT_PUBLIC_ORIGIN` | `http://127.0.0.1:7410` |
 | `PATCHRIOT_DISPATCHER_URL` | `http://127.0.0.1:7411` |
 | `PATCHRIOT_CONTACT_EMAIL` | Optional public email; leave unset until configured |
+| `PATCHRIOT_GA_MEASUREMENT_ID` | Optional public GA4 measurement ID; unset disables analytics |
+| `PATCHRIOT_ANALYTICS_ORIGIN` | Separate HTTPS hostname for analytics, routed to core; required with the measurement ID |
 | `PATCHRIOT_RELAY_ORIGIN` | Relay-facing URL; locally `http://127.0.0.1:7411` |
 | `PATCHRIOT_WEB_ROOT` | `web/dist` |
 
@@ -200,7 +238,7 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 ## Live website testing — approved pilot
 
-Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. ARTEX is included by default. Verification lets the requester proceed to checkout without a staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff gave your account a coupon. Confirm the three named operators and, separately, permission to send the task and responses to **abliteration.ai**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
+Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. ARTEX is included by default. Verification lets the requester proceed to checkout without a staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff gave your account a coupon. Confirm the three named operators and, separately, permission to send the task and responses to the **inference providers shown for that team**. Scout, Recon and Verifier then run in sequence. Open the private report to inspect their findings and recorded requests, download its JSON or cancel. Recommended fixes can include code examples; these remain untested suggestions and are displayed as inert text.
 
 This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v1** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes stay read-only. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
@@ -316,6 +354,8 @@ cargo run --locked -p patchriot-core -- payments-cancel-once
 
 `PATCHRIOT_REVIEW_MODE` selects `pilot` (default, free reviews), `coupons` (coupons only), `paid` (payment or a code), or `closed` (no new private reviews or deposit instructions). Paid mode requires `PATCHRIOT_1CLICK_API_KEY` and `PATCHRIOT_CHECKOUT_CONFIG`, the path to a private JSON file. Invalid paid configuration stops startup; it never falls back to free work. Coupon and paid modes block the free live, snapshot and source review routes. Existing order reads and payment workers remain available when new checkout is closed.
 
+For a hosted container without configuration-file mounts, set `PATCHRIOT_CHECKOUT_JSON` to the same JSON instead. Set only one source; conflicting, empty or oversized configuration stops startup. The limit is 16 KiB. Supply it through runtime configuration, never a build argument. Run a separate instance of the same image with `payments-run` before enabling paid checkout; it needs the database, dispatcher service credential and 1Click API key, but no wallet signing key or public HTTP endpoint.
+
 The configuration fixes the service price, recipient and allowed input tokens. Copy exact asset IDs, decimals and chain names from the [supported-token catalog](https://docs.near-intents.org/api-reference/oneclick/get-supported-tokens), verify the treasury destination, and replace every placeholder below. This is a format example, not a usable payment configuration.
 
 ```json
@@ -348,7 +388,7 @@ Run `patchriot-core payments-run` alongside the web server before enabling check
 
 For Linux, [deploy/patchriot-payments.service](deploy/patchriot-payments.service) uses the same installed core binary. Put `DATABASE_URL`, `PATCHRIOT_PUBLIC_ORIGIN`, `PATCHRIOT_DISPATCHER_URL`, `PATCHRIOT_INTERNAL_KEY` and `PATCHRIOT_1CLICK_API_KEY` in root-readable `/etc/patchriot/payments.env`. Never add a wallet private key. Install the unit, run `systemctl daemon-reload`, then `systemctl enable --now patchriot-payments`. Inspect fixed status counts with `journalctl -u patchriot-payments`. Both checkout and this worker need DNS/HTTPS access to `1click.chaindefuser.com`; the core pilot unit’s loopback-only network policy must be adjusted explicitly for paid checkout. Browser requests never trigger reconciliation or confirm their own payment.
 
-The quote keeps the recipient, refund destination, asset, amount and deadline bound to the saved order. Known provider defaults and timestamp formatting are accepted; other changes are rejected. A provider may keep its deposit address active for up to three additional days; Patchriot still closes payment instructions after its five-minute window and holds late receipts for review. Provider app fees are capped at 100 basis points (1%) and shown as part of the exact transfer amount. Saved payment terms must match later status replies; missing tracing IDs and empty optional metadata do not change those terms. `GET /api/payments` exposes the signed-in account’s recorded receipt totals. Checkout and reconciliation never hold a treasury signing key.
+The quote keeps the recipient, refund destination, asset, amount and deadline bound to the saved order. Known provider defaults and timestamp formatting are accepted; other changes are rejected. A provider may keep its deposit address active for up to three additional days; Patchriot still closes payment instructions after its five-minute window and holds late receipts for review. Provider app fees are capped at 100 basis points (1%) and shown as part of the exact transfer amount. Saved payment terms must match later status replies; missing tracing IDs and empty optional metadata do not change those terms. The provider can update its origin-chain refund fee; that field is validated separately and never determines the credited service amount. All other quote fields stay exact. `GET /api/payments` exposes the signed-in account’s recorded receipt totals. Checkout and reconciliation never hold a treasury signing key.
 
 Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It reads the newest 50 invoices, saved deposit address/memo, input asset, treasury destination, ledger credits, delivery errors and cancellation facts from the database, including disabled customer accounts. It does not contact the provider or create new payment instructions. It is recent history, not a complete reconciliation report; an attention flag does not authorize a refund.
 
@@ -449,10 +489,21 @@ Do not put the treasury signing key in the web service. Payment reconciliation a
 
 ### Test accounts and recorded coverage
 
-In **New website test → Test accounts & form submissions**, choose HTTP Basic or a bearer API token and a protected GET path on the same host. The path must return 2xx with the account and 401/403 without it. Use a disposable, low-privilege account. Unsupported browser login, SSO, MFA and CAPTCHA cannot be selected. Availability requires three approved agents with the matching capabilities before checkout.
+In **New website test → Test accounts & form submissions**, choose email/username and password, HTTP Basic or a bearer token. Supply the protected GET path that returns 2xx for this account and 401/403 without it. For session login, also declare the exact POST endpoint, form or JSON format and field names. A form may use a hidden CSRF token from the declared login page. The server must set a session cookie: token-only JSON responses, JavaScript-only login, SSO, MFA and CAPTCHA are unsupported. The relay attempts login once per role and never follows redirects. This narrow login permission does not allow other POST tests. Availability requires three agents with the matching capability.
+
+Add the disposable account after domain verification, then choose the team and pay. Before an assessment is admitted, the requester may replace an expired or incorrect account through `POST /api/pentests/:id/credentials`; scope, requester, session and CSRF checks apply. Once checkout or testing has reserved the request, the account cannot be changed. Existing API clients may still supply Basic/bearer credentials at creation.
 
 Credentials are encrypted in the dispatcher, delivered only to the assigned relay's active lease and removed from container/model input. The relay adds them to approved requests and redacts known credentials and session values from retained text. Assigned operators can still access plaintext. Each credential set serves one assessment and is deleted when work ends, permission is revoked or its 24-hour lifetime expires. Revoke the test account afterwards; deletion cannot recall data already received by an operator.
 
 The **Coverage & tools** tab and PDF include versioned check results: completed, potential issue, inconclusive, skipped or unsupported. Configuration-file probes use a random-path control; query reflection alone is not called XSS. Authenticated coverage requires both a successful account request and a denied anonymous control. Older reports keep their original evidence and do not gain invented checks.
 
-**Upgrade order:** deploy core first, then dispatcher and its gateway, then adapter 8 relays. Core can read older agents and keeps baseline request fields compatible with the older dispatcher. Older core versions cannot decode the new capability names; do not advertise them until core has updated. Keep advanced options unavailable until the server and all three selected agents support them.
+**Upgrade order for v0.0.5:** deploy dispatcher and its gateway with migrations 21–24, then core, then adapter 11 relays. Core can read older agents and keeps baseline request fields compatible with the older dispatcher. Older core versions cannot decode the new capability names; do not advertise them until core has updated. Keep advanced options unavailable until the server and all three selected agents support them.
+
+
+### Inference providers
+
+A live agent declares `abliterated-model-large-v2` at Abliteration, `abliteration-abliterated-model-large-v2` at Venice, or `deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated` at NEAR AI. Checkout shows each route; the saved team and report keep it. Switching providers requires a separately paired device and fresh consent. Existing requests keep their original devices. The first two routes use the same upstream model family, so they do not establish independent model diversity.
+
+Venice describes this model as **anonymized**, not private: the upstream provider receives the content. We do not claim upstream zero retention, TEE execution or end-to-end encryption for it. The relay disables provider web search/scraping, added system prompts, storage and model fallbacks. See [Venice privacy](https://docs.venice.ai/overview/privacy). Deleting a Patchriot report does not recall copies already processed by operators or providers.
+
+The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated) with end-to-end encryption and verified model-response signatures. Hermes receives a reply only after verification passes. This protects and verifies the model-service exchange; it does not attest the Kali host, hide task content from its operator or prove a finding is correct. The optional report check is a separate, requester-approved step.

@@ -10,8 +10,9 @@ export const roleMethods = {
 } as const;
 export const severities = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export const supportLabels: Record<string, string> = { observed: 'Observed', reproduced: 'Reproduction reported', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
-export type ReportInput = { id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
-export type ReportFinding = { id: string; role: LiveRole; finding: LiveFinding; result: LiveResult; complete: boolean };
+export type ReportInput = { id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
+export type FindingContribution = { id: string; role: LiveRole; finding: LiveFinding; result: LiveResult; complete: boolean };
+export type ReportFinding = FindingContribution & { contributions: FindingContribution[]; disputed: boolean };
 
 /** These are execution problems, never findings about the assessed website. */
 export function stopExplanation(reason?: string): string {
@@ -20,6 +21,7 @@ export function stopExplanation(reason?: string): string {
     case 'provider_budget_reached': case 'engine_budget_reached': return 'The agent reached its allowed AI usage budget. Saved evidence is available, but the remaining checks were not completed.';
     case 'timed_out': case 'timeout': return 'The allowed testing time ended before this work finished.';
     case 'provider_unavailable': case 'provider_rejected_request': case 'provider_stream_interrupted': return 'The AI provider did not complete a request. The agent could not finish this stage.';
+    case 'near_attestation_unavailable': case 'near_model_attestation_required': case 'near_signature_unavailable': case 'near_model_signature_required': case 'near_verification_timeout': return 'NEAR AI verification could not be completed. The agent stopped rather than trust an unverified model response. Saved website requests remain available; this stage needs another assessment.';
     case 'cancelled': return 'This stage was cancelled. Work already recorded remains available.';
     case 'invalid_tool_records': return 'The runner could not validate the recorded tool output. Its conclusions need review.';
     case undefined: return 'Some checks or supporting evidence are incomplete. Review the recorded limits before relying on these findings.';
@@ -33,12 +35,41 @@ export function roleOutcome(step: LiveStep): { label: string; detail: string } {
   return step.evidence_complete ? { label: 'Assessment received', detail: 'Findings and request evidence are available. The agent’s conclusions still need review.' } : { label: 'Partial assessment', detail: stopExplanation(step.result.execution.failure_reason) };
 }
 
-/** Preserve separate claims and provenance; matching titles are not a consensus. */
+/** First cited request, with access kept visible inside a grouped observation. */
+export function findingRequest(claim: FindingContribution): string {
+  const evidence = claim.result.evidence.find(e => e.id === claim.finding.evidence_ids[0]);
+  return evidence ? `${evidence.authenticated === true ? 'Test account' : 'Anonymous'} · ${evidence.method} ${evidence.url}` : 'Request evidence unavailable';
+}
+
+/** Match the claim and first request, preserving different access contexts as
+ * contributions to the same observation. A shared control URL elsewhere must
+ * not join unrelated findings. Grouping is presentation, never consensus. */
 export function reportFindings(input: ReportInput): ReportFinding[] {
-  return input.steps.flatMap(s => s.result?.assessment?.findings.map((finding, i) => ({
+  const claims = input.steps.flatMap(s => s.result?.assessment?.findings.map((finding, i) => ({
     id: `${({ investigator: 'S', reproducer: 'R', challenger: 'V' })[s.role]}-${String(i + 1).padStart(2, '0')}`,
     role: s.role, finding, result: s.result!, complete: s.evidence_complete === true,
-  })) ?? []).sort((a, b) => severities.indexOf(a.finding.severity as typeof severities[number]) - severities.indexOf(b.finding.severity as typeof severities[number]));
+  })) ?? []);
+  const groups = new Map<string, ReportFinding[]>();
+  for (const claim of claims) {
+    const evidence = claim.result.evidence.find(e => e.id === claim.finding.evidence_ids[0]);
+    // This spelling variant means the same HTTP header. No semantic/fuzzy
+    // title matching: different causes, paths, queries and inputs stay separate.
+    const title = claim.finding.title.toLowerCase().trim().replace(/\s+/g, ' ').replace(/\bstrict-transport-security header\b/g, 'strict-transport-security');
+    const key = evidence?.status != null ? JSON.stringify([title, evidence.method, evidence.url, evidence.request_body_sha256 ?? null]) : claim.id;
+    const bucket = groups.get(key) ?? [];
+    const group = bucket.find(g => !g.contributions.some(c => c.role === claim.role));
+    if (group) group.contributions.push(claim);
+    else bucket.push({ ...claim, contributions: [claim], disputed: false });
+    groups.set(key, bucket);
+  }
+  const rank = (f: LiveFinding) => severities.indexOf(f.severity as typeof severities[number]);
+  return [...groups.values()].flat().map(group => {
+    const highest = group.contributions.reduce((a, b) => rank(a.finding) <= rank(b.finding) ? a : b);
+    const support = new Set(group.contributions.map(c => ['observed', 'reproduced'].includes(c.finding.support) ? 'positive' : c.finding.support));
+    return { ...group, role: highest.role, finding: highest.finding, result: highest.result,
+      complete: group.contributions.every(c => c.complete),
+      disputed: support.size > 1 || new Set(group.contributions.map(c => c.finding.severity)).size > 1 };
+  }).sort((a, b) => rank(a.finding) - rank(b.finding));
 }
 
 export function reportSummary(input: ReportInput) {
@@ -49,7 +80,8 @@ export function reportSummary(input: ReportInput) {
   const finished = !['awaiting_payment', 'queued', 'running'].includes(input.state);
   const partial = complete < 3 || input.state !== 'completed';
   const headline = !finished ? 'Assessment in progress' : partial ? 'Partial assessment' : 'Assessment received';
-  const description = `${assessments} of 3 agents returned usable assessments. ${findings.length} ${findings.length === 1 ? 'observation is' : 'observations are'} listed below${partial ? '; unfinished work is listed separately' : ''}. ${partial ? 'This run cannot establish that your website is safe.' : 'These are agent-reported findings, not a certification of security.'}`;
+  const claims = findings.reduce((n, f) => n + f.contributions.length, 0);
+  const description = `${assessments} of 3 agents returned usable assessments. ${findings.length} ${findings.length === 1 ? 'observation is' : 'observations are'} listed below${claims > findings.length ? `, grouping ${claims} agent claims` : ''}${partial ? '; unfinished work is listed separately' : ''}. ${partial ? 'This run cannot establish that your website is safe.' : 'These are agent-reported findings, not a certification of security.'}`;
   return { findings, assessments, complete, requests, finished, partial, headline, description };
 }
 

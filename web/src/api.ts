@@ -29,6 +29,8 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  report_content_deleted: "The report’s download window ended and its private content has been deleted.",
+  report_not_finished: "Wait for the test to end before downloading its report.",
   invalid_inquiry: 'Add your name, company or team, email and a message of 20–3,000 characters.',
   inquiry_changed: 'This inquiry changed after being saved. Refresh the page before sending another.',
   inquiry_not_found: 'This inquiry is no longer available. Refresh the inbox.',
@@ -47,8 +49,10 @@ const messages: Record<string, string> = {
   conflicting_source_request: 'This upload changed. Start a fresh request or open the saved upload.',
   source_already_decided: 'This upload was already decided or has expired. Refresh its status.',
 
-  unsupported_or_missing_test_credentials: 'Check the test-account type and credentials. Only HTTP Basic and bearer tokens are supported, and the service must have account testing enabled.',
+  unsupported_or_missing_test_credentials: 'Check the test-account type and credentials. Use a supported test-account type and ensure account testing is enabled.',
   state_change_permission_required: 'Confirm that the agents may change disposable test data before enabling form submissions.',
+  test_credentials_locked: 'This account cannot be changed after checkout or testing begins. Verify domain ownership first; start a new request if this one has already been admitted.',
+  invalid_test_credentials: 'Check the selected account type, username and password or API token.',
   test_credentials_unavailable: 'Test-account access is unavailable or has expired. Open the saved assessment, or create a fresh request when the service is available.',
   test_credentials_expired_or_used: 'This test account has expired or is already attached to an assessment. Open that assessment from Audits, or start a new request.',
   conflicting_test_credentials: 'These credentials differ from the saved request. Create a new request to change the test account.',

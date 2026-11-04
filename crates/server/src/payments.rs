@@ -555,6 +555,25 @@ fn matches_status_request(saved: &Value, echo: &Value) -> bool {
     saved == echo
 }
 
+fn matches_status_quote(saved: &Value, echo: &Value) -> bool {
+    // 1Click can refresh the origin-chain refund fee after quoting. That fee
+    // does not select our recipient or the exact amount credited to the user.
+    // Keep every other field exact, including all addresses and swap amounts.
+    let (Some(mut saved), Some(mut echo)) = (saved.as_object().cloned(), echo.as_object().cloned())
+    else {
+        return false;
+    };
+    for quote in [&mut saved, &mut echo] {
+        if let Some(fee) = quote.remove("refundFee")
+            && fee.as_str() != Some("0")
+            && !positive_input_amount(&fee)
+        {
+            return false;
+        }
+    }
+    saved == echo
+}
+
 async fn apply_status(
     pool: &PgPool,
     id: Uuid,
@@ -581,7 +600,7 @@ async fn apply_status(
         .as_ref()
         .is_some_and(|id| id != &invoice.correlation_id)
         || !matches_status_request(&invoice.quote_request, &response.quote_request)
-        || response.quote != invoice.quote
+        || !matches_status_quote(&invoice.quote, &response.quote)
     {
         reason = Some("quote_binding_mismatch");
     } else if status.updated_at > now + Duration::seconds(30)

@@ -153,11 +153,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("invalid PATCHRIOT_CONTACT_EMAIL".into()),
     };
+    let ga_measurement_id = match std::env::var("PATCHRIOT_GA_MEASUREMENT_ID") {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(_) => return Err("invalid PATCHRIOT_GA_MEASUREMENT_ID".into()),
+    };
+    let analytics_origin = match std::env::var("PATCHRIOT_ANALYTICS_ORIGIN") {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(_) => return Err("invalid PATCHRIOT_ANALYTICS_ORIGIN".into()),
+    };
     let mut state = AppState::new(
         pool,
         config
             .with_relay_origin(relay_origin)?
-            .with_contact_email(contact_email)?,
+            .with_contact_email(contact_email)?
+            .with_ga_measurement_id(ga_measurement_id)?
+            .with_analytics_origin(analytics_origin)?,
     )?;
     if let Some(path) = std::env::var_os("PATCHRIOT_TREASURY_CONFIG") {
         use std::io::Read;
@@ -204,18 +216,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(std::env::VarError::NotPresent) => "pilot".into(),
         Err(_) => return Err("invalid review mode".into()),
     };
-    let policy = std::env::var_os("PATCHRIOT_CHECKOUT_CONFIG")
-        .map(|path| {
-            use std::io::Read;
-            let mut bytes = Vec::new();
-            std::fs::File::open(path)
-                .map_err(|_| "unable to read checkout configuration")?
-                .take(16 * 1024 + 1)
-                .read_to_end(&mut bytes)
-                .map_err(|_| "unable to read checkout configuration")?;
-            Ok::<_, &str>(bytes)
-        })
-        .transpose()?;
+    let inline_policy = match std::env::var("PATCHRIOT_CHECKOUT_JSON") {
+        Ok(value) => Some(value),
+        Err(std::env::VarError::NotPresent) => None,
+        Err(_) => return Err("invalid PATCHRIOT_CHECKOUT_JSON".into()),
+    };
+    let policy = checkout_policy(
+        std::env::var_os("PATCHRIOT_CHECKOUT_CONFIG").map(PathBuf::from),
+        inline_policy,
+    )?;
     let key = std::env::var("PATCHRIOT_1CLICK_API_KEY").ok();
     state = state.with_review_access(patchriot_core::payments::access::ReviewAccess::configured(
         &mode,
@@ -237,6 +246,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Hosted deployments can supply the same payment policy as a runtime variable.
+/// Reject conflicting sources rather than silently selecting a different treasury.
+fn checkout_policy(
+    path: Option<PathBuf>,
+    inline: Option<String>,
+) -> Result<Option<Vec<u8>>, &'static str> {
+    use std::io::Read;
+    const LIMIT: usize = 16 * 1024;
+    let bytes = match (path, inline) {
+        (Some(_), Some(_)) => {
+            return Err("set only one of PATCHRIOT_CHECKOUT_CONFIG and PATCHRIOT_CHECKOUT_JSON");
+        }
+        (None, None) => return Ok(None),
+        (None, Some(value)) => value.into_bytes(),
+        (Some(path), None) => {
+            let mut bytes = Vec::new();
+            std::fs::File::open(path)
+                .map_err(|_| "unable to read checkout configuration")?
+                .take(LIMIT as u64 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|_| "unable to read checkout configuration")?;
+            bytes
+        }
+    };
+    if bytes.is_empty() || bytes.len() > LIMIT {
+        return Err("checkout configuration must contain 1–16384 bytes");
+    }
+    Ok(Some(bytes))
+}
+
 async fn shutdown_signal() {
     #[cfg(unix)]
     {
@@ -250,4 +289,41 @@ async fn shutdown_signal() {
     }
     #[cfg(not(unix))]
     let _ = tokio::signal::ctrl_c().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::checkout_policy;
+
+    #[test]
+    fn hosted_checkout_does_not_override_a_file_or_accept_empty_or_oversized_policy() {
+        assert_eq!(checkout_policy(None, None).unwrap(), None);
+        for value in [String::new(), "x".repeat(16 * 1024 + 1)] {
+            assert!(checkout_policy(None, Some(value)).is_err());
+        }
+        assert!(
+            checkout_policy(
+                Some("/nonexistent/checkout-policy".into()),
+                Some("{}".into())
+            )
+            .unwrap_err()
+            .contains("set only one")
+        );
+        assert!(checkout_policy(Some("/nonexistent/checkout-policy".into()), None).is_err());
+    }
+
+    #[test]
+    fn file_and_hosted_policy_preserve_identical_bytes() {
+        let path = std::env::temp_dir().join(format!("patchriot-policy-{}", uuid::Uuid::new_v4()));
+        let policy = "{\n  \"recipient\": \"owned-fixture.near\"\n}\n";
+        std::fs::write(&path, policy).unwrap();
+        assert_eq!(
+            checkout_policy(Some(path.clone()), None).unwrap(),
+            checkout_policy(None, Some(policy.into())).unwrap()
+        );
+        std::fs::write(&path, vec![b'x'; 16 * 1024 + 1]).unwrap();
+        let oversized = checkout_policy(Some(path.clone()), None);
+        std::fs::remove_file(path).unwrap();
+        assert!(oversized.is_err());
+    }
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
 
 /** Keep the last successful value during an outage, with an explicit error. */
-export function useLive<T>(path: string, enabled = true, interval = 10_000) {
+export function useLive<T>(path: string, enabled = true, interval = 10_000, pollWhile?: (value: T) => boolean) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState('');
   const [updated, setUpdated] = useState<Date | null>(null);
@@ -12,19 +12,22 @@ export function useLive<T>(path: string, enabled = true, interval = 10_000) {
     if (!enabled) { setData(null); setError(''); setUpdated(null); return; }
     const controller = new AbortController();
     let pending = false;
+    let polling = true;
     async function update() {
       if (pending || controller.signal.aborted) return;
       pending = true;
       try {
         const value = await api<T>(path, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(12_000)]) });
-        if (!controller.signal.aborted) { setData(value); setError(''); setUpdated(new Date()); }
+        if (!controller.signal.aborted) { polling = pollWhile?.(value) ?? true; setData(value); setError(''); setUpdated(new Date()); }
       } catch (error) {
         if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Unable to refresh.');
       } finally { pending = false; }
     }
     void update();
-    const timer = window.setInterval(() => { if (!document.hidden) void update(); }, interval);
-    return () => { controller.abort(); window.clearInterval(timer); };
-  }, [path, enabled, revision, interval]);
+    const timer = window.setInterval(() => { if (!document.hidden && polling) void update(); }, interval);
+    const visible = () => { if (!document.hidden && pollWhile) void update(); };
+    document.addEventListener('visibilitychange', visible);
+    return () => { controller.abort(); window.clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+  }, [path, enabled, revision, interval, pollWhile]);
   return { data, error, updated, refresh };
 }

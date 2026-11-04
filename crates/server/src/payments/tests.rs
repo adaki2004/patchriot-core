@@ -243,6 +243,61 @@ fn status_may_omit_processing_defaults_but_never_payment_terms() {
 }
 
 #[tokio::test]
+async fn updated_refund_fee_does_not_reject_an_otherwise_identical_settlement() {
+    let db = TestDb::new().await;
+    let provider = MockProvider::new(Value::Null).await;
+    let (terms, mut quote) = db.quote();
+    quote.quote["refundFee"] = json!("10009");
+    let id = record_quote(&db.pool, &terms, &quote).await.unwrap();
+    let mut body = status(&quote, "SUCCESS");
+    body["quoteResponse"]["quote"]["refundFee"] = json!("9983");
+    provider.set(body);
+    reconcile_once(&db.pool, &provider.client).await.unwrap();
+    assert_eq!(db.state(id).await, ("settled".into(), None));
+    assert_eq!(db.counts().await, (1, 1));
+    db.due(id).await;
+    reconcile_once(&db.pool, &provider.client).await.unwrap();
+    assert_eq!(db.counts().await, (1, 1));
+    db.finish().await;
+}
+
+#[test]
+fn refund_fee_updates_cannot_change_the_saved_payment_route_or_amount() {
+    let quote = json!({"depositAddress":"deposit.fixture.near","depositMemo":"test-memo","amountIn":"1100000","amountOut":"1000000","minAmountOut":"1000000","deadline":"2026-11-03T22:00:00Z","refundFee":"10009","withdrawFee":"2400"});
+    let mut updated = quote.clone();
+    updated["refundFee"] = json!("9983");
+    assert!(matches_status_quote(&quote, &updated));
+    for field in [
+        "depositAddress",
+        "depositMemo",
+        "amountIn",
+        "amountOut",
+        "minAmountOut",
+        "deadline",
+        "withdrawFee",
+    ] {
+        let mut bad = updated.clone();
+        bad[field] = json!("different");
+        assert!(!matches_status_quote(&quote, &bad), "{field}");
+    }
+    for fee in [
+        json!(-1),
+        json!("-1"),
+        json!("1.5"),
+        json!("01"),
+        json!("x"),
+        Value::Null,
+        json!("9".repeat(79)),
+    ] {
+        let mut bad = updated.clone();
+        bad["refundFee"] = fee;
+        assert!(!matches_status_quote(&quote, &bad));
+    }
+    updated.as_object_mut().unwrap().remove("refundFee");
+    assert!(matches_status_quote(&quote, &updated));
+}
+
+#[tokio::test]
 async fn live_status_without_nested_trace_id_still_binds_the_complete_quote() {
     let db = TestDb::new().await;
     let provider = MockProvider::new(Value::Null).await;
