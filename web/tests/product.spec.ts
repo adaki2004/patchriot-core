@@ -30,24 +30,25 @@ test('public documentation is bookmarkable and never requests private records', 
     await expect(page.getByRole('heading', { name: section.title, exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
+  await page.goto('/#/docs/infrastructure');
   const diagram = page.locator('.docs-diagram');
-  await expect(diagram.locator('svg')).toBeVisible();
+  await expect(diagram.locator('.service-map')).toBeVisible();
   await expect(diagram).toContainText('NEAR AI');
-  await expect(diagram).toContainText('Only the model step is inside the TEE');
+  await expect(diagram).toContainText('isolated Hermes agents on Kali');
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Services and boundaries', exact: true })).toBeVisible();
-  await page.goBack();
-  await expect(page.getByRole('heading', { name: 'Don’t trust. Verify.', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Managed or dedicated', exact: true })).toBeVisible();
+  await page.goto('/#/docs/architecture');
+  await expect(page.getByRole('heading', { name: 'Managed or dedicated', exact: true })).toBeVisible();
   expect(calls.filter(path => !['/api/session', '/api/fleet', '/api/incidents', '/api/analytics'].includes(path))).toEqual([]);
   await page.goto('/#/docs/../../admin');
-  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE YOU SHIP.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toBeVisible();
 });
 
 test('workspace separates requests and pairing from the public introduction', async ({ page }) => {
   await setup(page, true);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE YOU SHIP.' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'A first check. With evidence.' })).toBeVisible();
   await page.getByText('Existing snapshot and source tools', { exact: true }).click();
@@ -60,7 +61,7 @@ test('workspace separates requests and pairing from the public introduction', as
   await expect(page.getByRole('heading', { name: 'Agent pairing is staff-only.' })).toBeVisible();
   await page.getByRole('button', { name: 'Patchriot home' }).click();
   await expect(page).toHaveURL(/#\/home$/);
-  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE YOU SHIP.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'DEFENSE BEFORE GOING LIVE.' })).toBeVisible();
   await page.getByRole('button', { name: 'OPEN DASHBOARD', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

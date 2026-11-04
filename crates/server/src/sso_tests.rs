@@ -286,7 +286,7 @@ async fn github_exchanges_once_checks_verified_email_and_never_inherits_an_email
     );
     let success = [one, two]
         .into_iter()
-        .find(|r| r.1[header::LOCATION] == "/#/audits")
+        .find(|r| r.1[header::LOCATION] == "/#/overview")
         .expect("one callback succeeds");
     assert_eq!(test.count("sessions").await, 1);
     assert_eq!(test.count("accounts").await, 2);
@@ -471,7 +471,7 @@ async fn google_verifies_the_signed_subject_nonce_issuer_audience_expiry_and_ema
         assert_eq!(
             response.1[header::LOCATION],
             if fault == "none" {
-                "/#/audits"
+                "/#/overview"
             } else {
                 "/?signin=failed#/request"
             },

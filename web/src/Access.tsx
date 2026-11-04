@@ -17,6 +17,10 @@ export function signInDestination(provider: Provider, value: string): string {
   return url.href;
 }
 
+function ProviderIcon({ provider }: { provider: Provider }) {
+  return <svg width="20" height="20" viewBox="0 0 24 24" className="signin-provider-icon" aria-hidden="true">{provider === 'github' ? <path fill="currentColor" d="M12 .9a11.1 11.1 0 0 0-3.51 21.63c.55.1.76-.24.76-.54v-2.13c-3.09.67-3.74-1.31-3.74-1.31-.51-1.29-1.24-1.63-1.24-1.63-1.01-.69.08-.68.08-.68 1.12.08 1.7 1.15 1.7 1.15.99 1.69 2.59 1.2 3.22.92.1-.72.39-1.2.71-1.48-2.47-.28-5.07-1.24-5.07-5.49 0-1.21.43-2.2 1.14-2.98-.11-.28-.49-1.41.11-2.94 0 0 .94-.3 3.05 1.14a10.6 10.6 0 0 1 5.56 0c2.12-1.44 3.05-1.14 3.05-1.14.61 1.53.23 2.66.12 2.94.71.78 1.14 1.77 1.14 2.98 0 4.26-2.6 5.2-5.08 5.48.4.35.75 1.02.75 2.06v3.11c0 .3.2.65.77.54A11.1 11.1 0 0 0 12 .9Z" /> : <><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-1.99 3.01v2.5h3.23c1.89-1.74 2.98-4.3 2.98-7.34Z" /><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.43l-3.23-2.5c-.9.6-2.05.97-3.39.97-2.61 0-4.83-1.76-5.62-4.12H3.04v2.58A10 10 0 0 0 12 22Z" /><path fill="#FBBC05" d="M6.38 13.92a6 6 0 0 1 0-3.84V7.5H3.04a10 10 0 0 0 0 9l3.34-2.58Z" /><path fill="#EA4335" d="M12 5.96c1.47 0 2.79.5 3.83 1.5l2.87-2.87A9.62 9.62 0 0 0 12 2a10 10 0 0 0-8.96 5.5l3.34 2.58C7.17 7.72 9.39 5.96 12 5.96Z" /></>}</svg>;
+}
+
 export function AccessPanel({ initialCode = '', onLogin, onBusyChange }: { initialCode?: string; onLogin: () => Promise<void>; onBusyChange?: (busy: boolean) => void }) {
   const panel = useRef<HTMLElement>(null);
   const [providers, setProviders] = useState<Providers | null>(null);
@@ -47,7 +51,7 @@ export function AccessPanel({ initialCode = '', onLogin, onBusyChange }: { initi
       <p className="eyebrow">YOUR PRIVATE WORKSPACE</p><h2>Sign in to Patchriot.</h2>
       <p>Use your account. Verify your web application before any testing starts.</p>
       {!providers && <p role="status">Loading sign-in options…</p>}
-      {enabled ? <><div className="sso-buttons">{(['github', 'google'] as const).filter(provider => providers?.[provider]).map(provider => <button className="quiet full" key={provider} disabled={busy} onClick={() => void start(provider)}>Continue with {provider === 'github' ? 'GitHub' : 'Google'} <span aria-hidden="true">↗</span></button>)}</div><p className="fine">Sign-in shares your name and verified email. It does not grant repository access.</p></> : providers && <p className="fine">Google and GitHub sign-in are being configured. Existing pilot accounts can sign in below.</p>}
+      {enabled ? <><div className="sso-buttons">{(['github', 'google'] as const).filter(provider => providers?.[provider]).map(provider => <button className="quiet full" key={provider} disabled={busy} onClick={() => void start(provider)}><ProviderIcon provider={provider} />Continue with {provider === 'github' ? 'GitHub' : 'Google'} <span aria-hidden="true">↗</span></button>)}</div><p className="fine">Sign-in shares your name and verified email. It does not grant repository access.</p></> : providers && <p className="fine">Google and GitHub sign-in are being configured. Existing pilot accounts can sign in below.</p>}
       {error && <p className="notice error" role="alert">{error}</p>}
       <button className="text-button legacy-toggle" disabled={busy} aria-expanded={showLegacy} onClick={() => setLegacyOpen(!showLegacy)}>Existing pilot account</button>
     </div>

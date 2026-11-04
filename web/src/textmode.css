@@ -118,7 +118,7 @@
 .tm-end { padding: 40px; background: var(--ink); color: var(--paper); display: flex; align-items: end; gap: 40px; flex-wrap: wrap; }
 .tm-end > span { font: 64px/1.1 var(--heading-font); }.tm-end em { color: var(--paper); opacity: .55; }.tm-end > button { margin: 0 0 8px auto; }.tm-end > p { flex-basis: 100%; margin: 15px 0 0; border-top: 1px solid currentColor; padding-top: 15px; font-size: 12px; }
 .textmode-ui footer { border-color: var(--line); margin-top: 30px; font-size: 12px; }
-[data-design=collective] .tm-hero-copy h1 em { color: var(--accent); }
+[data-design=collective] .tm-hero-copy h1 em { color: #91b3ff; }
 [data-design=collective] .tm-art > img { opacity: .95; mix-blend-mode: screen; }
 
 /* The workspace uses real account data and the selected study's type and palette. */

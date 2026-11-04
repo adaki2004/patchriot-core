@@ -1,5 +1,5 @@
 # Patchriot
-**Defense before you ship.**
+**Defense before going live.**
 
 Patchriot runs managed security assessments for web applications. Verify your own domain, start a bounded test and inspect private findings with recorded evidence. Businesses can arrange a dedicated installation.
 
@@ -555,3 +555,5 @@ When the dispatcher enables Venice recovery, checkout names NEAR as primary and 
 A temporary NEAR failure can use one backup completion, then keep that role on Venice. It consumes one logical model call; both provider attempts still count toward the spending cap. Reports and exports identify the backup, its trigger and completed replies. Venice inference is not presented as NEAR TEE execution. Invalid signatures, scope failures and exhausted budgets remain hard stops.
 
 Deployment: update core, dispatcher/gateway and relay; configure the private Venice key on managed NEAR relays; then set `PATCHRIOT_VENICE_FALLBACK_ENABLED=true` on dispatcher. See the relay README for exact configuration and provider pricing. No new migration is needed.
+
+The relay also checks buffered NEAR responses for the repetition pattern that stops Hermes. With prior Venice consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.

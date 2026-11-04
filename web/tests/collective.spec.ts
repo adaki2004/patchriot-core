@@ -9,7 +9,8 @@ test('Collective shows the selected hero, logo and consistent navigation', async
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.goto('/#/home');
   await expect(page.locator('html')).toHaveAttribute('data-design', 'collective');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DEFENSE BEFOREYOU SHIP.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('DEFENSE BEFOREGOING LIVE.');
+  await expect(page.locator('.tm-hero-copy h1 em')).toHaveCSS('color', 'rgb(145, 179, 255)');
   await expect(page.locator('header .brand-mark')).toHaveAttribute('src', '/brand/white-hat.png');
   expect((await page.locator('header .brand-mark').boundingBox())!.width).toBeGreaterThanOrEqual(64);
   const navigation = page.getByRole('navigation', { name: 'Website' });
@@ -19,7 +20,7 @@ test('Collective shows the selected hero, logo and consistent navigation', async
   await page.keyboard.press('Escape');
 });
 
-test('managed/dedicated comparison, motion and access work with a keyboard', async ({ page }) => {
+test('one service diagram explains scope, agents and inference and respects reduced motion', async ({ page }) => {
   await page.route('**/api/session', route => route.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 3, online_operators: 2, online_compute_groups: 2 } }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
@@ -28,24 +29,17 @@ test('managed/dedicated comparison, motion and access work with a keyboard', asy
   await expect(page.locator('.textmode-landing')).toHaveAttribute('data-paused', 'true');
   await expect(page.locator('animateMotion')).toHaveCount(0);
   await expect(page.getByLabel('Live fleet counts')).toContainText('3 AGENTS ONLINE');
-  await expect(page.locator('.compare-heading')).toHaveText('MANAGED SERVICEDEDICATED INSTALLATION');
-  await expect(page.locator('.tm-swarms .blueprint-deployments h4')).toHaveText(['For your web application', 'For your business']);
-  const geometry = await page.locator('.coordination-map').evaluateAll(maps => maps.map(map => [...map.querySelectorAll('.map-boundary, .map-link, .map-node, .map-target')].map(shape => [...shape.attributes].map(attribute => `${attribute.name}=${attribute.value}`).join(';'))));
-  expect(geometry).toHaveLength(2);
-  expect(geometry[0]).toEqual(geometry[1]);
-  const slider = page.getByRole('slider', { name: 'Compare managed and dedicated installations' });
-  await slider.focus();
-  await page.keyboard.press('Home');
-  await expect(slider).toHaveValue('0');
-  await page.keyboard.press('End');
-  await expect(slider).toHaveValue('100');
-  await page.locator('.compare-toolbar').getByRole('button', { name: 'SPLIT ↔', exact: true }).click();
-  await expect(slider).toHaveValue('50');
-  // A later generic input style must not hide the comparison artwork again.
-  expect(await slider.evaluate(el => getComputedStyle(el).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  await expect(page.locator('.service-map')).toHaveCount(1);
+  await expect(page.getByRole('slider')).toHaveCount(0);
+  await expect(page.locator('.service-map')).toContainText('Verify your domain');
+  await expect(page.locator('.service-map')).toContainText('Confirm access');
+  await expect(page.locator('.service-map h3')).toHaveText(['Patchriot core', 'Dispatcher', 'Kali + Hermes', 'NEAR AI']);
+  await expect(page.locator('.service-map')).toContainText('1 … N');
+  await expect(page.locator('.service-map')).toHaveAttribute('data-paused', 'true');
+  await expect(page.locator('link[rel=icon]')).toHaveAttribute('href', '/brand/white-hat.png');
   await expect(page.getByRole('heading', { name: 'OWASP BLACK-BOX ETHICAL HACKING ENGINE.' })).toBeVisible();
   await expect(page.getByText('NO SOLO', { exact: false })).toHaveCount(0);
-  await page.getByRole('button', { name: 'TEST MY WEB APP', exact: false }).click();
+  await page.locator('.tm-hero').getByRole('button', { name: 'TEST MY WEB APP', exact: false }).click();
   const access = page.getByRole('dialog', { name: 'Sign in' });
   await expect(access.getByRole('heading', { name: 'Sign in to Patchriot.' })).toBeInViewport();
   await expect(access.getByLabel('Username', { exact: true })).toBeVisible();

@@ -262,7 +262,7 @@ pub(crate) async fn callback(
                 *response.status_mut() = StatusCode::SEE_OTHER;
                 response
                     .headers_mut()
-                    .insert(header::LOCATION, HeaderValue::from_static("/#/audits"));
+                    .insert(header::LOCATION, HeaderValue::from_static("/#/overview"));
                 response
             }
             Err(_) => Redirect::to("/?signin=failed#/request").into_response(),

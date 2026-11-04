@@ -18,10 +18,14 @@ const result: LiveResult = {
 test('two completed reports are complete only for the resolved conditional policy', async () => {
   const report: ReportInput = { id, state:'completed', created_at:1793640000, origins:['https://owned.example'], review_policy:'investigate_verify_v1', third_review:{reasons:[]}, steps: (['investigator','reproducer'] as const).map(role=>({role,state:'completed',result,evidence_complete:true})) };
   expect(reportSummary(report).partial).toBe(false);
-  expect(reportSummary(report).description).toContain('2 of 2 agents');
+  expect(reportSummary(report).description).toContain('2 of 2 agent reports');
   expect(reportSummary({...report,third_review:undefined}).partial).toBe(true);
+  const stopped = reportSummary({...report, state:'needs_review', steps:[report.steps[0],{role:'reproducer',state:'failed',result:null}]});
+  expect(stopped.headline).toBe('Run ended · some checks missing');
+  expect(stopped.description).toContain('Nothing is still running. Recon did not finish');
+  expect(stopped.description).not.toContain('Verifier did not finish');
   expect(reportSummary({...report,review_policy:undefined,third_review:undefined}).partial).toBe(true);
-  expect(reportSummary({...report,third_review:{reasons:['serious_finding']}}).description).toContain('2 of 3 agents');
+  expect(reportSummary({...report,third_review:{reasons:['serious_finding']}}).description).toContain('2 of 3 agent reports');
 });
 
 async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false) {
@@ -63,19 +67,22 @@ test('NEAR report advice needs consent, renders inert text and exports through r
   page.on('request', r => { if (r.url().endsWith('/report')) exports++; });
   await setup(page, false, false, true);
   const check = page.getByLabel('NEAR AI report check');
-  await check.locator('summary').click();
+  await check.locator('summary').first().click();
   await expect(check.getByRole('button', { name: 'Check this report' })).toBeDisabled();
   expect(writes).toBe(0); expect(exports).toBe(0);
   await check.getByRole('checkbox').check();
   await check.getByRole('button', { name: 'Check this report' }).click();
   await expect(check.getByText('Waiting for the report checker.')).toBeVisible();
   state = 'verified'; await page.clock.fastForward(5000);
-  await expect(check.getByText('Model-signed advice')).toBeVisible();
+  await expect(check.getByText('1 possible overlap', { exact: true })).toBeVisible();
+  await expect(check.getByText('Scout #1 · Recon #1')).not.toBeVisible();
+  await check.getByText('What was compared?', { exact: true }).click();
   await expect(check.getByText('Scout #1 · Recon #1')).toBeVisible();
   await expect(check.locator('img, script')).toHaveCount(0);
   expect(await page.evaluate(() => 'checkExecuted' in window)).toBe(false);
   const previous = reads; await page.clock.fastForward(60_000); expect(reads).toBe(previous);
   const download = page.waitForEvent('download');
+  await check.getByText('Verification receipt', { exact: true }).click();
   await check.getByRole('button', { name: 'Download check & signature ↓' }).click();
   const file = await download;
   expect(JSON.parse(await readFile((await file.path())!, 'utf8'))).toEqual(result);
@@ -91,10 +98,10 @@ test('an unavailable checker keeps the original findings and never shows a proof
     return route.fulfill({ json: { state: 'unavailable', can_request: false, model: 'fixture-model', error_code: 'response_signature_unavailable' } });
   });
   await setup(page, false, false, true);
-  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').click();
+  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').first().click();
   await expect(check.getByText(/could not be completed and verified/)).toBeVisible();
   await expect(check.getByRole('button')).toHaveCount(0);
-  await expect(page.getByText('Model-signed advice')).toHaveCount(0);
+  await expect(page.locator('.report-check-summary')).toHaveCount(0);
   await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible(); expect(writes).toBe(0);
 });
 
@@ -103,7 +110,8 @@ test('expired receipt download cannot save stale model advice', async ({ page })
   await setup(page, false, false, true);
   await page.route(`**/api/reviews/${id}/report`, route => route.fulfill({ status: 410, json: { error: 'report_content_deleted' } }));
   let downloads = 0; page.on('download', () => downloads++);
-  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').click();
+  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').first().click();
+  await check.getByText('Verification receipt', { exact: true }).click();
   await check.getByRole('button', { name: 'Download check & signature ↓' }).click();
   await expect(check.getByRole('alert')).toBeVisible(); expect(downloads).toBe(0);
 });
@@ -330,7 +338,7 @@ test('repeated findings count once while keeping all roles, citations and confli
   expect(findings[0].contributions.map(c => c.role)).toEqual(['investigator', 'reproducer', 'challenger']);
   expect(findings[0].contributions[2].finding.support).toBe('not_reproduced');
   expect(findings[0].contributions.every(c => c.finding.evidence_ids.join(',') === '1,2')).toBe(true);
-  expect(reportSummary(report).description).toContain('grouping 6 agent claims');
+  expect(reportSummary(report).description).toContain('from 6 agent observations');
   expect(report.steps.every(s => s.result!.assessment!.findings.length === 2)).toBe(true);
 });
 
