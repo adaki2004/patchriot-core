@@ -256,17 +256,19 @@ pub(crate) async fn verify(
 #[path = "wallet_tests.rs"]
 mod tests;
 
-/// WalletConnect transports are allowed only on the explicit wallet page. The
-/// console and private reports retain their self-only connection policy.
+/// Wallet code loads only after an explicit user action. The application shell
+/// allows the fixed Reown transport endpoints when wallet access is configured;
+/// external scripts and arbitrary RPC hosts remain blocked.
 pub(crate) async fn page_policy(
     State(state): State<AppState>,
     request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> Response {
-    let wallet_page = request.uri().path() == "/wallet" && state.config.wallet_project_id.is_some();
+    let wallet_page =
+        matches!(request.uri().path(), "/" | "/wallet") && state.config.wallet_project_id.is_some();
     let mut response = next.run(request).await;
     if wallet_page {
-        response.headers_mut().insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com https://api.mainnet-beta.solana.com; frame-src https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"));
+        response.headers_mut().insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com https://api.mainnet-beta.solana.com; frame-src https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com {}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",state.config.analytics_origin.as_deref().unwrap_or(""))).expect("validated wallet origins"));
     }
     response
 }

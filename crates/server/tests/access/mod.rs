@@ -47,6 +47,10 @@ async fn real_login_form_and_protected_account_work_without_javascript() {
     assert!(html.contains("name=\"username\"") && html.contains("name=\"password\""));
     assert!(!html.contains("<script"));
     assert_eq!(
+        test.request("GET", "/account", Value::Null, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
         test.request("GET", "/api/account", Value::Null, &[])
             .await
             .0,
@@ -83,7 +87,7 @@ async fn real_login_form_and_protected_account_work_without_javascript() {
             .unwrap();
         assert_eq!(reply.status(), expected);
         if expected == StatusCode::SEE_OTHER {
-            assert_eq!(reply.headers()["location"], "/#/account");
+            assert_eq!(reply.headers()["location"], "/account");
             let cookie = reply.headers()["set-cookie"]
                 .to_str()
                 .unwrap()
@@ -97,6 +101,11 @@ async fn real_login_form_and_protected_account_work_without_javascript() {
             assert_eq!(account.2["account"]["role"], "member");
             assert_eq!(account.2["account"]["id"], grant.2["account_id"]);
             assert!(!account.2.to_string().contains(&secret));
+            let entry = test
+                .request("GET", "/account", Value::Null, &[("cookie", cookie)])
+                .await;
+            assert_eq!(entry.0, StatusCode::SEE_OTHER);
+            assert_eq!(entry.1["location"], "/#/account");
             disable_account(
                 &test.pool,
                 Uuid::parse_str(grant.2["account_id"].as_str().unwrap()).unwrap(),

@@ -197,7 +197,7 @@ async fn save(
         return Err(ApiError::denied());
     }
     let sponsored: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM review_codes WHERE account_id = $1 AND request_id = $2)",
+        "SELECT EXISTS (SELECT 1 FROM review_codes WHERE account_id = $1 AND request_id = $2) OR EXISTS (SELECT 1 FROM credit_purchases WHERE account_id=$1 AND request_id=$2) OR EXISTS (SELECT 1 FROM credit_topups WHERE account_id=$1 AND request_id=$2)",
     )
     .bind(account)
     .bind(input.consent.request_id)

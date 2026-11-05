@@ -226,10 +226,6 @@ async fn allocate(
     {
         return Err(PaymentError::InvalidResponse);
     }
-    let roles = credits(view, candidate.amount).map_err(|_| PaymentError::InvalidResponse)?;
-    let result_hash = hex::encode(Sha256::digest(
-        serde_json::to_vec(view).map_err(|_| PaymentError::InvalidResponse)?,
-    ));
     let mut tx = pool.begin().await?;
     // Serializes allocation with another worker; no network call holds this lock.
     let valid: bool = sqlx::query_scalar("SELECT i.state='settled' AND i.asset=$2 AND i.required_amount=$3 AND i.account_id=$4 AND l.amount=$3 AND l.credit='customer_funds' AND l.asset=$2 AND l.account_id=$4 AND f.delivery_state='delivered' AND o.review_id=$5 AND o.state='activated' AND o.account_id=$4 AND o.request_id=i.request_id AND f.request_id=i.request_id AND f.account_id=$4 AND f.asset=$2 AND f.amount=$3 FROM payment_invoices i JOIN payment_ledger l ON l.invoice_id=i.id JOIN payment_funding_events f ON f.invoice_id=i.id JOIN checkout_orders o ON o.invoice_id=i.id WHERE i.id=$1 FOR UPDATE OF i")
@@ -238,10 +234,51 @@ async fn allocate(
     if !valid {
         return Err(PaymentError::InvalidResponse);
     }
+    let changed = write_allocation(
+        &mut tx,
+        candidate.invoice_id,
+        view,
+        &candidate.asset,
+        candidate.amount,
+        "invoice",
+    )
+    .await?;
+    sqlx::query("UPDATE payment_funding_events SET earnings_next_check_at=NULL,earnings_error=NULL WHERE invoice_id=$1")
+        .bind(candidate.invoice_id).execute(&mut *tx).await?;
+    tx.commit().await?;
+    Ok(changed)
+}
+
+/// Credit purchases use the same evidence checks and 90/10 split as an invoice.
+/// Their funding reference names a reservation, not a second chain payment.
+pub(super) async fn allocate_credit(
+    pool: &PgPool,
+    id: Uuid,
+    view: &ReviewView,
+) -> Result<bool, PaymentError> {
+    let mut tx = pool.begin().await?;
+    let amount = super::credits::for_allocation(&mut tx, id, view).await?;
+    let changed = write_allocation(&mut tx, id, view, SETTLEMENT_ASSET, amount, "credits").await?;
+    tx.commit().await?;
+    Ok(changed)
+}
+
+async fn write_allocation(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: Uuid,
+    view: &ReviewView,
+    asset: &str,
+    amount: i64,
+    funding_kind: &str,
+) -> Result<bool, PaymentError> {
+    let roles = credits(view, amount).map_err(|_| PaymentError::InvalidResponse)?;
+    let result_hash = hex::encode(Sha256::digest(
+        serde_json::to_vec(view).map_err(|_| PaymentError::InvalidResponse)?,
+    ));
     let existing: Option<String> =
         sqlx::query_scalar("SELECT result_hash FROM earning_allocations WHERE invoice_id=$1")
-            .bind(candidate.invoice_id)
-            .fetch_optional(&mut *tx)
+            .bind(id)
+            .fetch_optional(&mut **tx)
             .await?;
     if let Some(previous) = existing {
         return if previous == result_hash {
@@ -259,17 +296,14 @@ async fn allocate(
     } else {
         "three_roles_90_10_v1"
     };
-    sqlx::query("INSERT INTO earning_allocations(invoice_id,review_id,asset,gross_amount,platform_amount,operator_amount,result_hash,policy,completed_roles) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)")
-        .bind(candidate.invoice_id).bind(candidate.review_id).bind(&candidate.asset).bind(candidate.amount)
-        .bind(candidate.amount/10).bind(candidate.amount-candidate.amount/10).bind(result_hash).bind(policy).bind(roles.len() as i16).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO earning_allocations(invoice_id,review_id,asset,gross_amount,platform_amount,operator_amount,result_hash,policy,completed_roles,funding_kind) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
+        .bind(id).bind(view.id).bind(asset).bind(amount)
+        .bind(amount/10).bind(amount-amount/10).bind(result_hash).bind(policy).bind(roles.len() as i16).bind(funding_kind).execute(&mut **tx).await?;
     for role in roles {
         sqlx::query("INSERT INTO operator_earnings(invoice_id,role,operator_id,device_id,amount,reported_duration_ms,reported_model,inference_calls,terminal_calls,http_requests) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)")
-            .bind(candidate.invoice_id).bind(role.role).bind(role.operator).bind(role.device).bind(role.amount)
-            .bind(role.reported_duration_ms).bind(role.reported_model).bind(role.inference_calls).bind(role.terminal_calls).bind(role.http_requests).execute(&mut *tx).await?;
+            .bind(id).bind(role.role).bind(role.operator).bind(role.device).bind(role.amount)
+            .bind(role.reported_duration_ms).bind(role.reported_model).bind(role.inference_calls).bind(role.terminal_calls).bind(role.http_requests).execute(&mut **tx).await?;
     }
-    sqlx::query("UPDATE payment_funding_events SET earnings_next_check_at=NULL,earnings_error=NULL WHERE invoice_id=$1")
-        .bind(candidate.invoice_id).execute(&mut *tx).await?;
-    tx.commit().await?;
     Ok(true)
 }
 

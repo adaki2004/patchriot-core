@@ -20,6 +20,14 @@ pub(crate) async fn styles() -> impl IntoResponse {
     )
 }
 
+pub(crate) async fn account_entry(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<axum::response::Redirect, ApiError> {
+    crate::auth::require_session(&headers, &state).await?;
+    Ok(axum::response::Redirect::to("/#/account"))
+}
+
 pub(crate) async fn submit(
     state: State<AppState>,
     peer: Option<Extension<ConnectInfo<SocketAddr>>>,
@@ -32,6 +40,6 @@ pub(crate) async fn submit(
     *response.status_mut() = StatusCode::SEE_OTHER;
     response
         .headers_mut()
-        .insert(header::LOCATION, HeaderValue::from_static("/#/account"));
+        .insert(header::LOCATION, HeaderValue::from_static("/account"));
     Ok(response)
 }

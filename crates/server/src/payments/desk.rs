@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 #[derive(FromRow, Serialize)]
 pub(crate) struct PaymentRecord {
     invoice_id: Uuid,
+    credit_topup_id: Option<Uuid>,
     account_id: Uuid,
     account_name: String,
     account_disabled: bool,
@@ -54,7 +55,7 @@ pub(crate) async fn list(
     // historical facts, not fresh transfer instructions. Never return the raw
     // provider response, customer refund address or secrets.
     let rows = sqlx::query_as(
-        "SELECT i.id AS invoice_id, i.account_id, a.display_name AS account_name,
+        "SELECT i.id AS invoice_id, t.id AS credit_topup_id, i.account_id, a.display_name AS account_name,
             a.disabled AS account_disabled, i.asset, i.required_amount::text,
             i.quote_request->>'originAsset' AS origin_asset,
             i.deposit_address, NULLIF(i.deposit_memo, '') AS deposit_memo,
@@ -74,7 +75,9 @@ pub(crate) async fn list(
                 OR COALESCE(o.cancel_requested_at IS NOT NULL AND (
                     l.id IS NOT NULL OR (o.cancel_confirmed_at IS NULL AND o.cancel_next_attempt_at IS NULL)
                 ), false)
-                OR (i.state = 'settled' AND (l.id IS NULL OR o.id IS NULL OR f.invoice_id IS NULL))
+                OR (i.state = 'settled' AND (l.id IS NULL OR
+                    (t.id IS NULL AND (o.id IS NULL OR f.invoice_id IS NULL)) OR
+                    (t.id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM credit_ledger c WHERE c.topup_id=t.id))))
                 OR (l.id IS NOT NULL AND (l.account_id <> i.account_id OR l.asset <> i.asset
                     OR l.amount IS DISTINCT FROM i.received_amount))
                 OR (o.id IS NOT NULL AND (o.account_id <> i.account_id OR o.request_id <> i.request_id))
@@ -85,6 +88,7 @@ pub(crate) async fn list(
         LEFT JOIN payment_ledger l ON l.invoice_id = i.id
         LEFT JOIN checkout_orders o ON o.invoice_id = i.id
         LEFT JOIN payment_funding_events f ON f.invoice_id = i.id
+        LEFT JOIN credit_topups t ON t.invoice_id = i.id
         ORDER BY i.created_at DESC, i.id DESC LIMIT 50",
     )
     .fetch_all(&state.pool)
