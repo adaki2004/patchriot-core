@@ -13,7 +13,7 @@ async function setup(page: Page, available = '18000000') {
   ];
   const data = { enabled: true, minimum_claim: '10000000', balance: { earned: available, available, reserved: '0', paid: '0' }, destinations, claims: [] as Array<{ id: string; state: string; amount: string; recipient: string; destination_asset: string; expected_amount: string; minimum_amount: string; expires_at: string; last_error: null }>, receipts: [] };
   const state = { data, confirms: 0, errors: false, requests: [] as Record<string, string>[] };
-  await page.route('**/api/session', r => r.fulfill({ json: { account: { id: '00000000-0000-4000-8000-000000000001', display_name: 'Fixture operator', role: 'member', auth_method: 'invite' }, csrf_token: 'fixture-csrf' } }));
+  await page.route('**/api/session', r => r.fulfill({ json: { account: { id: '00000000-0000-4000-8000-000000000001', display_name: 'Fixture operator', role: 'admin', auth_method: 'invite' }, csrf_token: 'fixture-csrf' } }));
   await page.route('**/api/fleet', r => r.fulfill({ json: { online_devices: 3, online_operators: 1, online_compute_groups: 1 } }));
   await page.route('**/api/devices', r => r.fulfill({ json: [] }));
   await page.route('**/api/earnings', r => r.fulfill({ json: { work: [] } }));

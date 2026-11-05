@@ -180,7 +180,10 @@ async fn ethereum_and_solana_create_only_members_and_a_one_use_session() {
         let message = body["message"].as_str().unwrap();
         assert!(message.starts_with("patchriot.example wants you to sign in"));
         assert!(message.contains("URI: https://patchriot.example\nVersion: 1"));
-        assert!(message.contains("does not authorize a payment"));
+        assert!(message.contains("Welcome to Patchriot!"));
+        assert!(message.contains("This action will NOT cost any gas fees."));
+        assert!(message.contains("does not authorize any transactions or payments"));
+        assert_eq!(message.split("\n\n").nth(1).unwrap().lines().count(), 1);
         let (status, headers, _) = app.verify(&who, &cookie, &body).await;
         assert_eq!(status, StatusCode::OK);
         let session = headers
@@ -225,9 +228,9 @@ async fn ethereum_and_solana_create_only_members_and_a_one_use_session() {
 }
 
 #[tokio::test]
-async fn wallet_transport_policy_is_limited_to_the_wallet_page_and_config_fails_closed() {
+async fn wallet_transport_policy_is_limited_to_app_shells_and_config_fails_closed() {
     let mut app = TestApp::new().await;
-    for path in ["/", "/api/session", "/wallet/config", "/wallet/"] {
+    for path in ["/api/session", "/wallet/config", "/wallet/", "/login"] {
         let (_, headers, _) = app.request("GET", path, &[], Value::Null).await;
         assert!(
             !headers[header::CONTENT_SECURITY_POLICY]
@@ -236,11 +239,19 @@ async fn wallet_transport_policy_is_limited_to_the_wallet_page_and_config_fails_
                 .contains("walletconnect")
         );
     }
-    let (_, headers, _) = app.request("GET", "/wallet", &[], Value::Null).await;
-    let policy = headers[header::CONTENT_SECURITY_POLICY].to_str().unwrap();
-    assert!(policy.contains("wss://relay.walletconnect.com"));
-    assert!(policy.contains("script-src 'self'"));
-    assert!(!policy.contains("unsafe-inline"));
+    for path in ["/", "/wallet"] {
+        let (_, headers, _) = app.request("GET", path, &[], Value::Null).await;
+        let policy = headers[header::CONTENT_SECURITY_POLICY].to_str().unwrap();
+        assert!(policy.contains("wss://relay.walletconnect.com"));
+        assert!(policy.contains("script-src 'self'"));
+        assert!(
+            policy
+                .split(';')
+                .find(|s| s.trim().starts_with("script-src "))
+                .is_some_and(|s| s.trim() == "script-src 'self'")
+        );
+        assert!(policy.contains("style-src-attr 'unsafe-inline'"));
+    }
     std::sync::Arc::get_mut(&mut app.state.config)
         .unwrap()
         .wallet_project_id = None;

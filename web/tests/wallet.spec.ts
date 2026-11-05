@@ -14,11 +14,12 @@ function deposit(): Deposit {
 }
 
 async function setup(context: BrowserContext, signedIn = true) {
-  const state = { signedIn, quote:deposit(), verification:0, quotes:0 };
+  const state = { signedIn, quote:deposit(), verification:0, quotes:0, failSession:false };
   await context.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
     if(path==='/api/wallet/config')return route.fulfill({json:{enabled:true,project_id:'a'.repeat(32),origin}});
     if(path==='/api/auth/providers')return route.fulfill({json:{google:true,github:true,wallet:true}});
+    if(path==='/api/session' && state.signedIn && state.failSession)return route.fulfill({status:503,json:{error:'session_unavailable'}});
     if(path==='/api/session')return route.fulfill({json:{account:state.signedIn?{id:order,display_name:'Wallet fixture',role:'member',auth_method:signedIn?'google':'wallet'}:null,csrf_token:state.signedIn?'test-csrf':null}});
     if(path===`/api/orders/${order}/quote`){state.quotes++;expect(route.request().method()).toBe('POST');expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');return route.fulfill({json:state.quote});}
     if(path==='/api/auth/wallet/challenge'){
@@ -52,57 +53,55 @@ async function setup(context: BrowserContext, signedIn = true) {
   return state;
 }
 async function payment(page:Page) {
-  const opened=page.waitForEvent('popup');
   await page.evaluate(async order=>{
     const path='/src/wallet.ts'; const {openWallet}=await import(/* @vite-ignore */ path);
     void openWallet('payment',order).catch(()=>{});
   },order);
-  const popup=await opened;
-  await expect(popup.getByRole('heading',{name:'Pay for your assessment.'})).toBeVisible();
-  await popup.getByRole('button',{name:'Connect browser wallet',exact:true}).click();
-  await expect(popup.getByRole('button',{name:'Confirm payment in wallet'})).toBeEnabled();
-  return popup;
+  await expect(page.getByRole('heading',{name:'Pay for your assessment',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Browser wallet',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Confirm payment',exact:true})).toBeEnabled();
+  return page;
 }
 async function calls(page:Page) { return page.evaluate(()=>(window as unknown as {walletCalls:{method:string;params?:unknown[]}[]}).walletCalls); }
 
 test('wallet sign-in signs only the server message and opens Overview',async({page,context})=>{
   const state=await setup(context,false);const external:string[]=[];page.on('request',r=>{if(new URL(r.url()).origin!==origin)external.push(r.url());});
   await page.goto('/');await page.locator('header').getByRole('button',{name:'App',exact:true}).click();
-  const opened=page.waitForEvent('popup');await page.getByRole('button',{name:'Connect wallet ↗',exact:true}).click();const popup=await opened;
-  await popup.getByRole('button',{name:'Connect browser wallet',exact:true}).click();
+  await page.getByRole('button',{name:'Connect wallet',exact:true}).click();const popup=page;
+  await popup.getByRole('button',{name:'Browser wallet',exact:true}).click();
   await expect.poll(async()=>(await calls(popup)).some(c=>c.method==='personal_sign')).toBe(false);
-  const closing=popup.waitForEvent('close');await popup.getByRole('button',{name:'Sign in',exact:true}).click();await closing;
+  await popup.getByRole('button',{name:'Sign in',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page).toHaveURL(/#\/overview$/);expect(state.verification).toBe(1);expect(external).toEqual([]);
 });
 
 test('Google account can pay the exact server quote without a new login or an approval',async({page,context})=>{
   const state=await setup(context);await page.goto('/');const popup=await payment(page);
   expect((await calls(popup)).some(c=>c.method==='eth_sendTransaction')).toBe(false);
-  await popup.getByRole('button',{name:'Confirm payment in wallet'}).click();
+  await popup.getByRole('button',{name:'Confirm payment'}).click();
   await expect(popup.getByRole('status')).toContainText('Transfer sent');
   const sent=(await calls(popup)).filter(c=>c.method==='eth_sendTransaction');expect(sent).toHaveLength(1);
   expect(sent[0].params).toEqual([ethereumTransfer(state.quote,sender)]);
   expect((await calls(popup)).some(c=>c.method==='personal_sign')).toBe(false);expect(state.verification).toBe(0);
   expect(state.quotes).toBe(2);
   await expect(popup.getByText('Your order updates after the server confirms it.',{exact:false})).toBeVisible();
-  const secondOpened=page.waitForEvent('popup');await page.evaluate(async order=>{const path='/src/wallet.ts';void(await import(path)).openWallet('payment',order).catch(()=>{});},order);
-  const second=await secondOpened;await expect(second.getByRole('status')).toContainText('already requested');await expect(second.getByRole('button',{name:'Connect browser wallet'})).toHaveCount(0);
+  await page.getByRole('button',{name:'Back to Patchriot',exact:true}).click();await page.evaluate(async order=>{const path='/src/wallet.ts';void(await import(path)).openWallet('payment',order).catch(()=>{});},order);
+  const second=page;await expect(second.getByRole('status')).toContainText('already requested');await expect(second.getByRole('button',{name:'Browser wallet'})).toHaveCount(0);
 });
 
 test('changed quotes are never sent to the wallet',async({page,context})=>{
   const state=await setup(context);await page.goto('/');const popup=await payment(page);state.quote={...state.quote,input:{...state.quote.input,amount:'20000000'}};
-  await popup.getByRole('button',{name:'Confirm payment in wallet'}).click();await expect(popup.getByRole('alert')).toContainText('quote changed');
+  await popup.getByRole('button',{name:'Confirm payment'}).click();await expect(popup.getByRole('alert')).toContainText('quote changed');
   expect((await calls(popup)).some(c=>c.method==='eth_sendTransaction')).toBe(false);
 });
 
 test('declined prompts can retry; a lost send result cannot silently send twice',async({page,context})=>{
   await setup(context);await page.goto('/');const popup=await payment(page);
   await popup.evaluate(()=>{(window as unknown as {walletFailure:string}).walletFailure='reject';});
-  await popup.getByRole('button',{name:'Confirm payment in wallet'}).click();await expect(popup.getByRole('alert')).toContainText('declined');
+  await popup.getByRole('button',{name:'Confirm payment'}).click();await expect(popup.getByRole('alert')).toContainText('declined');
   expect(await popup.evaluate(()=>localStorage.getItem('patchriot-payment:00000000-0000-4000-8000-000000000003'))).toBeNull();
   await popup.evaluate(()=>{(window as unknown as {walletFailure:string}).walletFailure='lost';});
-  await popup.getByRole('button',{name:'Confirm payment in wallet'}).click();await expect(popup.getByRole('status')).toContainText('uncertain');
-  await expect(popup.getByRole('button',{name:'Confirm payment in wallet'})).toHaveCount(0);
+  await popup.getByRole('button',{name:'Confirm payment'}).click();await expect(popup.getByRole('status')).toContainText('uncertain');
+  await expect(popup.getByRole('button',{name:'Confirm payment'})).toHaveCount(0);
   expect((await calls(popup)).filter(c=>c.method==='eth_sendTransaction')).toHaveLength(2);
 });
 
@@ -120,4 +119,73 @@ test('transfer builders reject misleading assets and encode only the quoted paym
   expect(ix.keys.filter(k=>k.isSigner).map(k=>k.pubkey.toBase58())).toEqual([from]);
   const mint=new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');expect(ix.keys[1].pubkey.equals(mint)).toBe(true);
   expect(()=>solanaTransfer({...sol,input:{...sol.input,amount:'18446744073709551616'}},from,to)).toThrow();
+});
+
+
+test('a verified signature retries only session loading and closes the sign-in dialog',async({page,context})=>{
+  const state=await setup(context,false);
+  await page.goto('/');
+  await page.locator('header').getByRole('button',{name:'App',exact:true}).click();
+  await page.getByRole('button',{name:'Connect wallet',exact:true}).click();
+  await page.getByRole('button',{name:'Browser wallet',exact:true}).click();
+  state.failSession=true;
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Open my account',exact:true})).toBeEnabled();
+  expect(state.verification).toBe(1);
+  state.failSession=false;
+  await page.getByRole('button',{name:'Open my account',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/overview$/);
+  expect((await calls(page)).filter(c=>c.method==='personal_sign')).toHaveLength(1);
+  expect(state.verification).toBe(1);
+});
+
+test('closing the wallet returns to sign-in without signing or opening another window',async({page,context})=>{
+  await setup(context,false);
+  await page.goto('/');
+  await page.locator('header').getByRole('button',{name:'App',exact:true}).click();
+  await page.getByRole('button',{name:'Connect wallet',exact:true}).click();
+  await page.getByRole('dialog').filter({has:page.getByRole('button',{name:'Browser wallet',exact:true})}).getByRole('button',{name:'Close',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Connect wallet',exact:true})).toBeEnabled();
+  expect(context.pages()).toHaveLength(1);
+  expect((await calls(page)).some(c=>c.method==='personal_sign')).toBe(false);
+});
+
+test('changing the selected account stops signing until it is reconnected',async({page,context})=>{
+  await setup(context,false);
+  await page.goto('/');
+  await page.locator('header').getByRole('button',{name:'App',exact:true}).click();
+  await page.getByRole('button',{name:'Connect wallet',exact:true}).click();
+  await page.getByRole('button',{name:'Browser wallet',exact:true}).click();
+  await page.evaluate(()=>{
+    const w=window as unknown as {ethereum:{request:(a:{method:string})=>Promise<unknown>}};
+    const previous=w.ethereum.request;
+    w.ethereum.request=async a=>a.method==='eth_accounts'?['0x'+'0'.repeat(40)]:previous(a);
+  });
+  await page.getByRole('button',{name:'Sign in',exact:true}).click();
+  await expect(page.getByRole('alert')).toContainText('wallet changed');
+  expect((await calls(page)).some(c=>c.method==='personal_sign')).toBe(false);
+});
+
+test('wallet chooser uses announced local icons and never fetches a provider-supplied remote image', async ({page,context}) => {
+  await setup(context,false);
+  await context.addInitScript(() => {
+    window.addEventListener('eip6963:requestProvider', () => {
+      const provider = (window as unknown as {ethereum:unknown}).ethereum;
+      for (const [uuid,name,icon] of [
+        ['fixture-local','Installed wallet','data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="blue"/></svg>'],
+        ['fixture-remote','Untrusted icon wallet','https://untrusted.example/tracker.svg'],
+      ]) window.dispatchEvent(new CustomEvent('eip6963:announceProvider',{detail:{info:{uuid,name,icon},provider}}));
+    });
+  });
+  const external:string[]=[];
+  page.on('request',r=>{if(new URL(r.url()).hostname==='untrusted.example')external.push(r.url());});
+  await page.goto('/');
+  await page.locator('header').getByRole('button',{name:'App',exact:true}).click();
+  await page.getByRole('button',{name:'Connect wallet',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Installed wallet',exact:true}).locator('img')).toHaveAttribute('src',/^data:image\/svg/);
+  await expect(page.getByRole('button',{name:'Untrusted icon wallet',exact:true}).locator('img')).toHaveCount(0);
+  await page.getByRole('tab',{name:'Solana',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Phantom / Solana wallet',exact:true}).locator('img')).toHaveAttribute('src','/brand/phantom.svg');
+  expect(external).toEqual([]);
 });

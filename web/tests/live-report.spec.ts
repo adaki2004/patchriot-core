@@ -28,18 +28,42 @@ test('two completed reports are complete only for the resolved conditional polic
   expect(reportSummary({...report,third_review:{reasons:['serious_finding']}}).description).toContain('2 of 3 agent reports');
 });
 
-async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false) {
+async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false, browser?: 'verified' | 'gap') {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role: 'member' }, csrf_token: 'test-csrf' } }));
   await page.route('**/api/fleet', r => r.fulfill({ json: {} }));
   await page.route('**/api/review-codes', r => r.fulfill({ json: [] }));
   await page.route('**/api/devices', r => r.fulfill({ json: [] }));
   const review = { id, mode: 'pentest_agent', state: stopped ? 'failed' : (failed || finished) ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  if (browser) {
+    Object.assign(review.pentest.scope, { authentication: 'session', browser_login: {} });
+    review.steps[0].evidence_complete = browser === 'verified';
+    review.steps[0].result = { ...result, ...(browser === 'verified' ? { browser_access: { authenticated_id: 1, anonymous_id: 2, check: { kind: 'protected_resource' as const } } } : {}), evidence: result.evidence.map((e, i) => ({...e, url:'https://owned.example/account', status:i ? 401 : 200, authenticated:!i, body_excerpt:i ? 'Sign in required' : '{"account":"fixture"}'})) };
+  }
   await mockExport(page, review);
   if (stopped) review.steps = review.steps.map((step, i) => ({ ...step, state: i ? 'cancelled' : 'failed', result: null, progress: null }));
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.goto(`/#/reviews/${id}`);
 }
+
+for (const mode of ['verified', 'gap'] as const) test(`browser access ${mode} is explicit in the report and exports`, async ({page}) => {
+  await setup(page, false, false, true, mode);
+  await page.getByRole('button', {name:'Agent reports', exact:true}).click();
+  // A gap remains visible even when a model returned a plausible report.
+  const expected = mode === 'verified' ? 'Signed-in access verified:' : 'Signed-in access was not verified.';
+  await expect(page.getByText(expected, {exact:false}).first()).toBeVisible();
+  if (mode === 'verified') await expect(page.getByText('Evidence #1 and #2.', {exact:false}).first()).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', {name:'Download vulnerability report'}).click();
+  const pdf = await PDFDocument.load(await readFile((await (await download).path())!));
+  expect(pdf.getPageCount()).toBeGreaterThan(1);
+  await page.getByText('Other downloads & test details', {exact:true}).click();
+  const readable = page.waitForEvent('download');
+  await page.getByRole('button', {name:'Download readable report'}).click();
+  const body = await readFile((await (await readable).path())!, 'utf8');
+  expect(body).toContain(expected);
+  expect(body).toContain('Signed-in access was not verified.'); // unfinished roles
+});
 
 async function mockExport(page: import('@playwright/test').Page, review: unknown) {
   let first: number | undefined;

@@ -35,7 +35,7 @@ const pollActiveReview = (review: Review) => ['awaiting_payment', 'queued', 'run
 function reportInput(review: Review): ReportInput {
   const liveSteps: LiveStep[] = review.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, progress: s.progress, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null }));
   const team = review.pentest?.reviewers ?? [];
-  return { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, scope_sha256: review.pentest?.scope_sha256, review_policy: review.pentest?.review_policy, third_review: review.pentest?.third_review, team };
+  return { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, browser_login: review.pentest?.scope.browser_login !== undefined, scope_sha256: review.pentest?.scope_sha256, review_policy: review.pentest?.review_policy, third_review: review.pentest?.third_review, team };
 }
 
 const states: Record<string, string> = {
@@ -162,7 +162,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
       {!['completed', 'needs_review'].includes(review.state) && <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} timing={review.timing} />}
       {['awaiting_payment', 'queued', 'running'].includes(review.state) && <LiveProgress steps={liveSteps} state={review.state} policy={review.pentest} />}
       {retentionNotice}<PdfReportDownload report={report} loadReport={loadReport} disabled={!canExport} />
-      <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a web application ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
+      <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a web application ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && <a className="quiet" href="#/account">Manage credit purchase →</a>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
       <p className="fine" aria-label="Review method">{reviewMethod(report)}</p>
       <VulnerabilityReport report={report} />
       {['completed', 'needs_review'].includes(review.state) && <ReportCheck key={id} id={id} csrf={csrf} beforeExport={exportReview} />}

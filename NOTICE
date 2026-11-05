@@ -14,3 +14,28 @@ IBM Plex Mono, Bricolage Grotesque and Lora are provided under the
 SIL Open Font License 1.1. Their copyright and full license notices are
 in web/public/fonts/LICENSES.txt. The browser loads these local files;
 no third-party font service is contacted.
+
+Phantom wallet icon — https://github.com/phantom/phantom-connect-sdk/tree/daa18efa5d653baf254bc8c010260a2cf2d6ba0a
+web/public/brand/phantom.svg is the unmodified PHANTOM_ICON from packages/constants/src/icons.ts. Used to identify the wallet option, not to imply endorsement. Phantom names and marks remain their owners' property. Upstream source license:
+
+MIT License
+
+Copyright (c) 2024 Phantom Technologies, Inc
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

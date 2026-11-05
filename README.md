@@ -11,7 +11,7 @@ Give us your website URL. Our hosted agents run an automated web application sec
 ```mermaid
 flowchart LR
     U[Your web app] --> V[Verify domain]
-    V --> C[Confirm team + coupon or payment]
+    V --> C[Confirm team + coupon or credit]
     C --> S[Scout investigates]
     S --> R[Recon verifies]
     R --> T{Further review?}
@@ -23,7 +23,7 @@ flowchart LR
 | Choose | You provide | You get |
 | --- | --- | --- |
 | **Black box** | A public HTTPS URL you own; a temporary DNS record proves control | Checks of reachable pages, APIs, browser security settings and exposed configuration, with evidence and suggested fixes |
-| **Grey box** | The same, plus a dedicated test account or API token and a protected page to check | Public checks plus signed-in access checks, compared with anonymous requests; unsupported or inconclusive checks are clearly marked |
+| **Grey box** | The same, plus a dedicated test account, API token or permission to use an empty test wallet | Public checks plus verified signed-in access where supported; unsupported or inconclusive checks are clearly marked |
 | **White box** | Source + a deployment | Roadmap; not part of current onboarding |
 
 Scout maps the application. Recon checks leads with fresh requests. A reserved third agent reviews serious claims, disagreements or incomplete evidence. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
@@ -33,7 +33,7 @@ Download **PDF, Markdown, evidence JSON or observed endpoints**. Your first expo
 ## Two NEAR building blocks
 
 - **NEAR AI:** our Hermes agents use DeepSeek V4.1 Flash Abliterated in NEAR AI’s private, hardware-protected inference environment. The relay encrypts requests and verifies attestation and signed responses. This protects model inference; the Kali agents and report storage are separate.
-- **NEAR Intents:** checkout converts and settles supported crypto payments. The server confirms settlement before work starts. A browser transaction hash never grants access on its own.
+- **NEAR Intents:** top-ups convert supported crypto into service credit. The server confirms settlement before credit is available. A top-up does not start work; a browser transaction hash never creates a balance.
 
 A disclosed Venice fallback can recover temporary model failures when the requester agrees. It is not a TEE route; usage appears in the report. [Data handling and retention →](https://patchriot.tech/#/docs/privacy)
 
@@ -60,7 +60,7 @@ flowchart LR
 
 1. Enter your web app’s URL at **[patchriot.tech](https://patchriot.tech)**, sign in and choose black-box or grey-box testing.
 2. Add the supplied DNS TXT record. For grey box, add a disposable test account.
-3. Confirm the named team and providers. Use a coupon or pay the displayed quote.
+3. Confirm the named team and providers. Use a coupon or your account credit. Add credit from Account before starting.
 4. Follow progress, inspect the findings and download the report. Cancel from the app if needed.
 
 A free-test campaign offers **one requested coupon per account**, with a 24/48-hour claim window and an administrator-set total limit. Claiming does not start work. Coupons last seven days and do not create cash or funded operator rewards. Different sign-ins can represent one person, so the campaign cap is essential.
@@ -72,13 +72,31 @@ A free-test campaign offers **one requested coupon per account**, with a 24/48-h
 | Ready | Next |
 | --- | --- |
 | Ownership-verified black-box and test-account assessments | Source-assisted repository reviews |
-| Isolated agents, live progress, cancellation, private reports | Interactive browser login and recurring checks |
+| Isolated agents, live progress, cancellation, private reports | Recurring checks |
+| Browser login through the target's own UI, with access evidence | External identity providers and broader wallet transports |
 | NEAR AI inference, disclosed fallback, NEAR Intents checkout | Broader infrastructure testing |
-| Requested free trials, admin activity counts, 90/10 paid-work accounting | Self-service dedicated installations |
+| Prepaid credit, requested free trials, 90/10 paid-work accounting | Self-service dedicated installations |
 
 ## For developers and operators
 
 Use the hosted product to request a test. The sections below are for running a separate installation or maintaining this one. Secrets, private reports and deployment records do not belong in Git.
+
+<details>
+<summary>Account credit: deployment, accounting and recovery</summary>
+
+Deploy dispatcher’s authenticated `GET /internal/pentests/:id` first, then core with migration `0018_account_credits.sql`. Keep the payment worker running with the same database and dispatcher settings. No agent runtime change is required for credit payments. Existing invoices, coupons, reports and operator withdrawals retain their interfaces.
+
+**Account → Add credit** offers $2, $5, $10, $25, $50, $100 or a custom $2–$1,000 amount. The existing payment policy fixes the treasury, accepted inputs and destination. Credit is enabled only for the exact Base USDC representation used by earnings, with six decimals. NEAR Intents quotes the input including conversion costs; wallet gas is separate. Only a matching, settled receipt adds the chosen number of cents, once. A top-up never emits a work-funding event.
+
+A black-box test costs **$1.99**; a test with saved authentication costs **$4.99**. Core derives this from the dispatcher’s saved scope, not the browser. White box is listed at $9.99 as a roadmap product and cannot be purchased. Coupons start their normal assessment without touching credit. Separate sign-in identities retain separate balances.
+
+Starting a test reserves credit under an account lock. The payment worker admits and funds that exact request with its saved consent; retries reuse the purchase ID. If work cannot start, confirmed rejection or unfunded cancellation returns the reservation once. A timeout alone never returns money: funding might have succeeded. Once work starts, failure or cancellation moves payment to staff review rather than silently returning spendable credit. Completion uses the existing evidence checks and 90/10 allocation. Request cancellation from **Account → Paid tests**. Its state remains pending until the worker confirms it. Staff can inspect top-ups and unresolved purchases in **Payment desk**; this view grants no refund or replay action.
+
+`GET /api/credits` returns the signed-in account’s balance and bounded history. Top-ups use `POST /api/credits/topups` and resume through `POST /api/credits/topups/:id/quote`. Test setup reads `GET /api/pentests/:id/credit-offer`, then starts through `POST /api/pentests/:id/credits` with `consent` and the displayed `amount_cents`. All writes require the normal session, Origin and CSRF checks. `GET /api/credits/purchases/:id` reports progress; `POST /api/credits/purchases/:id/cancel` with `{}` records cancellation intent without claiming a refund. The existing internal funding field `invoice_id` is an opaque funding reference: for account credit it names a purchase, not a new blockchain invoice; `earning_allocations.funding_kind` records the distinction.
+
+The payment policy can retain Base USDC inside NEAR Intents or deliver it on Base. This distinction still applies to withdrawals: an Intents balance is not spendable by the Base payout signer. Do not treat unspent customer credit or unresolved purchases as platform revenue. Cash refunds and recovery of ambiguous payments remain staff operations; never delete ledger entries or re-credit merely because a request timed out.
+
+</details>
 
 <details>
 <summary>Free-trial operations and deployment order</summary>
@@ -287,7 +305,7 @@ The intended beta offer is **$10 for one bounded live website, snapshot or sourc
 
 Paid checkout is implemented through **NEAR Intents / 1Click**. The server fixes the price and receiving wallet. The customer chooses an allowed token and pays the displayed quote. Work starts only after a matching payment is recorded. Swap and network costs can make the customer's total higher than the service price.
 
-**Test status:** live Solana USDT deposits settled as Base USDC, and a matching payment automatically started a private review. That CPU review needed attention because one report was incomplete; it created no operator earnings. Database and simulated-provider tests cover earnings, concurrent withdrawals and transfer retries. A live operator withdrawal has not yet been exercised. The service price is 10 USDC; it does not fetch a USD exchange rate.
+**Test status:** live Solana USDT deposits settled as Base USDC, and a matching payment automatically started a private review. That CPU review needed attention because one report was incomplete; it created no operator earnings. Database and simulated-provider tests cover earnings, concurrent withdrawals and transfer retries. A live operator withdrawal has not yet been exercised. Those live tests exercised the earlier per-review checkout. Account credit and the new $1.99/$4.99 live-test prices have local database and browser coverage; they have not yet been exercised with a live top-up. Legacy snapshot/source checkout keeps its configured price. Prices use USDC at face value; the service does not fetch a USD exchange rate.
 
 **Operator payments:** completed, evidence-checked paid reviews allocate 90% to their operators and 10% to Patchriot. Customer money stays in the treasury; operators withdraw recorded earnings after reaching 10 USDC. See [earnings and withdrawals](#operator-earnings-and-withdrawals) for the separate payout service and coverage checks. A returned report alone does not earn a payment.
 
@@ -401,7 +419,7 @@ Administrators can inspect **Payment desk** (`GET /api/admin/payments`). It read
 
 The current automated payout worker spends **native USDC on Base**. Checkout can instead retain the same asset representation in **NEAR Intents**, controlled by an EVM wallet, but this worker cannot sign Intents withdrawals. An Intents balance is not spendable Base backing. Keep automated payouts disabled for that custody mode until an Intents signer and matching balance checks are implemented, or separately fund and verify the Base treasury. Customers can pay supported USDC/USDT on Ethereum or Solana through 1Click. A matching token symbol alone is not enough.
 
-A completed $10 review allocates **$1 to Patchriot and $9 across the roles that actually ran**: $4.50 each for two required roles, or $3 each when the reserved third reviewer is used. Multiple roles belonging to one operator accumulate in that account. Every required report must pass the dispatcher’s evidence checks. Existing three-role orders keep their original policy. Failed, incomplete and cancelled reviews keep their customer funds for staff review; coupons create no cash earnings. Model conclusions are still claims to inspect. Runtime and model names are recorded but do not increase payment. Receipts, allocations and payout records cannot be edited or deleted; replay cannot credit a role twice.
+Completed work allocates **10% to Patchriot and 90% across the roles that actually ran**. For a legacy $10 review, that is $4.50 each for two required roles, or $3 each when the reserved third reviewer is used. Multiple roles belonging to one operator accumulate in that account. Every required report must pass the dispatcher’s evidence checks. Existing three-role orders keep their original policy. Failed, incomplete and cancelled reviews keep their customer funds for staff review; coupons create no cash earnings. Model conclusions are still claims to inspect. Runtime and model names are recorded but do not increase payment. Receipts, allocations and payout records cannot be edited or deleted; replay cannot credit a role twice.
 
 Operators open **Earnings** to inspect work and request a withdrawal of at least **10 USDC**. They choose USDC or USDT on Ethereum or Solana, enter their wallet address, inspect the exact quote and confirm. Conversion and delivery fees come from the requested amount. An unsigned request can be cancelled. Once signed, funds remain reserved until its outcome is known. Unknown, reverted or refunded transfers require staff review; they never silently restore a spendable balance.
 
@@ -494,17 +512,21 @@ Do not put the treasury signing key in the web service. Payment reconciliation a
 
 ### Test accounts and recorded coverage
 
-Choose **Grey-box** and provide your login page and a protected page or API. The protected URL must return 2xx with the test account and refuse anonymous visitors (401/403) or redirect them to the declared same-origin login page; a public page returning 200 to everyone does not prove login worked. The relay can detect one standard HTML form, its username/password fields, same-origin action and hidden values. Ambiguous forms stop without submitting credentials. **Custom login settings** supports explicit form fields or JSON session login. HTTP Basic and bearer API tokens are also supported.
+Choose **Grey box**, select username/password, a bearer token, HTTP Basic or EVM wallet sign-in, and verify the domain. Supply a dedicated account or token after verification; wallet mode needs permission to create a fresh, unfunded identity. Login and signed-in paths are optional hints. New requests do not need API endpoint layouts or JSON field names.
 
-Add the dedicated password or token after domain verification. It is encrypted separately and never put in model prompts, browser storage or report bodies. Login is attempted once per role; redirects are not followed. Other POST tests need separate permission. JavaScript-only login, SSO, MFA, CAPTCHA, SSH access and token-only JSON login responses are unsupported. These require different integrations, not more permissive agent instructions.
+**How login works:** the agent opens the approved website in isolated Chromium, finds its sign-in and follows the website's own frontend. A private helper fills supplied credentials. For wallet login, the website sees an injected test wallet; the agent reviews each readable login challenge before the relay signs it. The same browser retains the resulting session for approved testing. Some dapps only connect an address and never request a signature; that permits public account views but does not prove private access. Requests still pass through the relay's exact-origin, public-DNS, lease and request limits. External identity providers are not added to scope. If the app needs a separate CDN or public API, the requester can list up to eight exact HTTPS hosts under **Optional sign-in hints → Page dependencies**. The browser may read those hosts without account cookies, tokens or referrers. They cannot become login or test targets; changing the list changes the saved permission and consent hash.
 
-Automatic form detection uses `form_discovery_v1`. Deploy the updated core, dispatcher (migration `0026_login_form_discovery.sql`), then the relay; no agent image change is required. The feature is offered only with three eligible relays advertising it. Existing explicit `session_login_v1` requests and their signed scopes remain unchanged.
+**Proof of access:** the relay compares the same GET resource with and without the account. It records success only when authenticated access returns 2xx and the anonymous request returns 401/403, or when a JSON account response matches the supplied username/test wallet and the anonymous response does not. A signature, cookie, changed screen or HTTP 200 alone is insufficient. The report, Markdown and PDF show the evidence references or a clear coverage gap. Verification establishes access to that resource, not every private page. Browser-mode redirects and HTML-only identity changes are not currently sufficient proof.
 
-Add the disposable account after domain verification, then choose the team and pay. Before an assessment is admitted, the requester may replace an expired or incorrect account through `POST /api/pentests/:id/credentials`; scope, requester, session and CSRF checks apply. Once checkout or testing has reserved the request, the account cannot be changed. Existing API clients may still supply Basic/bearer credentials at creation.
+**Limits:** one five-minute login window permits at most eight same-origin POST steps and four signatures per role. These are steps in one login, not password guesses. Supplied credentials must work, and the target must admit a fresh wallet without funding, holdings or prior membership. Transactions, typed-data/permit signing, external SSO, MFA, CAPTCHA, Solana target wallets, WalletConnect-only flows and account registration requiring additional permission remain unsupported. Browser login supports bounded readable personal-sign messages and SIWE; an agent's assessment of a custom message cannot guarantee its legal or application-level meaning. Never fund these test wallets or give them valuable permissions.
 
-Credentials are encrypted in the dispatcher, delivered only to the assigned relay's active lease and removed from container/model input. The relay adds them to approved requests and redacts known credentials and session values from retained text. Assigned operators can still access plaintext. Each credential set serves one assessment and is deleted when work ends, permission is revoked or its 24-hour lifetime expires. Revoke the test account afterwards; deletion cannot recall data already received by an operator.
+Credentials are encrypted in the dispatcher and delivered only to the assigned, active lease. The browser necessarily handles the password/session; the relay holds the disposable wallet key. Known credentials, cookies, signatures and common token fields are redacted before model requests and retained reports, with size limits. This does not cover every possible encoding or a hostile operator: assigned operators can inspect plaintext. Credentials expire after 24 hours at most and are deleted when work ends or permission is revoked. Revoke the target account afterwards.
 
-The **Coverage & tools** tab and PDF include versioned check results: completed, potential issue, inconclusive, skipped or unsupported. Configuration-file probes use a random-path control; query reflection alone is not called XSS. Authenticated coverage requires both a successful account request and a denied anonymous control. Older reports keep their original evidence and do not gain invented checks.
+**Rollout:** update core, dispatcher and its gateway with migration `0029_browser_login.sql`, then the relay and pinned **adapter 13** image. The host must load the browser AppArmor profile described in the relay README. Three eligible agents must advertise `browser_login_v1` before new grey-box requests are available. No live benchmark is implied by fixture tests. Existing saved form/JSON and SIWE HTTP scopes retain their formats, hashes and adapter requirements; they do not silently switch to a browser.
+
+For a local Patchriot comparison, use a dedicated non-admin password account or enable wallet sign-in and allow a new member wallet. `/api/account` supplies a genuine anonymous 401 control. A password account with history and a fresh wallet need not have identical access or findings. The user runs the live comparison separately.
+
+Before admission, requesters can replace credentials through `POST /api/pentests/:id/credentials`; ownership, scope, session and CSRF checks apply. Replacement cannot alter a reserved request or revive cancelled work. Existing API clients can keep submitting their legacy Basic/bearer, form/JSON or SIWE scopes. Coverage & tools distinguishes completed checks, observations, inconclusive work and unsupported checks; older reports never gain invented evidence.
 
 **Upgrade order for v0.0.5:** deploy dispatcher and its gateway with migrations 21–24, then core, then adapter 11 relays. Core can read older agents and keeps baseline request fields compatible with the older dispatcher. Older core versions cannot decode the new capability names; do not advertise them until core has updated. Keep advanced options unavailable until the server and all three selected agents support them.
 
@@ -541,9 +563,11 @@ The relay also checks buffered NEAR responses for the repetition pattern that st
 <details>
 <summary>Wallet sign-in and checkout</summary>
 
-Set `WC_REOWNED_PRJ_ID` to your Reown project ID and allow your exact website origin in that project. This enables Ethereum and Solana personal-wallet sign-in and WalletConnect/browser-wallet payments. Wallet code and its network connections load only after the user opens the wallet window. Contract-wallet sign-in is not supported in this release.
+Set `WC_REOWNED_PRJ_ID` to your Reown project ID and allow your exact website origin in that project. This enables Ethereum and Solana personal-wallet sign-in and WalletConnect/browser-wallet payments. The in-page chooser loads wallet code only after the user opens it. WalletConnect uses the configured Reown project; installed wallets are discovered through the browser. Sign-in closes only after the session can be read, and a failed session read retries without another signature. Contract-wallet sign-in is not supported in this release.
 
 Sign-in verifies a five-minute, single-use message bound to this website and browser. It creates a member account; it does not grant operator access or authorize payment. Google, GitHub and wallet identities stay separate. Connect a wallet during checkout to pay an existing account's order, or send the displayed amount manually without connecting. The server confirms payment through the existing NEAR Intents reconciliation before work starts; a browser transaction hash cannot credit an order.
+
+The app-shell CSP allows a fixed set of Reown transports when wallet support is configured; external scripts remain blocked. Inline style attributes are allowed for the accessible dialogs. Third-party analytics remain in their separate sandboxed origin. The legacy `/wallet` URL returns users to Account.
 
 The wallet sends only the saved quote's exact USDC/USDT transfer on Ethereum or Solana mainnet, plus network gas. It requests no token allowance. Expired, changed or unsupported quotes stop before signing. An uncertain send result stays marked locally to prevent an accidental second payment; check the order and wallet before retrying. This local guard is not shared across browsers or devices.
 

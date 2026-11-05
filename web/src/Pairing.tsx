@@ -19,8 +19,8 @@ function Command({ children }: { children: string }) {
   return <div className="pair-command"><pre>{children}</pre><div><button className="quiet" onClick={() => void copy()}>Copy command</button>{notice && <span role="status">{notice}</span>}</div></div>;
 }
 
-export function PairingClosed() {
-  return <section className="panel"><p className="eyebrow">MANAGED SERVICE</p><h1 className="page-title">Agent pairing is staff-only.</h1><p>We operate the testing agents. Use your account to request a web application assessment; public machines cannot join this service.</p><p>For a separate business installation, <a href="#/contact">discuss dedicated infrastructure →</a>.</p></section>;
+export function PairingClosed({ earnings = false }: { earnings?: boolean }) {
+  return <section className="panel contributor-preview"><p className="eyebrow">CONTRIBUTORS · COMING SOON</p><h1 className="page-title">{earnings ? 'Earnings are coming soon.' : 'Bring your agents. Soon.'}</h1><p>{earnings ? 'Earnings will become available when users can provide inference. There are no contributor earnings to display yet.' : 'Users can’t yet provide inference. We run the testing agents while we prepare contributor access.'}</p><p>You can already request a security assessment and follow its progress in Audits.</p></section>;
 }
 
 export function Guide({ onPair }: { onPair: () => void }) {

@@ -1,8 +1,10 @@
 import { useLive } from './useLive';
 import { TreasuryDesk } from './Earnings';
+import type { CreditPurchase } from './AccountPage';
+import { dollars } from './AccountPage';
 
 type PaymentRecord = {
-  invoice_id: string; account_id: string; account_name: string; account_disabled: boolean;
+  invoice_id: string; credit_topup_id?: string | null; account_id: string; account_name: string; account_disabled: boolean;
   asset: string; required_amount: string; received_amount: string | null;
   origin_asset: string | null; deposit_address: string; deposit_memo: string | null;
   recipient: string; recipient_type: string | null; payment_confirmed: boolean;
@@ -18,19 +20,24 @@ const label = (value: string | null) => value ? value.replaceAll('_', ' ') : 'No
 const time = (value: string | null) => value ? new Date(value).toLocaleString() : 'Not recorded';
 
 export function PaymentDesk() {
+  const creditPurchases = useLive<(CreditPurchase & {account_name:string})[]>('/admin/credit-purchases');
   const records = useLive<PaymentRecord[]>('/admin/payments');
   // A revoked admin session must lose this data even if its next status read is
   // forbidden rather than expired. Hide the old rows on every failed refresh.
   const rows = records.error ? undefined : records.data;
   return <>
-    <section className="section-heading fleet-heading"><div><p className="eyebrow">ADMIN / SAVED PAYMENT FACTS</p><h1 className="page-title">Payment desk</h1><p className="subtle">Inspect confirmation, accounting and work delivery separately.</p></div><button className="quiet" onClick={records.refresh}>Refresh payments ↻</button></section>
+    <section className="section-heading fleet-heading"><div><p className="eyebrow">ADMIN / SAVED PAYMENT FACTS</p><h1 className="page-title">Payment desk</h1><p className="subtle">Inspect confirmation, accounting and work delivery separately.</p></div><button className="quiet" onClick={()=>{records.refresh();creditPurchases.refresh();}}>Refresh payments ↻</button></section>
     <TreasuryDesk />
+    <section className="panel" aria-label="Credit purchases"><h2>Tests paid with account credit</h2><p className="fine">Up to 100 recent purchases, with unresolved payments first. This view cannot refund or restart work.</p>
+      {creditPurchases.error ? <p role="alert" className="notice error">{creditPurchases.error}</p> : creditPurchases.data?.map(p => <div className="account-entry" key={p.id}><div><strong>{p.account_name} · {dollars(p.amount_cents)}</strong><small>{time(p.created_at)} · {label(p.state)}{p.last_error ? ` · ${label(p.last_error)}` : ''}</small></div>{p.review_id && <a href={`/#/reviews/${p.review_id}`}>Open test</a>}</div>)}
+      {!creditPurchases.error && creditPurchases.data?.length === 0 && <p>No credit purchases yet.</p>}
+    </section>
     <p className="notice">Read-only. A received payment does not prove work finished. Cancelling work does not return funds. Check the saved payment, review and any previous refund before making a money decision.</p>
     {records.error && <div className="notice error" role="alert">{records.error} Payment records are hidden until access and storage can be checked.</div>}
     <section className="panel payment-desk" aria-label="Admin payment records">
       <div className="table-toolbar"><strong>{rows ? `${rows.length} recent invoice${rows.length === 1 ? '' : 's'}` : records.error ? 'Records unavailable' : 'Loading payments…'}</strong><span className="fine">Newest 50 · amounts in token smallest units</span></div>
       {rows?.length === 0 && <div className="empty"><h2>No payment records yet.</h2><p>Prepared quotes appear here. A quote alone does not create a ledger credit.</p></div>}
-      {rows?.map(row => <details key={row.invoice_id} className="payment-record"><summary><span><strong>{row.account_name}{row.account_disabled ? ' · account disabled' : ''}</strong><small>{time(row.created_at)} · order {row.order_id?.slice(0, 8) ?? 'not linked'}</small></span><span className={`badge ${row.requires_attention ? 'revoked' : row.payment_confirmed ? 'approved' : 'pending'}`}>{row.payment_confirmed ? `Paid${row.requires_attention ? ' · needs attention' : ''}` : row.requires_attention ? 'Needs attention' : label(row.payment_state)}</span></summary>
+      {rows?.map(row => <details key={row.invoice_id} className="payment-record"><summary><span><strong>{row.account_name}{row.account_disabled ? ' · account disabled' : ''}</strong><small>{time(row.created_at)} · {row.credit_topup_id ? `credit top-up ${row.credit_topup_id.slice(0,8)}` : `order ${row.order_id?.slice(0, 8) ?? 'not linked'}`}</small></span><span className={`badge ${row.requires_attention ? 'revoked' : row.payment_confirmed ? 'approved' : 'pending'}`}>{row.payment_confirmed ? `Paid${row.requires_attention ? ' · needs attention' : ''}` : row.requires_attention ? 'Needs attention' : label(row.payment_state)}</span></summary>
         <div className="payment-record-body">
           {row.requires_attention && <p className="notice error">Inspect the records below. This flag does not authorize a refund or another work attempt.</p>}
           <dl><dt>Asset</dt><dd><code>{row.asset}</code></dd><dt>Quoted amount · smallest units</dt><dd><code>{row.required_amount}</code></dd><dt>Provider-reported received amount</dt><dd><code>{row.received_amount ?? 'Not recorded'}</code></dd><dt>Ledger credit · smallest units</dt><dd><code>{row.ledger_amount ?? 'Not recorded'}</code> · {label(row.ledger_credit)}</dd><dt>Payment status</dt><dd>{label(row.payment_state)}</dd><dt>Order</dt><dd>{label(row.order_state)}</dd><dt>Review activation</dt><dd>{label(row.funding_state)}</dd><dt>Cancellation requested</dt><dd>{time(row.cancel_requested_at)}</dd><dt>Cancellation confirmed</dt><dd>{time(row.cancel_confirmed_at)}{row.cancel_review_state ? ` · review ${label(row.cancel_review_state)}` : ''}</dd></dl>

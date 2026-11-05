@@ -1,5 +1,9 @@
-import { useEffect, useState } from "react";
-import { createRoot } from "react-dom/client";
+import { useEffect, useRef, useState } from "react";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from './components/ui/dialog';
+import { Button } from './components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
+import { Wallet as WalletIcon, ShieldCheck, ArrowRight, LoaderCircle } from 'lucide-react';
+import type { WalletRequest } from './wallet';
 import UniversalProvider from "@walletconnect/universal-provider";
 import { Connection, type Transaction } from "@solana/web3.js";
 import { Buffer } from "buffer";
@@ -45,6 +49,15 @@ const chains = {
   solana: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Announcements are untrusted. Data images avoid third-party requests. SVG is
+// rendered only through img, never as inline markup or an HTML object.
+function providerIcon(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length <= 65536 && /^data:image\/(?:png|webp|jpeg|svg\+xml)[;,]/i.test(value) ? value : undefined;
+}
+function WalletProviderIcon({ icon }: { icon?: string }) {
+  const [failed, setFailed] = useState(false);
+  return icon && !failed ? <img className="wallet-provider-logo" src={icon} alt="" width={32} height={32} onError={() => setFailed(true)} /> : <WalletIcon className="wallet-provider-logo" size={32}/>;
+}
 function safeError(e: unknown) {
   const code = (e as { code?: unknown })?.code;
   return code === 4001 || code === "ACTION_REJECTED"
@@ -53,15 +66,25 @@ function safeError(e: unknown) {
       ? e.message
       : "The wallet could not finish. Check its connection and network, then try again.";
 }
-function WalletPage({ settings }: { settings: Settings }) {
-  const params = new URLSearchParams(location.hash.slice(1)),
-    intent = params.get("intent"),
-    order = params.get("order"),
-    request = params.get("request");
-  const valid =
-    !!window.opener &&
-    uuid.test(request ?? "") &&
-    (intent === "signin" || (intent === "payment" && uuid.test(order ?? "")));
+export default function WalletDialog({ settings, request, finish }: { settings: Settings; request: WalletRequest; finish: (error?: Error) => void }) {
+  const {intent, orderId: order, paymentKind} = request;
+  const valid = intent === 'signin' || uuid.test(order ?? '');
+  const quotePath = paymentKind === 'topup' ? `/credits/topups/${order}/quote` : `/orders/${order}/quote`;
+  const alive = useRef(true);
+  const [injected, setInjected] = useState<{id:string;name:string;icon?:string;provider:Evm}[]>([]);
+  const [accepted,setAccepted] = useState(false);
+  const providerRef=useRef<Awaited<ReturnType<typeof UniversalProvider.init>> | null>(null);
+  useEffect(() => {
+    alive.current=true;
+    const announce = (event: Event) => {
+      const detail=(event as CustomEvent).detail;
+      if (!detail?.info || typeof detail.info.uuid!=='string' || typeof detail.info.name!=='string' || typeof detail.provider?.request!=='function') return;
+      setInjected(list=>list.some(p=>p.id===detail.info.uuid) || list.length>=12 ? list : [...list,{id:detail.info.uuid,name:detail.info.name.slice(0,40),icon:providerIcon(detail.info.icon),provider:detail.provider}]);
+    };
+    window.addEventListener('eip6963:announceProvider',announce);
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+    return () => {alive.current=false;window.removeEventListener('eip6963:announceProvider',announce);providerRef.current?.abortPairingAttempt();};
+  },[]);
   const [network, setNetwork] = useState<Network>("ethereum"),
     [wallet, setWallet] = useState<Wallet | null>(null),
     [busy, setBusy] = useState(false),
@@ -85,8 +108,9 @@ function WalletPage({ settings }: { settings: Settings }) {
       const session = await api<Session>("/session");
       if (!session.csrf_token)
         throw new Error("This payment needs your signed-in account.");
+      if (!active) return;
       const saved = checkedDeposit(
-        await write<Deposit>(`/orders/${order}/quote`, session.csrf_token, {}),
+        await write<Deposit>(quotePath, session.csrf_token, {}),
       );
       if (saved.order_id !== order)
         throw new Error("This quote does not match the order.");
@@ -118,13 +142,8 @@ function WalletPage({ settings }: { settings: Settings }) {
       active = false;
     };
   }, [uri]);
-  function done() {
-    window.opener?.postMessage(
-      { kind: "patchriot-wallet-finished", intent, request },
-      settings.origin,
-    );
-  }
-  async function connectBrowser() {
+  function done() { finish(); }
+  async function connectBrowser(selected?: Evm) {
     setBusy(true);
     setError("");
     setWallet(null);
@@ -135,7 +154,7 @@ function WalletPage({ settings }: { settings: Settings }) {
         phantom?: { solana?: Sol };
       };
       if (network === "ethereum") {
-        const provider = w.ethereum;
+        const provider = selected ?? w.ethereum;
         if (!provider)
           throw new Error(
             "This browser has no Ethereum wallet. Use WalletConnect instead.",
@@ -161,7 +180,7 @@ function WalletPage({ settings }: { settings: Settings }) {
           )
             throw new Error("This wallet changed. Connect it again.");
         };
-        setWallet({
+        if (alive.current) setWallet({
           address,
           network,
           sign: async (m) => {
@@ -191,7 +210,7 @@ function WalletPage({ settings }: { settings: Settings }) {
           if (provider.publicKey.toString() !== address)
             throw new Error("This wallet changed. Connect it again.");
         };
-        setWallet({
+        if (alive.current) setWallet({
           address,
           network,
           sign: async (m) => {
@@ -235,7 +254,9 @@ function WalletPage({ settings }: { settings: Settings }) {
         telemetryEnabled: false,
         logger: "error",
       });
-      provider.on("display_uri", (value: string) => setUri(value));
+      if (!alive.current) return;
+      providerRef.current=provider;
+      provider.on("display_uri", (value: string) => {if(alive.current)setUri(value);});
       const chain = chains[network],
         ns = network === "ethereum" ? "eip155" : "solana";
       const methods =
@@ -272,7 +293,7 @@ function WalletPage({ settings }: { settings: Settings }) {
         )
           throw new Error("This wallet changed. Connect it again.");
       };
-      setWallet({
+      if (alive.current) setWallet({
         address,
         network,
         sign: async (message) => {
@@ -351,6 +372,7 @@ function WalletPage({ settings }: { settings: Settings }) {
     let submitted = false;
     try {
       if (intent === "signin") {
+        if (!accepted) {
         const challenge = await api<{
           nonce: string;
           message: string;
@@ -370,11 +392,17 @@ function WalletPage({ settings }: { settings: Settings }) {
         )
           throw new Error("This sign-in message belongs to another site.");
         const signature = await wallet.sign(challenge.message);
+        if(!alive.current) return;
         await api("/auth/wallet/verify", {
           method: "POST",
           body: JSON.stringify({ nonce: challenge.nonce, signature }),
         });
-        setFinished("Signed in. Return to your workspace.");
+        setAccepted(true);
+        }
+        // A verified signature is not enough to close the dialog: the browser
+        // must be able to read the actual session cookie. Retry that read only.
+        const session=await api<Session>('/session');
+        if(!session.account || !session.csrf_token) throw new Error('This sign-in could not open a session. Retry opening your account.');
         done();
       } else {
         if (!navigator.locks)
@@ -396,14 +424,14 @@ function WalletPage({ settings }: { settings: Settings }) {
               throw new Error("This payment needs your signed-in account.");
             const latest = checkedDeposit(
               await write<Deposit>(
-                `/orders/${order}/quote`,
+                quotePath,
                 session.csrf_token,
                 {},
               ),
             );
             if (JSON.stringify(latest) !== JSON.stringify(quote))
               throw new Error(
-                "This quote changed. Close this window and inspect the current order.",
+                "This quote changed. Close the wallet panel and inspect the current payment.",
               );
             localStorage.setItem(
               key,
@@ -444,171 +472,30 @@ function WalletPage({ settings }: { settings: Settings }) {
       setBusy(false);
     }
   }
-  return (
-    <main className="wallet-page">
-      <a href="/#/home" className="wallet-brand" target="_blank" rel="noopener">
-        <img src="/brand/white-hat.png" width="68" height="68" alt="" />
-        patchriot_
-      </a>
-      {!valid ? (
-        <p role="alert">
-          Open this window from Patchriot sign-in or your order.
-        </p>
-      ) : (
-        <>
-          <p className="eyebrow">
-            {intent === "signin" ? "ACCOUNT ACCESS" : "NEAR INTENTS / PAYMENT"}
-          </p>
-          <h1>
-            {intent === "signin"
-              ? "Sign in with your wallet."
-              : "Pay for your assessment."}
-          </h1>
-          {finished ? (
-            <>
-              <p role="status">{finished}</p>
-              <button className="primary full" onClick={done}>
-                Return to Patchriot
-              </button>
-            </>
-          ) : (
-            <>
-              {intent === "signin" ? (
-                <p>
-                  Sign one message to open your account. No transaction or token
-                  approval.
-                </p>
-              ) : quote ? (
-                <div className="wallet-quote">
-                  <strong>
-                    {tokenAmount(quote.input.amount, quote.input.token)}
-                  </strong>
-                  <p>
-                    {chainName(quote.input.token.blockchain)} mainnet · gas is
-                    extra
-                  </p>
-                  <code>{quote.deposit_address}</code>
-                  <small>
-                    Deposit address · quote ends{" "}
-                    {new Date(quote.expires_at).toLocaleTimeString()}
-                  </small>
-                </div>
-              ) : (
-                <p>Loading your saved payment instructions…</p>
-              )}
-              {intent === "signin" && (
-                <label>
-                  Wallet network
-                  <select
-                    value={network}
-                    disabled={busy}
-                    onChange={(e) => {
-                      setNetwork(e.target.value as Network);
-                      setWallet(null);
-                      setUri("");
-                    }}
-                  >
-                    <option value="ethereum">Ethereum · personal wallet</option>
-                    <option value="solana">Solana · personal wallet</option>
-                  </select>
-                </label>
-              )}
-              {!wallet ? (
-                <div className="wallet-connect-options">
-                  <button
-                    className="quiet full"
-                    disabled={busy || (intent === "payment" && !quote)}
-                    onClick={() => void connectBrowser()}
-                  >
-                    Connect browser wallet
-                  </button>
-                  <button
-                    className="quiet full"
-                    disabled={busy || (intent === "payment" && !quote)}
-                    onClick={() => void connectQr()}
-                  >
-                    WalletConnect · scan a QR
-                  </button>
-                  {qr && (
-                    <div className="wallet-qr">
-                      <img
-                        src={qr}
-                        width="280"
-                        height="280"
-                        alt="Scan with your wallet to connect"
-                      />
-                      <p>
-                        Open WalletConnect in your wallet and scan this code.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <p className="fine">Connected wallet</p>
-                  <code className="wallet-address">{wallet.address}</code>
-                  <button
-                    className="primary full"
-                    disabled={
-                      busy ||
-                      (intent === "payment" &&
-                        (!quote ||
-                          Date.parse(quote.expires_at) <= now + 15_000))
-                    }
-                    onClick={() => void confirm()}
-                  >
-                    {busy
-                      ? "Check your wallet…"
-                      : intent === "signin"
-                        ? "Sign in"
-                        : "Confirm payment in wallet"}
-                  </button>
-                  <button
-                    className="text-button"
-                    disabled={busy}
-                    onClick={() => setWallet(null)}
-                  >
-                    Choose another wallet
-                  </button>
-                </>
-              )}
-              {error && (
-                <p className="notice error" role="alert">
-                  {error}
-                </p>
-              )}
-              <p className="fine">
-                {intent === "payment"
-                  ? "This pays your current order. It does not change your sign-in account. You can close this window and use the manual transfer instructions instead."
-                  : "Wallet sign-in creates a separate account from Google or GitHub. Use your original sign-in method to keep its existing reviews."}
-              </p>
-            </>
-          )}
-        </>
-      )}
-    </main>
-  );
+  return <Dialog open onOpenChange={open=>{if(!open)finish(new Error(intent==='signin'?'Wallet sign-in cancelled.':'Wallet closed. Check your payment status before sending again.'));}}>
+    <DialogContent className="wallet-dialog" aria-describedby="wallet-description">
+      <div className="wallet-dialog-icon"><WalletIcon size={23}/></div>
+      <DialogTitle>{intent==='signin'?'Connect your wallet':paymentKind==='topup'?'Add credit':'Pay for your assessment'}</DialogTitle>
+      <DialogDescription id="wallet-description">{intent==='signin'?'Connect, then sign one message to open your account.':'Confirm the saved transfer in your wallet. Network gas is extra.'}</DialogDescription>
+      {finished ? <div className="wallet-success"><ShieldCheck/><p role="status">{finished}</p><Button className="full" onClick={done}>Back to Patchriot</Button></div> : <>
+        {intent==='signin' && !wallet && <Tabs value={network} onValueChange={v=>{setNetwork(v as Network);setUri('');}}><TabsList className="full"><TabsTrigger value="ethereum" disabled={busy}>Ethereum</TabsTrigger><TabsTrigger value="solana" disabled={busy}>Solana</TabsTrigger></TabsList></Tabs>}
+        {intent==='payment' && (quote ? <div className="wallet-payment-summary"><strong>{tokenAmount(quote.input.amount,quote.input.token)}</strong><span>{chainName(quote.input.token.blockchain)} mainnet</span><code>{quote.deposit_address}</code></div> : <p role="status">Loading payment details…</p>)}
+        {!wallet ? <div className="wallet-options">
+          {network==='ethereum' && injected.length>0 ? injected.map(p=><Button key={p.id} variant="outline" disabled={busy} onClick={()=>void connectBrowser(p.provider)}><WalletProviderIcon icon={p.icon}/><span>{p.name}</span><ArrowRight size={16}/></Button>) : <Button variant="outline" disabled={busy || (intent==='payment'&&!quote)} onClick={()=>void connectBrowser()}><WalletProviderIcon icon={network==='solana'?'/brand/phantom.svg':undefined}/><span>{network==='solana'?'Phantom / Solana wallet':'Browser wallet'}</span><ArrowRight size={16}/></Button>}
+          <Button variant="outline" disabled={busy || (intent==='payment'&&!quote)} onClick={()=>void connectQr()}><svg className="wallet-provider-logo walletconnect-logo" viewBox="0 0 32 22" aria-hidden="true"><path d="M6 6c5.5-5.4 14.5-5.4 20 0l1 1-4 4-1-1a8.5 8.5 0 0 0-12 0l-1 1-4-4 1-1ZM0 10l4-4 8 8 4-4 4 4 8-8 4 4-12 12-4-4-4 4L0 10Z" fill="currentColor"/></svg><span>WalletConnect</span><span className="wallet-option-hint">Scan QR</span></Button>
+          {qr && <div className="wallet-qr"><img src={qr} width="280" height="280" alt="Scan with your wallet to connect"/><p>Scan in your wallet’s WalletConnect screen.</p></div>}
+          {busy && <p className="wallet-wait" role="status"><LoaderCircle className="spin" size={16}/>Waiting for your wallet…</p>}
+        </div> : <div className="wallet-confirm"><p className="fine">Connected</p><code className="wallet-address">{wallet.address}</code><Button className="full" disabled={busy||(intent==='payment'&&(!quote||Date.parse(quote.expires_at)<=now+15000))} onClick={()=>void confirm()}>{busy?'Check your wallet…':intent==='signin'?accepted?'Open my account':'Sign in':'Confirm payment'}</Button><Button variant="ghost" disabled={busy||accepted} onClick={()=>setWallet(null)}>Choose another wallet</Button></div>}
+        {error && <p className="notice error" role="alert">{error}</p>}
+        {intent==='signin' && wallet && <div className="wallet-welcome"><strong>Welcome to Patchriot!</strong><p>By signing this message, you are securely logging into your account.</p><ul><li>This action will NOT cost any gas fees.</li><li>This does not authorize any transactions or payments.</li></ul><p>Click sign to verify your wallet and enter!</p></div>}
+        <p className="wallet-footnote">{intent==='signin'?'No transaction or token approval. Wallet, Google and password logins are separate accounts.':'Only this payment is requested. Your sign-in account stays the same.'}</p>
+      </>}
+    </DialogContent>
+  </Dialog>;
 }
-export async function mountWallet() {
-  const root = createRoot(document.getElementById("root")!);
-  try {
-    const settings = await api<Settings>("/wallet/config");
-    if (
-      !settings.enabled ||
-      !settings.project_id ||
-      settings.origin !== location.origin
-    )
-      throw new Error("Wallet access is not configured on this address.");
-    root.render(<WalletPage settings={settings} />);
-  } catch {
-    root.render(
-      <main className="wallet-page">
-        <h1>Wallet unavailable.</h1>
-        <p>
-          Close this window and use Google, GitHub or the manual payment
-          instructions.
-        </p>
-      </main>,
-    );
-  }
+
+export async function walletSettings(): Promise<Settings> {
+  const settings=await api<Settings>('/wallet/config');
+  if(!settings.enabled || !settings.project_id || settings.origin!==location.origin) throw new Error('Wallet access is not configured on this address.');
+  return settings;
 }

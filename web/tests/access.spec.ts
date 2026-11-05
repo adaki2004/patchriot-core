@@ -71,7 +71,7 @@ test('SSO replaces public registration while pilot sign-in stays available', asy
   await setup(page);
   await page.route('**/api/auth/providers', route => route.fulfill({ json: { github: true, google: true } }));
   await page.goto('/');
-  await page.locator('.access-invitation').getByRole('button', { name: 'Get started' }).click();
+  await page.locator('header').getByRole('button', { name: 'App', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Sign in', exact: true });
   await expect(dialog.getByRole('button', { name: 'Continue with GitHub' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Continue with Google' })).toBeVisible();

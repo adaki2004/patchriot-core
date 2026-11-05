@@ -18,6 +18,111 @@ fn password() -> String {
     format!("test-{}", Uuid::new_v4())
 }
 
+#[tokio::test]
+async fn real_login_form_and_protected_account_work_without_javascript() {
+    let _serial = PASSWORD_TESTS.lock().await;
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (owner, owner_session) = test.login("admin").await;
+    let grant = test.request("POST", "/api/admin/accounts", json!({
+        "display_name":"HTTP login fixture", "email":"login@example.com", "with_coupon":false
+    }), &write_headers(&owner, &owner_session)).await;
+    assert_eq!(grant.0, StatusCode::OK);
+    let secret = password();
+    let activation = test
+        .request(
+            "POST",
+            "/api/auth/activate",
+            json!({
+                "code":grant.2["invitation"], "username":"http_fixture", "password":secret
+            }),
+            &[("origin", ORIGIN)],
+        )
+        .await;
+    assert_eq!(activation.0, StatusCode::OK);
+    let page = test.request("GET", "/login", Value::Null, &[]).await;
+    assert_eq!(page.0, StatusCode::OK);
+    let html = page.2["text"].as_str().unwrap();
+    assert_eq!(html.matches("<form ").count(), 1);
+    assert!(html.contains("method=\"post\" action=\"/login\""));
+    assert!(html.contains("name=\"username\"") && html.contains("name=\"password\""));
+    assert!(!html.contains("<script"));
+    assert_eq!(
+        test.request("GET", "/account", Value::Null, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        test.request("GET", "/api/account", Value::Null, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    // The public session probe stays compatible: it returns 200 with no account.
+    assert_eq!(
+        test.request("GET", "/api/session", Value::Null, &[])
+            .await
+            .2["account"],
+        Value::Null
+    );
+    let encoded = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("username", "http_fixture")
+        .append_pair("password", &secret)
+        .finish();
+    for (origin, expected) in [
+        ("https://foreign.example", StatusCode::FORBIDDEN),
+        (ORIGIN, StatusCode::SEE_OTHER),
+    ] {
+        let reply = test
+            .app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/login")
+                    .header("origin", origin)
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(Body::from(encoded.clone()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(reply.status(), expected);
+        if expected == StatusCode::SEE_OTHER {
+            assert_eq!(reply.headers()["location"], "/account");
+            let cookie = reply.headers()["set-cookie"]
+                .to_str()
+                .unwrap()
+                .split(';')
+                .next()
+                .unwrap();
+            let account = test
+                .request("GET", "/api/account", Value::Null, &[("cookie", cookie)])
+                .await;
+            assert_eq!(account.0, StatusCode::OK);
+            assert_eq!(account.2["account"]["role"], "member");
+            assert_eq!(account.2["account"]["id"], grant.2["account_id"]);
+            assert!(!account.2.to_string().contains(&secret));
+            let entry = test
+                .request("GET", "/account", Value::Null, &[("cookie", cookie)])
+                .await;
+            assert_eq!(entry.0, StatusCode::SEE_OTHER);
+            assert_eq!(entry.1["location"], "/#/account");
+            disable_account(
+                &test.pool,
+                Uuid::parse_str(grant.2["account_id"].as_str().unwrap()).unwrap(),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                test.request("GET", "/api/account", Value::Null, &[("cookie", cookie)])
+                    .await
+                    .0,
+                StatusCode::UNAUTHORIZED
+            );
+        }
+    }
+    test.finish().await;
+}
+
 async fn session(test: &TestApp, headers: HeaderMap) -> (String, Value) {
     let set = headers["set-cookie"].to_str().unwrap();
     for attr in [

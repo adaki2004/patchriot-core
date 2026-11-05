@@ -10,6 +10,7 @@ pub struct Tick {
     reconciliation: Option<PollSummary>,
     funding: Option<funding::DeliverySummary>,
     earnings: Option<earnings::AllocationSummary>,
+    credits: Option<credits::CreditSummary>,
     errors: Vec<&'static str>,
 }
 
@@ -20,6 +21,7 @@ impl Tick {
             || self.reconciliation.as_ref().is_some_and(|s| s.checked > 0)
             || self.funding.as_ref().is_some_and(|s| s.checked > 0)
             || self.earnings.as_ref().is_some_and(|s| s.checked > 0)
+            || self.credits.as_ref().is_some_and(|s| s.checked > 0)
     }
 }
 
@@ -42,6 +44,10 @@ pub async fn tick(state: &AppState, provider: &OneClick) -> Tick {
     match earnings::allocate_once(state).await {
         Ok(summary) => result.earnings = Some(summary),
         Err(_) => result.errors.push("earnings_unavailable"),
+    }
+    match credits::process_once(state).await {
+        Ok(summary) => result.credits = Some(summary),
+        Err(_) => result.errors.push("credits_unavailable"),
     }
     result
 }

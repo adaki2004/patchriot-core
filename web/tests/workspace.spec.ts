@@ -70,22 +70,20 @@ test('dashboard keeps decisions and active work ahead of finished reports', asyn
   await expect(page).toHaveURL(/#\/reviews\/needs-review$/);
 });
 
-test('unavailable personal data is not reported as zero earnings or an empty audit history', async ({ page }) => {
+test('unavailable audit data is not reported as empty history and contributor totals stay hidden', async ({ page }) => {
   await setup(page);
-  let failed = true;
+  let failed = true, earningsReads = 0;
   await page.route('**/api/reviews?scope=mine', route => route.fulfill(failed ? { status: 503, json: { error: 'dispatcher_unavailable' } } : { json: [] }));
-  await page.route('**/api/withdrawals', route => route.fulfill(failed ? { status: 503, json: { error: 'database_unavailable' } } : { json: { balance: { available: '12500000', earned: '12500000', reserved: '0', paid: '0' } } }));
+  await page.route('**/api/withdrawals', route => { earningsReads++; return route.fulfill({ status: 503, json: { error: 'database_unavailable' } }); });
   await page.goto('/#/overview');
-  await expect(page.getByRole('alert').filter({ hasText: 'Earnings could not refresh' })).toBeVisible();
   await expect(page.getByRole('alert').filter({ hasText: 'Audits could not fully refresh' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Your available earnings' })).toContainText('—');
+  await expect(page.getByRole('button', { name: 'Your available earnings' })).toHaveCount(0);
   await expect(page.getByText('A fresh pair of eyes.', { exact: true })).toHaveCount(0);
   failed = false;
-  await page.getByRole('button', { name: 'Retry earnings', exact: true }).click();
   await page.getByRole('button', { name: 'Retry audits', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Your available earnings' })).toContainText('12.5');
   await expect(page.getByText('A fresh pair of eyes.', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
+  expect(earningsReads).toBe(0);
 });
 
 test('queued work stays visible and can be found in the activity filter', async ({ page }) => {

@@ -246,7 +246,12 @@ async fn saved_signature_survives_timeout_retries_and_finality_before_paying_onc
         chain::run_once(&state, &network.key_path),
         chain::run_once(&state, &network.key_path)
     );
-    assert!(a.is_ok() && b.is_ok());
+    assert!(
+        a.is_ok() && b.is_ok(),
+        "concurrent payout errors: {:?}, {:?}",
+        a.as_ref().err(),
+        b.as_ref().err()
+    );
     let n: i64 = sqlx::query_scalar("SELECT count(*) FROM payout_transactions")
         .fetch_one(&db.pool)
         .await
@@ -285,7 +290,12 @@ async fn saved_signature_survives_timeout_retries_and_finality_before_paying_onc
         chain::run_once(&state, &network.key_path),
         chain::run_once(&state, &network.key_path)
     );
-    assert!(a.is_ok() && b.is_ok());
+    assert!(
+        a.is_ok() && b.is_ok(),
+        "concurrent payout errors: {:?}, {:?}",
+        a.as_ref().err(),
+        b.as_ref().err()
+    );
     let paid: bool = sqlx::query_scalar("SELECT state='paid' FROM operator_claims WHERE id=$1")
         .bind(claim.id)
         .fetch_one(&db.pool)

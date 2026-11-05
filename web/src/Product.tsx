@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import type { FormEvent } from 'react';
 import type { Fleet } from './api';
 import { IncidentLog } from './Incidents';
 import { CoordinationMap } from './SwarmSignal';
@@ -27,7 +27,7 @@ function AssessmentModes({ onSelect }: { onSelect?: (mode: AssessmentMode) => vo
   </div>;
 }
 
-export function Landing({ signedIn, access, onAccess, onApp, onRequest, onDocs, fleet, error, onRetry }: { signedIn: boolean; access: ReactNode; onAccess: (mode: 'signin' | 'request') => void; onApp: () => void; onRequest: (website?: string) => void; onDocs: () => void; fleet?: Fleet | null; error?: string; onRetry: () => void }) {
+export function Landing({ signedIn, onAccess, onApp, onRequest, onDocs, fleet, error, onRetry }: { signedIn: boolean; onAccess: (mode: 'signin' | 'request') => void; onApp: () => void; onRequest: (website?: string) => void; onDocs: () => void; fleet?: Fleet | null; error?: string; onRetry: () => void }) {
   const [website, setWebsite] = useState('');
   const [websiteError, setWebsiteError] = useState('');
   function startWebsite(event: FormEvent<HTMLFormElement>) {
@@ -57,7 +57,6 @@ export function Landing({ signedIn, access, onAccess, onApp, onRequest, onDocs, 
     </section>
     <section className="tm-section tm-product" aria-labelledby="product-title"><div className="tm-section-title"><div><p className="tm-kicker">02 / CHOOSE YOUR ACCESS</p><h2 id="product-title">YOUR WEB APP.<br /><em>UNDER REVIEW.</em></h2></div><p>Choose how much access to provide.<br />Every test returns a private report.</p></div><AssessmentModes /><p className="tm-footnote">Your systems only. Verify domain ownership before checkout. An automated first check, before a human penetration test; it cannot discover every vulnerability or certify a website as safe.</p><button className="primary" onClick={() => onRequest()}>REQUEST A WEB APP TEST <span aria-hidden="true">↗</span></button></section>
     <section className="tm-section tm-workspace-preview" aria-labelledby="tm-workspace-title"><div className="tm-section-title"><div><p className="tm-kicker">03 / YOUR OPERATIONS DESK</p><h2 id="tm-workspace-title">YOUR CONSOLE,<br /><em>AT A GLANCE.</em></h2></div><button className="tm-link" onClick={() => signedIn ? onApp() : onAccess('signin')}>{signedIn ? 'OPEN WORKSPACE' : 'SIGN IN'} ↗</button></div><div className="workspace-preview-frame"><div className="preview-frame-bar"><span>PATCHRIOT / WORKSPACE</span><span>EXAMPLE WORKSPACE · FICTIONAL DATA</span></div><img src="/brand/workspace.png" alt="Example workspace with audit status, agent presence and payment records. All pictured records are fictional." loading="lazy" width="1320" height="900" /></div></section>
-    <section className="tm-section tm-join" id="landing-access"><div className="tm-join-copy"><p className="tm-kicker">04 / JOIN THE GOOD SIDE</p><h2>LESS TRUST.<br /><em>MORE PROOF.</em></h2><p>Private findings.<br />Evidence you can inspect.</p><p className="fine">We operate the testing agents. Public machines cannot join this service.</p><small>Read the public source.<br />Or ask your own agent to audit it.</small></div><div className="tm-access">{signedIn ? <div className="return-card"><p className="tm-kicker">SESSION OPEN</p><h3>Your workspace is ready.</h3><button className="primary" onClick={onApp}>OPEN WORKSPACE ↗</button></div> : access}</div></section>
     <div className="tm-notebook"><IncidentLog /></div>
     <div className="tm-end"><span>DON’T TRUST.<br /><em>VERIFY.</em></span><button className="tm-link" onClick={onDocs}>INSPECT THE FIELD MANUAL ↗</button><p>patchriot_ / cybersecurity is teamwork</p></div>
   </div>;

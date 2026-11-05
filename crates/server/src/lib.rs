@@ -9,6 +9,7 @@ mod contact;
 mod diagnostics;
 mod gateway;
 mod incidents;
+mod login_page;
 pub mod payments;
 mod pentests;
 pub mod review_codes;
@@ -257,7 +258,7 @@ pub async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
 
 pub fn router(state: AppState) -> Router {
     let frame_origin = state.config.analytics_origin.as_deref().unwrap_or("'none'");
-    let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src {frame_origin}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
+    let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src {frame_origin}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
         .expect("validated analytics origin");
     let mut routes = Router::new()
         .route(
@@ -267,6 +268,10 @@ pub fn router(state: AppState) -> Router {
             }),
         )
         .route("/api/session", get(auth::session))
+        .route("/api/account", get(auth::account))
+        .route("/account", get(login_page::account_entry))
+        .route("/login", get(login_page::page).post(login_page::submit))
+        .route("/login.css", get(login_page::styles))
         .route("/api/analytics", get(analytics::settings))
         .route("/api/analytics/frame/{page}", get(analytics::frame))
         .route("/api/contact", get(contact::details).post(contact::create))
@@ -288,8 +293,34 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/admin/treasury", get(payments::payouts::desk))
         .route("/api/admin/payments", get(payments::desk::list))
+        .route(
+            "/api/admin/credit-purchases",
+            get(payments::credits::admin_purchases),
+        )
         .route("/api/admin/review-stats", get(gateway::review_stats))
         .route("/api/checkout", get(payments::access::settings))
+        .route(
+            "/api/credits/purchases/{id}/cancel",
+            post(payments::credits::cancel_purchase),
+        )
+        .route("/api/credits", get(payments::credits::summary))
+        .route("/api/credits/topups", post(payments::credits::create_topup))
+        .route(
+            "/api/credits/topups/{id}/quote",
+            post(payments::credits::topup_quote),
+        )
+        .route(
+            "/api/credits/purchases/{id}",
+            get(payments::credits::purchase_detail),
+        )
+        .route(
+            "/api/pentests/{id}/credit-offer",
+            get(payments::credits::offer),
+        )
+        .route(
+            "/api/pentests/{id}/credits",
+            post(payments::credits::create_purchase),
+        )
         .route("/api/trial", get(trials::offer).post(trials::claim))
         .route(
             "/api/admin/trial",

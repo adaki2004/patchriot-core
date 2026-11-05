@@ -23,6 +23,7 @@ async function setup(page: Page, role: 'admin' | 'member' | null = 'admin') {
   await page.route('**/api/fleet', route => route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } }));
   await page.route('**/api/devices', route => route.fulfill({ json: [] }));
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
+  await page.route('**/api/admin/credit-purchases',route=>route.fulfill({json:[]}));
   await page.route('**/api/admin/treasury', route => route.fulfill({ json: { liabilities: '20000000', platform_revenue: '0', observation: null, claims: [], work: [] } }));
   await page.route('**/api/admin/payments', route => {
     expect(route.request().method()).toBe('GET'); state.calls++;

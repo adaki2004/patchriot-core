@@ -19,6 +19,7 @@ pub mod access;
 pub(crate) mod browser_checkout;
 pub mod cancellation;
 pub mod checkout;
+pub mod credits;
 pub(crate) mod desk;
 pub mod earnings;
 pub mod funding;
@@ -674,7 +675,7 @@ async fn apply_status(
             .bind(Uuid::new_v4()).bind(id).bind(invoice.account_id).bind(&invoice.asset).bind(amount)
             .bind(if state == "settled" { "customer_funds" } else { "customer_held_funds" })
             .execute(&mut *tx).await?;
-        if state == "settled" {
+        if state == "settled" && !credits::credit_settled(&mut tx, id).await? {
             sqlx::query("INSERT INTO payment_funding_events (invoice_id, account_id, request_id, asset, amount) VALUES ($1,$2,$3,$4,$5)")
                 .bind(id).bind(invoice.account_id).bind(invoice.request_id).bind(&invoice.asset).bind(amount)
                 .execute(&mut *tx).await?;
