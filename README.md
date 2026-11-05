@@ -2,7 +2,7 @@
 
 **Defense before going live.**
 
-Give us your website URL. Our hosted agents test it and return a private report: what they found, the evidence behind it and what to fix next. No local agent installation needed.
+Give us your website URL. Our hosted agents run an automated web application security assessment against the running app, often called dynamic application security testing (DAST). You get a private report: what they found, the evidence behind it and what to fix next. **You install nothing.** Add a dedicated test account for checks behind the login.
 
 **[Open Patchriot ↗](https://patchriot.tech)** · [How it works](https://patchriot.tech/#/docs/workflow) · [Testing FAQ](https://patchriot.tech/#/docs/safety)
 
@@ -22,8 +22,8 @@ flowchart LR
 
 | Choose | You provide | You get |
 | --- | --- | --- |
-| **Black box** | A deployed HTTPS URL + DNS ownership proof | Checks of public routes and exposed behavior |
-| **Grey box** | The same, plus a dedicated test account | Checks of account access with anonymous controls |
+| **Black box** | A public HTTPS URL you own; a temporary DNS record proves control | Checks of reachable pages, APIs, browser security settings and exposed configuration, with evidence and suggested fixes |
+| **Grey box** | The same, plus a dedicated test account or API token and a protected page to check | Public checks plus signed-in access checks, compared with anonymous requests; unsupported or inconclusive checks are clearly marked |
 | **White box** | Source + a deployment | Roadmap; not part of current onboarding |
 
 Scout maps the application. Recon checks leads with fresh requests. A reserved third agent reviews serious claims, disagreements or incomplete evidence. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
@@ -58,7 +58,7 @@ flowchart LR
 
 ## Start a test
 
-1. Sign in at **[patchriot.tech](https://patchriot.tech)** and enter your own web app’s HTTPS URL.
+1. Enter your web app’s URL at **[patchriot.tech](https://patchriot.tech)**, sign in and choose black-box or grey-box testing.
 2. Add the supplied DNS TXT record. For grey box, add a disposable test account.
 3. Confirm the named team and providers. Use a coupon or pay the displayed quote.
 4. Follow progress, inspect the findings and download the report. Cancel from the app if needed.
@@ -494,7 +494,11 @@ Do not put the treasury signing key in the web service. Payment reconciliation a
 
 ### Test accounts and recorded coverage
 
-In **New website test → Test accounts & form submissions**, choose email/username and password, HTTP Basic or a bearer token. Supply the protected GET path that returns 2xx for this account and 401/403 without it. For session login, also declare the exact POST endpoint, form or JSON format and field names. A form may use a hidden CSRF token from the declared login page. The server must set a session cookie: token-only JSON responses, JavaScript-only login, SSO, MFA and CAPTCHA are unsupported. The relay attempts login once per role and never follows redirects. This narrow login permission does not allow other POST tests. Availability requires three agents with the matching capability.
+Choose **Grey-box** and provide your login page and a protected page or API. The protected URL must return 2xx with the test account and 401/403 without it; a public page returning 200 to everyone does not prove login worked. The relay can detect one standard HTML form, its username/password fields, same-origin action and hidden values. Ambiguous forms stop without submitting credentials. **Custom login settings** supports explicit form fields or JSON session login. HTTP Basic and bearer API tokens are also supported.
+
+Add the dedicated password or token after domain verification. It is encrypted separately and never put in model prompts, browser storage or report bodies. Login is attempted once per role; redirects are not followed. Other POST tests need separate permission. JavaScript-only login, SSO, MFA, CAPTCHA, SSH access and token-only JSON login responses are unsupported. These require different integrations, not more permissive agent instructions.
+
+Automatic form detection uses `form_discovery_v1`. Deploy the updated core, dispatcher (migration `0026_login_form_discovery.sql`), then the relay; no agent image change is required. The feature is offered only with three eligible relays advertising it. Existing explicit `session_login_v1` requests and their signed scopes remain unchanged.
 
 Add the disposable account after domain verification, then choose the team and pay. Before an assessment is admitted, the requester may replace an expired or incorrect account through `POST /api/pentests/:id/credentials`; scope, requester, session and CSRF checks apply. Once checkout or testing has reserved the request, the account cannot be changed. Existing API clients may still supply Basic/bearer credentials at creation.
 

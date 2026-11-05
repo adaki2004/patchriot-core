@@ -44,8 +44,8 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
-  await expect(page.locator('.tm-footnote')).toContainText('An automated first check, before a human penetration test.');
-  await expect(page.locator('.tm-footnote')).toContainText('It cannot discover every vulnerability or certify a website as safe.');
+  await expect(page.locator('.tm-footnote')).toContainText('An automated first check, before a human penetration test');
+  await expect(page.locator('.tm-footnote')).toContainText('cannot discover every vulnerability or certify a website as safe.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');

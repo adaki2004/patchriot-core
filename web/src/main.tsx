@@ -27,6 +27,7 @@ import type { View } from './navigation';
 import { AccessPanel, AccessDialog, AccessDesk } from './Access';
 import { Guide, AgentList, PairingClosed } from './Pairing';
 import { Landing, RequestWork, websiteOrigin } from './Product';
+import type { AssessmentMode } from './Product';
 import { Docs } from './Docs';
 import { Sources } from './Sources';
 import { Earnings } from './Earnings';
@@ -120,6 +121,7 @@ function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [websiteDraft, setWebsiteDraft] = useState(readWebsiteDraft);
   const resumeWebsiteDraft = useRef(Boolean(websiteDraft));
+  const [assessmentMode, setAssessmentMode] = useState<AssessmentMode>('black');
   const [sessionError, setSessionError] = useState('');
   const [initialCode, setInitialCode] = useState(() => window.location.pathname === '/activate' && /^[0-9a-f]{64}$/i.test(window.location.hash.slice(1)) ? window.location.hash.slice(1) : '');
   const [signinFailed] = useState(() => new URLSearchParams(window.location.search).get('signin') === 'failed');
@@ -142,7 +144,7 @@ function App() {
     if (!account || !resumeWebsiteDraft.current) return;
     resumeWebsiteDraft.current = false;
     rememberWebsiteDraft('');
-    navigate('pentests');
+    navigate('request');
   }, [account, navigate]);
   const isAdmin = account?.role === 'admin';
   const privateView = !['home', 'overview', 'incidents', 'docs', 'contact'].includes(view);
@@ -187,7 +189,7 @@ function App() {
   function requestWork(website = '') {
     setWebsiteDraft(website);
     if (!website) { rememberWebsiteDraft(''); resumeWebsiteDraft.current = false; setView('request'); return; }
-    if (account) { rememberWebsiteDraft(''); navigate('pentests'); }
+    if (account) { rememberWebsiteDraft(''); navigate('request'); }
     else { rememberWebsiteDraft(website); resumeWebsiteDraft.current = true; openAccess(); }
   }
   function closeAccess() {
@@ -196,7 +198,7 @@ function App() {
   async function signedIn() {
     const resumeWebsite = resumeWebsiteDraft.current;
     await loadSession(); setInitialCode(''); setAccessOpen(false);
-    if (resumeWebsite) { resumeWebsiteDraft.current = false; rememberWebsiteDraft(''); navigate('pentests'); }
+    if (resumeWebsite) { resumeWebsiteDraft.current = false; rememberWebsiteDraft(''); navigate('request'); }
     else if (!privateView || view === 'home') setView('overview');
   }
   const access = <AccessPanel initialCode={initialCode} onLogin={signedIn} />;
@@ -240,7 +242,7 @@ function App() {
       {view === 'audit-desk' && isAdmin && <Audits key={`admin:${account.id}`} admin csrf={session?.csrf_token ?? undefined} onOpen={navigate} />}
       {['sites', 'sources', 'reviews'].includes(view) && account && <div className="audit-breadcrumb"><button className="text-button" onClick={() => setView('audits')}>← Your audits</button><span>{view === 'sites' ? 'Website snapshots' : view === 'sources' ? 'Source uploads' : 'Reports'}</span></div>}
       {['orders', 'earnings', 'agents'].includes(view) && account && <div className="audit-breadcrumb"><button className="text-button" onClick={() => setView('overview')}>← Dashboard</button></div>}
-      {view === 'request' && account && <RequestWork onLive={() => navigate('pentests')} onWebsite={() => { setStartAudit('sites'); setView('sites'); }} onSource={() => { setStartAudit('sources'); setView('sources'); }} />}
+      {view === 'request' && account && <RequestWork website={websiteDraft} onSelect={mode => { setAssessmentMode(mode); navigate('pentests'); }} />}
       {view === 'docs' && <Docs page={route.id} onPage={page => navigate('docs', page)} />}
       {view === 'contact' && <EnterpriseContact />}
       {view === 'devices' && account && <>
@@ -254,7 +256,7 @@ function App() {
       {view === 'reviews' && account && session?.csrf_token && <Reviews key={account.id} admin={account.role === 'admin'} csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('reviews', id)} onOpenOrders={() => setView('orders')} />}
       {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('orders', id)} report={route.report} onReport={open => navigate('orders', route.id, open)} onOpenReview={id => navigate('reviews', id)} initialQuote={checkout} onClearQuote={() => setCheckout(null)} />}
       {view === 'sites' && account && session?.csrf_token && <Sites key={account.id} startNew={startAudit === 'sites'} onStarted={() => setStartAudit(null)} csrf={session.csrf_token} admin={isAdmin} accountId={account.id} selected={route.id} onSelect={id => navigate('sites', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
-      {view === 'pentests' && account && session?.csrf_token && <Pentests key={account.id} initialWebsite={websiteDraft} onBack={() => navigate('audits')} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => { setWebsiteDraft(''); navigate('pentests', id); }} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
+      {view === 'pentests' && account && session?.csrf_token && <Pentests key={`${account.id}:${assessmentMode}`} initialMode={assessmentMode} initialWebsite={websiteDraft} onChangeMode={website => { setWebsiteDraft(website); navigate('request'); }} onBack={() => navigate('audits')} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => { setWebsiteDraft(''); navigate('pentests', id); }} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'sources' && account && session?.csrf_token && <Sources key={account.id} startNew={startAudit === 'sources'} onStarted={() => setStartAudit(null)} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => navigate('sources', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'guide' && account && (isAdmin ? <Guide onPair={() => setPairing(true)} /> : <PairingClosed />)}
       {view === 'earnings' && account && session?.csrf_token && <Earnings csrf={session.csrf_token} />}
