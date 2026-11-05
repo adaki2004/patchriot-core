@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { api, write, sessionChanged, sessionExpiredEvent, SessionExpiredError, SessionChangedError } from './api';
 import type { Account, Device, Fleet, Session } from './api';
 import './fonts.css';
+import './ui.css';
 import './style.css';
 import './redesign.css';
 import './workspace.css';
@@ -25,6 +26,8 @@ import { IncidentDesk, IncidentLog } from './Incidents';
 import { useNavigation } from './navigation';
 import type { View } from './navigation';
 import { AccessPanel, AccessDialog, AccessDesk } from './Access';
+import { WalletHost } from './WalletHost';
+import { AccountPage } from './AccountPage';
 import { Guide, AgentList, PairingClosed } from './Pairing';
 import { Landing, RequestWork, websiteOrigin } from './Product';
 import type { AssessmentMode } from './Product';
@@ -32,6 +35,7 @@ import { Docs } from './Docs';
 import { Sources } from './Sources';
 import { Earnings } from './Earnings';
 import { EnterpriseContact, ContactInbox } from './Contact';
+import './form-polish.css';
 
 function Mark() {
   return <img className="brand-mark" src="/brand/white-hat.png" alt="" width="44" height="44" />;
@@ -176,7 +180,7 @@ function App() {
     return () => window.removeEventListener(sessionExpiredEvent, expired);
   }, [endSession]);
   const loadSession = useCallback(async () => {
-    try { const value = await api<Session>('/session'); sessionChanged(); setSession(value); setSessionError(''); if (value.account) setNotice(''); }
+    try { const value = await api<Session>('/session'); sessionChanged(); setSession(value); setSessionError(''); if (value.account) setNotice(''); return value; }
     catch (error) { if (!(error instanceof SessionChangedError)) setSessionError((error as Error).message); throw error; }
   }, []);
   useEffect(() => { void loadSession().catch(() => {}); }, [loadSession]);
@@ -197,7 +201,7 @@ function App() {
   }
   async function signedIn() {
     const resumeWebsite = resumeWebsiteDraft.current;
-    await loadSession(); setInitialCode(''); setAccessOpen(false);
+    const current = await loadSession(); if(!current?.account) throw new Error('Your sign-in session is unavailable. Please retry.'); setInitialCode(''); setAccessOpen(false);
     if (resumeWebsite) { resumeWebsiteDraft.current = false; rememberWebsiteDraft(''); navigate('request'); }
     else if (!privateView || view === 'home') setView('overview');
   }
@@ -216,7 +220,7 @@ function App() {
         <button aria-current={view === 'docs' ? 'page' : undefined} onClick={() => navigate('docs', 'start')}>Docs</button>
         <button className="dashboard-destination" aria-current={view === 'overview' && account ? 'page' : undefined} onClick={() => account ? setView('overview') : openAccess()}>App <span aria-hidden="true">↗</span></button>
       </nav>
-      {account && <div className="header-account"><span className="account-name">{account.display_name}</span><button className="quiet" onClick={() => void logout()}>Sign out</button></div>}
+      {account && <div className="header-account"><button className="account-name" onClick={()=>setView('account')}>{account.display_name}</button><button className="quiet" onClick={() => void logout()}>Sign out</button></div>}
     </header>
     <main id="main" tabIndex={-1} className={appView ? 'app-main' : 'public-main'}>
       {account && appView && <nav ref={workspaceNav} className="workspace-nav" aria-label="Workspace">
@@ -226,6 +230,7 @@ function App() {
         {isAdmin && <button className={view === 'guide' ? 'active' : ''} onClick={() => setView('guide')}><UIIcon name="plus" className="nav-icon" />Pair an agent</button>}
         <button className={view === 'devices' ? 'active' : ''} onClick={() => setView('devices')}><UIIcon name="agent" className="nav-icon" />{isAdmin ? 'Agent approvals' : 'My agents'}</button>
         <button className={view === 'agents' ? 'active' : ''} aria-current={view === 'agents' ? 'page' : undefined} onClick={() => setView('agents')}>Network agents</button>
+        <button className={view === 'account' ? 'active' : ''} aria-current={view==='account'?'page':undefined} onClick={()=>setView('account')}>Account & credit</button>
         <button className={view === 'orders' ? 'active' : ''} aria-current={view === 'orders' ? 'page' : undefined} onClick={() => setView('orders')}>Orders</button>
         <button className={view === 'earnings' ? 'active' : ''} aria-current={view === 'earnings' ? 'page' : undefined} onClick={() => setView('earnings')}>Earnings</button>
         {isAdmin && <details className="admin-navigation" open={adminView}><summary>Administration</summary><button className={view === 'audit-desk' ? 'active' : ''} onClick={() => setView('audit-desk')}>Audit activity</button><button className={view === 'access-desk' ? 'active' : ''} onClick={() => setView('access-desk')}>Access & users</button><button className={view === 'payment-desk' ? 'active' : ''} onClick={() => setView('payment-desk')}>Payment desk</button><button className={view === 'incident-desk' ? 'active' : ''} onClick={() => setView('incident-desk')}>Incident desk</button><button className={view === 'contact-inbox' ? 'active' : ''} onClick={() => setView('contact-inbox')}>Contact inbox</button></details>}
@@ -256,9 +261,10 @@ function App() {
       {view === 'reviews' && account && session?.csrf_token && <Reviews key={account.id} admin={account.role === 'admin'} csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('reviews', id)} onOpenOrders={() => setView('orders')} />}
       {view === 'orders' && account && session?.csrf_token && <Orders csrf={session.csrf_token} selected={route.id} onSelect={id => navigate('orders', id)} report={route.report} onReport={open => navigate('orders', route.id, open)} onOpenReview={id => navigate('reviews', id)} initialQuote={checkout} onClearQuote={() => setCheckout(null)} />}
       {view === 'sites' && account && session?.csrf_token && <Sites key={account.id} startNew={startAudit === 'sites'} onStarted={() => setStartAudit(null)} csrf={session.csrf_token} admin={isAdmin} accountId={account.id} selected={route.id} onSelect={id => navigate('sites', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
-      {view === 'pentests' && account && session?.csrf_token && <Pentests key={`${account.id}:${assessmentMode}`} initialMode={assessmentMode} initialWebsite={websiteDraft} onChangeMode={website => { setWebsiteDraft(website); navigate('request'); }} onBack={() => navigate('audits')} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => { setWebsiteDraft(''); navigate('pentests', id); }} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
+      {view === 'pentests' && account && session?.csrf_token && <Pentests key={`${account.id}:${assessmentMode}`} initialMode={assessmentMode} initialWebsite={websiteDraft} onChangeMode={website => { setWebsiteDraft(website); navigate('request'); }} onBack={() => navigate('audits')} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => { setWebsiteDraft(''); navigate('pentests', id); }} onReview={id => navigate('reviews', id)} onAccount={id=>navigate('account',id)} />}
       {view === 'sources' && account && session?.csrf_token && <Sources key={account.id} startNew={startAudit === 'sources'} onStarted={() => setStartAudit(null)} csrf={session.csrf_token} admin={isAdmin} selected={route.id} onSelect={id => navigate('sources', id)} onReview={id => navigate('reviews', id)} onCheckout={quote => { setCheckout(quote); navigate('orders', quote.order_id); }} />}
       {view === 'guide' && account && (isAdmin ? <Guide onPair={() => setPairing(true)} /> : <PairingClosed />)}
+      {view === 'account' && account && session?.csrf_token && <AccountPage key={account.id} account={account} csrf={session.csrf_token} returnTo={route.id} onReturn={id=>navigate('pentests',id)} onReview={id=>navigate('reviews',id)}/>}
       {view === 'earnings' && account && session?.csrf_token && <Earnings csrf={session.csrf_token} />}
       {view === 'agents' && account && <AgentList />}
       {view === 'incidents' && <IncidentLog />}
@@ -270,11 +276,12 @@ function App() {
     </main>
     <Analytics page={analyticsPage} />
     <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><span>Inspect the code. Question the evidence.</span></footer>
+    <WalletHost/>
     {!account && accessOpen && <AccessDialog initialCode={initialCode} onLogin={signedIn} onClose={closeAccess} />}
     {pairing && isAdmin && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => { setView('devices'); changed('Relay paired. Check its approval and connection status below.'); }} onClose={() => setPairing(false)} />}
     {decision && session?.csrf_token && <Decision {...decision} csrf={session.csrf_token} onDone={() => changed(`${decisionLabels[decision.action]}: saved.`)} onClose={() => setDecision(null)} />}
   </>;
 }
 
-if (location.pathname === '/wallet') void import('./WalletPage').then(module => module.mountWallet());
-else createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);
+if (location.pathname === '/wallet') location.replace('/#/account');
+createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>);

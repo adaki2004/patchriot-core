@@ -1,0 +1,20 @@
+/* shadcn-style owned components use Tailwind utilities without its global reset. */
+@layer theme, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@theme inline {
+  --color-background: #0b0d12;
+  --color-foreground: #f0eeeb;
+  --color-card: #141923;
+  --color-card-foreground: #f0eeeb;
+  --color-primary: #ff735f;
+  --color-primary-foreground: #18100e;
+  --color-secondary: #25334e;
+  --color-secondary-foreground: #d8e4ff;
+  --color-muted: #0d121c;
+  --color-muted-foreground: #abb4c5;
+  --color-accent: #263044;
+  --color-destructive: #a83443;
+  --color-border: #303b4d;
+  --color-input: #45516a;
+}

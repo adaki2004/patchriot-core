@@ -390,7 +390,7 @@ test('a pending order resumes explicitly and a sent hint cannot mark it as funde
   await page.getByRole('button', { name: 'Show current payment instructions →', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Payment instructions' })).toBeVisible();
   expect(state.resumed).toBe(1); expect(state.submissions).toHaveLength(0);
-  await page.getByRole('button', { name: 'I’ve sent it · hide instructions', exact: true }).click();
+  await page.getByRole('button', { name: 'I’ve sent it', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Order details' })).toContainText('Your click does not confirm payment');
   await expect(page.getByRole('region', { name: 'Order details' })).toContainText('No payment confirmed');
