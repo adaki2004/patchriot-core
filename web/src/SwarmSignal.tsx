@@ -71,16 +71,16 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
   const [playing, setPlaying] = useState(false);
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const stop = () => setPlaying(false);
+    let visible = false;
+    const update = () => setPlaying(visible && !document.hidden && !media.matches);
     const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
-      if (!media.matches) { setPlaying(true); timer = setTimeout(stop, 4000); }
+      visible = entry.isIntersecting;
+      update();
     });
     if (root.current) observer.observe(root.current);
-    media.addEventListener('change', stop);
-    return () => { observer.disconnect(); clearTimeout(timer); media.removeEventListener('change', stop); };
+    media.addEventListener('change', update);
+    document.addEventListener('visibilitychange', update);
+    return () => { observer.disconnect(); media.removeEventListener('change', update); document.removeEventListener('visibilitychange', update); };
   }, []);
   const stopped = paused === true || !playing;
   return <div ref={root} className="service-map animated-map" data-paused={stopped} aria-label="From your verified domain to a private security report">
@@ -91,7 +91,7 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
       <rect className="map-boundary" x="230" y="65" width="370" height="300" rx="8" />
       <text x="250" y="94" className="map-caption">PATCHRIOT / MANAGED AGENTS</text>
       <rect className="map-tee-boundary" x="655" y="105" width="190" height="180" rx="12" />
-      {paths.map((path, index) => <g key={path}><path className={`map-link link-${index % 2}`} d={path} />{!stopped && <rect x="-3" y="-3" width="6" height="6" className="map-packet"><animateMotion dur="4s" begin={`${-index * .7}s`} repeatCount="1" path={path} /></rect>}</g>)}
+      {paths.map((path, index) => <g key={path}><path className={`map-link link-${index % 2}`} d={path} />{!stopped && <rect x="-3" y="-3" width="6" height="6" className="map-packet"><animateMotion dur="4s" begin={`${-index * .7}s`} repeatCount="indefinite" path={path} /></rect>}</g>)}
       {[{x:110,title:'YOUR WEB APP',detail:'VERIFIED SCOPE'}, {x:300,title:'DISPATCHER',detail:'PERMISSION + QUEUE'}, {x:510,title:'KALI + HERMES',detail:'ISOLATED AGENTS'}, {x:750,title:'NEAR AI',detail:'PRIVATE TEE'}].map(({x,title,detail},i) => <g key={title} transform={`translate(${x},200)`}>
         {i===2 && <><rect className="map-isolation" x="-46" y="-45" width="92" height="88" rx="6" /><rect className="map-node node-1" x="-13" y="-35" width="48" height="48" /></>}
         <rect className={`map-node node-${i%2}`} x="-24" y="-24" width="48" height="48" /><path className="map-face" d={i===3?'M-9 0v-7a9 9 0 0 1 18 0v7M-12 0h24v14h-24Z':'M-8-3h4m8 0h4M-6 6H6'} />

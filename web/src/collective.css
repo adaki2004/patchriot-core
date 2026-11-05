@@ -381,7 +381,9 @@ button.assessment-mode:focus-visible { outline: 2px solid var(--accent); outline
 .exposure-form>label { display:block;margin-bottom:9px;color:#eef3f6;font:500 12px var(--body-font); }
 .exposure-input { display:flex;align-items:center;gap:10px;padding:5px;background:#edf3f6;border:1px solid #becbd3;color:#142235; }
 .exposure-input>span { margin-left:12px;color:#65717c;font:20px var(--body-font); }
-.exposure-input input { flex:1;min-width:0;width:0;padding:12px 0;border:0;box-shadow:none;background:transparent;color:#142235;font:13px/1.5 var(--mono-font); }
+.exposure-input input { flex:1;min-width:0;width:0;margin:0;padding:12px 0;border:0;box-shadow:none;background:transparent;color:#142235;font:13px/1.5 var(--mono-font); }
+.exposure-input:focus-within { outline:2px solid var(--accent);outline-offset:3px; }
+.textmode-ui .exposure-input input:focus-visible { outline:none; }
 .exposure-input input::placeholder { color:#65717c;opacity:1; }
 .exposure-input button { padding:16px 20px;border:0;background:#e37d6d;color:#152332;font:500 14px var(--body-font);white-space:nowrap; }
 .exposure-input button span { display:inline-block;margin-left:14px;transition:transform .15s ease; }
