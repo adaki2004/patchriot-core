@@ -134,7 +134,7 @@ test('setup does not invent a deployment endpoint and the agent directory shows 
 });
 
 for (const phase of ['headers', 'body']) test(`a read timeout during ${phase} preserves the workspace and can recover`, async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   await page.route('**/api/devices', route => route.fulfill({ json: [{ id: 'private-device', operator_id: account.id, operator_name: account.display_name, label: 'My private relay', runtime: 'owned_fixture', runtime_version: '0.0.1', compute_group: 'my-machine', approval: 'approved', state: 'online', last_seen_at: null }] }));
   await page.addInitScript(phase => {
     const originalFetch = window.fetch.bind(window);
@@ -155,7 +155,7 @@ for (const phase of ['headers', 'body']) test(`a read timeout during ${phase} pr
     };
   }, phase);
   await page.goto('/');
-  await page.getByRole('button', { name: 'My agents', exact: true }).click();
+  await page.getByRole('button', { name: 'Agent approvals', exact: true }).click();
   await expect(page.getByText('My private relay', { exact: true })).toBeVisible();
   await page.evaluate(() => sessionStorage.setItem('interrupt-read', 'yes'));
   await page.getByRole('button', { name: 'Refresh ↻', exact: true }).click();
@@ -472,7 +472,7 @@ test('a pending device decision stays visible and an error leaves its reason edi
 });
 
 test('renders operator-controlled names as text and exposes no admin actions to members', async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   await page.route('**/api/devices', route => route.fulfill({ json: [{
     id: '00000000-0000-4000-8000-000000000002', operator_id: account.id,
     operator_name: '<img src=x onerror=alert(1)>', label: '<script>alert(1)</script>',
@@ -480,15 +480,18 @@ test('renders operator-controlled names as text and exposes no admin actions to 
     approval: 'pending', state: 'pending', last_seen_at: null,
   }] }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'My agents', exact: true }).click();
+  await page.getByRole('button', { name: 'Agent approvals', exact: true }).click();
   await expect(page.getByRole('cell', { name: '<script>alert(1)</script>', exact: false })).toBeVisible();
   await expect(page.locator('td img, td script')).toHaveCount(0);
   await expect(page.getByText('Reports received: —', { exact: true })).toBeVisible();
+  await page.route('**/api/session', route => route.fulfill({ json: { account, csrf_token: 'test-csrf' } }));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Bring your agents. Soon.' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
 });
 
 test('shows the declared Hermes model without treating presence as model verification', async ({ page }) => {
-  await setup(page, true);
+  await setup(page, true, 'admin');
   await page.route('**/api/devices', route => route.fulfill({ json: [{
     id: '00000000-0000-4000-8000-000000000003', operator_id: account.id,
     operator_name: 'CPU pilot', label: 'Hermes contributor', runtime: 'hermes',
@@ -497,7 +500,7 @@ test('shows the declared Hermes model without treating presence as model verific
     reports_received: 7,
   }] }));
   await page.goto('/');
-  await page.getByRole('button', { name: 'My agents', exact: true }).click();
+  await page.getByRole('button', { name: 'Agent approvals', exact: true }).click();
   const row = page.getByRole('row').filter({ hasText: 'Hermes contributor' });
   await expect(row).toContainText('Runner 0.22.2');
   await expect(row).toContainText('Reports received: 7');

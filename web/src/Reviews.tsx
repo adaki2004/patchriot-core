@@ -35,7 +35,7 @@ const pollActiveReview = (review: Review) => ['awaiting_payment', 'queued', 'run
 function reportInput(review: Review): ReportInput {
   const liveSteps: LiveStep[] = review.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, progress: s.progress, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null }));
   const team = review.pentest?.reviewers ?? [];
-  return { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, scope_sha256: review.pentest?.scope_sha256, review_policy: review.pentest?.review_policy, third_review: review.pentest?.third_review, team };
+  return { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, auth_check_path: review.pentest?.scope.auth_check_path, browser_login: review.pentest?.scope.browser_login !== undefined, scope_sha256: review.pentest?.scope_sha256, review_policy: review.pentest?.review_policy, third_review: review.pentest?.third_review, team };
 }
 
 const states: Record<string, string> = {

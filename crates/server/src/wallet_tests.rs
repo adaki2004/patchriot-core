@@ -180,7 +180,10 @@ async fn ethereum_and_solana_create_only_members_and_a_one_use_session() {
         let message = body["message"].as_str().unwrap();
         assert!(message.starts_with("patchriot.example wants you to sign in"));
         assert!(message.contains("URI: https://patchriot.example\nVersion: 1"));
-        assert!(message.contains("does not authorize a payment"));
+        assert!(message.contains("Welcome to Patchriot!"));
+        assert!(message.contains("This action will NOT cost any gas fees."));
+        assert!(message.contains("does not authorize any transactions or payments"));
+        assert_eq!(message.split("\n\n").nth(1).unwrap().lines().count(), 1);
         let (status, headers, _) = app.verify(&who, &cookie, &body).await;
         assert_eq!(status, StatusCode::OK);
         let session = headers

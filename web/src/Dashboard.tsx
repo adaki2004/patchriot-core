@@ -1,15 +1,12 @@
 import type { Fleet } from './api';
 import type { View } from './navigation';
-import { useLive } from './useLive';
 import { AuditRows, auditActive, useAudits } from './Audits';
 import { AgentList } from './Pairing';
-import { money } from './Earnings';
 import { orderLabel, paymentLabel } from './Orders';
 import { useOrderHistory } from './orderHistory';
 import { Trial } from './Trial';
 import { UIIcon } from './UIIcon';
 
-type Earnings = { balance: { available: string } };
 
 // Keep actions and active work visible before finished reports.
 const needsAction = (state: string) => ['needs_review', 'failed', 'awaiting_payment', 'awaiting_verification', 'collected', 'approved'].includes(state);
@@ -19,7 +16,6 @@ export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: s
   const audits = useAudits();
   const history = useOrderHistory();
   const { orders, coupons } = history;
-  const earnings = useLive<Earnings>('/withdrawals', true, 60_000);
   const ready = audits.ready && !audits.error;
   const complete = audits.items.filter(item => item.state === 'completed').length;
   const active = audits.items.filter(item => ['running', 'collecting'].includes(item.state)).length;
@@ -53,8 +49,6 @@ export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: s
         {!history.ready && !orders.error && !coupons.error && <p role="status">Loading orders…</p>}
         {history.ready && !orders.error && !coupons.error && history.entries.length === 0 && <div className="orders-empty"><UIIcon name="wallet" /><p>No orders yet.<br /><small>Paid and coupon assessments will appear here.</small></p></div>}
         {history.entries.slice(0, 2).map(entry => <button className="dashboard-order" key={`${entry.kind}-${entry.record.id}`} onClick={() => onOpen('orders', entry.record.id)}><UIIcon name="file" /><span><strong>Audit · {entry.record.id.slice(0, 8)}</strong><small>{entry.kind === 'coupon' ? 'Covered by coupon · $0 charged' : paymentLabel(entry.record)}</small></span><span className={`status-chip ${entry.kind === 'payment' && entry.record.requires_attention ? 'state-needs_review' : ''}`}>{entry.kind === 'coupon' ? (entry.record.review_id ? 'Open assessment' : 'Start not confirmed') : orderLabel(entry.record)}</span></button>)}
-        {earnings.error && <p className="notice error" role="alert">Earnings could not refresh. <button className="inline" onClick={earnings.refresh}>Retry earnings</button></p>}
-        <button className="dashboard-earnings" aria-label="Your available earnings" onClick={() => onOpen('earnings')}><span>Available earnings <strong>{earnings.data?.balance && !earnings.error ? money(earnings.data.balance.available) : '—'} USDC</strong></span><UIIcon name="arrow" /></button>
       </section>
       <section className="work-card network-work"><p className="section-kicker">{fleet?.online_devices ?? '—'} AGENTS ONLINE ACROSS THE NETWORK</p><AgentList compact onAll={() => onOpen('agents')} /></section>
       <section className="workspace-contribute"><div><span className="section-kicker">MANAGED BETA</span><h2>A network ready for your scope.</h2><p>Patchriot runs the agents. Public contributor pairing is not open yet.</p></div><button onClick={() => onOpen('agents')}>Meet the agents <UIIcon name="arrow" /></button></section>

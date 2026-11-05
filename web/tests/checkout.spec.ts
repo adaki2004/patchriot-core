@@ -159,7 +159,7 @@ async function choose(page: Page) {
 async function prepare(page: Page) {
   await choose(page);
   await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
-  await page.getByLabel('Pay with', { exact: true }).selectOption(input.asset_id);
+  await page.getByRole('radio', { name: 'NEAR · NEAR', exact: true }).check();
   await page.getByLabel('Refund address on NEAR', { exact: false }).fill('customer.fixture.near');
   await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
 }
@@ -216,12 +216,13 @@ test('paid review shows the price before an exact network-specific deposit and n
   expect(state.submissions).toHaveLength(0);
   const submit = page.getByRole('button', { name: 'Reserve review & get quote →', exact: true });
   await expect(submit).toBeDisabled();
-  await page.getByLabel('Pay with', { exact: true }).selectOption(input.asset_id);
+  await page.getByRole('radio', { name: 'NEAR · NEAR', exact: true }).check();
   await page.getByLabel('Refund address on NEAR', { exact: false }).fill('customer.fixture.near');
   await modal.screenshot({ path: info.outputPath('checkout-consent.png') });
   await submit.click();
   await expect(modal).toHaveCount(0);
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
+  await instructions.getByRole('button', { name: 'Send to an address', exact: false }).click();
   await expect(instructions).toContainText('0.01% provider app fee is included in the displayed amount');
   await expect(instructions.getByRole('heading', { name: 'Send 1.000000000000000000000001 NEAR', exact: true })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { (window as Window & { copiedAmount?: string }).copiedAmount = value; } } }));
@@ -250,11 +251,12 @@ for (const blockchain of ['eth', 'sol']) for (const symbol of ['USDC', 'USDT']) 
   await choose(page);
   await page.getByRole('button', { name: 'Continue to payment →', exact: true }).click();
   const network = blockchain === 'sol' ? 'Solana' : 'Ethereum';
-  await page.getByLabel('Pay with', { exact: true }).selectOption({ label: `${symbol} · ${network}` });
+  await page.getByRole('radio', { name: `${symbol} · ${network}`, exact: true }).check();
   if (blockchain === 'sol') await expect(page.getByRole('dialog')).toContainText('Use your Solana wallet address, not its token account.');
   await page.getByLabel(`Refund address on ${network}`, { exact: false }).fill(address);
   await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
+  await instructions.getByRole('button', { name: 'Send to an address', exact: false }).click();
   await expect(instructions.getByRole('heading', { name: `Send 1.000123 ${symbol}`, exact: true })).toBeVisible();
   await expect(instructions).toContainText(network);
   await expect(instructions).toContainText('1 USDC');
@@ -388,6 +390,7 @@ test('a pending order resumes explicitly and a sent hint cannot mark it as funde
   await page.getByRole('region', { name: 'Order history' }).getByRole('button').click();
   await expect(page.getByRole('region', { name: 'Payment instructions' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Show current payment instructions →', exact: true }).click();
+  await page.getByRole('button', { name: 'Send to an address', exact: false }).click();
   await expect(page.getByRole('region', { name: 'Payment instructions' })).toBeVisible();
   expect(state.resumed).toBe(1); expect(state.submissions).toHaveLength(0);
   await page.getByRole('button', { name: 'I’ve sent it', exact: true }).click();

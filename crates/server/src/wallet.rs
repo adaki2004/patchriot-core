@@ -107,8 +107,10 @@ pub(crate) async fn challenge(
     } else {
         ("Solana", "mainnet")
     };
+    // SIWE permits one statement line. The UI displays this with paragraphs;
+    // embedding that layout here would break EIP-4361 message parsers.
     let message = format!(
-        "{domain} wants you to sign in with your {label} account:\n{address}\n\nSign in to Patchriot. This does not authorize a payment.\n\nURI: {}\nVersion: 1\nChain ID: {chain}\nNonce: {nonce}\nIssued At: {}\nExpiration Time: {}",
+        "{domain} wants you to sign in with your {label} account:\n{address}\n\nWelcome to Patchriot! By signing this message, you are securely logging into your account. This action will NOT cost any gas fees. This does not authorize any transactions or payments. Click sign to verify your wallet and enter!\n\nURI: {}\nVersion: 1\nChain ID: {chain}\nNonce: {nonce}\nIssued At: {}\nExpiration Time: {}",
         state.config.public_origin,
         now.to_rfc3339_opts(SecondsFormat::Secs, true),
         expires.to_rfc3339_opts(SecondsFormat::Secs, true)

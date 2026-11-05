@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from './components/ui/dialog';
 import { Button } from './components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from './components/ui/tabs';
-import { Wallet as WalletIcon, QrCode, ShieldCheck, ArrowRight, LoaderCircle } from 'lucide-react';
+import { Wallet as WalletIcon, ShieldCheck, ArrowRight, LoaderCircle } from 'lucide-react';
 import type { WalletRequest } from './wallet';
 import UniversalProvider from "@walletconnect/universal-provider";
 import { Connection, type Transaction } from "@solana/web3.js";
@@ -49,6 +49,15 @@ const chains = {
   solana: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Announcements are untrusted. Data images avoid third-party requests. SVG is
+// rendered only through img, never as inline markup or an HTML object.
+function providerIcon(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length <= 65536 && /^data:image\/(?:png|webp|jpeg|svg\+xml)[;,]/i.test(value) ? value : undefined;
+}
+function WalletProviderIcon({ icon }: { icon?: string }) {
+  const [failed, setFailed] = useState(false);
+  return icon && !failed ? <img className="wallet-provider-logo" src={icon} alt="" width={32} height={32} onError={() => setFailed(true)} /> : <WalletIcon className="wallet-provider-logo" size={32}/>;
+}
 function safeError(e: unknown) {
   const code = (e as { code?: unknown })?.code;
   return code === 4001 || code === "ACTION_REJECTED"
@@ -62,7 +71,7 @@ export default function WalletDialog({ settings, request, finish }: { settings: 
   const valid = intent === 'signin' || uuid.test(order ?? '');
   const quotePath = paymentKind === 'topup' ? `/credits/topups/${order}/quote` : `/orders/${order}/quote`;
   const alive = useRef(true);
-  const [injected, setInjected] = useState<{id:string;name:string;provider:Evm}[]>([]);
+  const [injected, setInjected] = useState<{id:string;name:string;icon?:string;provider:Evm}[]>([]);
   const [accepted,setAccepted] = useState(false);
   const providerRef=useRef<Awaited<ReturnType<typeof UniversalProvider.init>> | null>(null);
   useEffect(() => {
@@ -70,7 +79,7 @@ export default function WalletDialog({ settings, request, finish }: { settings: 
     const announce = (event: Event) => {
       const detail=(event as CustomEvent).detail;
       if (!detail?.info || typeof detail.info.uuid!=='string' || typeof detail.info.name!=='string' || typeof detail.provider?.request!=='function') return;
-      setInjected(list=>list.some(p=>p.id===detail.info.uuid) || list.length>=12 ? list : [...list,{id:detail.info.uuid,name:detail.info.name.slice(0,40),provider:detail.provider}]);
+      setInjected(list=>list.some(p=>p.id===detail.info.uuid) || list.length>=12 ? list : [...list,{id:detail.info.uuid,name:detail.info.name.slice(0,40),icon:providerIcon(detail.info.icon),provider:detail.provider}]);
     };
     window.addEventListener('eip6963:announceProvider',announce);
     window.dispatchEvent(new Event('eip6963:requestProvider'));
@@ -472,12 +481,13 @@ export default function WalletDialog({ settings, request, finish }: { settings: 
         {intent==='signin' && !wallet && <Tabs value={network} onValueChange={v=>{setNetwork(v as Network);setUri('');}}><TabsList className="full"><TabsTrigger value="ethereum" disabled={busy}>Ethereum</TabsTrigger><TabsTrigger value="solana" disabled={busy}>Solana</TabsTrigger></TabsList></Tabs>}
         {intent==='payment' && (quote ? <div className="wallet-payment-summary"><strong>{tokenAmount(quote.input.amount,quote.input.token)}</strong><span>{chainName(quote.input.token.blockchain)} mainnet</span><code>{quote.deposit_address}</code></div> : <p role="status">Loading payment details…</p>)}
         {!wallet ? <div className="wallet-options">
-          {network==='ethereum' && injected.length>0 ? injected.map(p=><Button key={p.id} variant="outline" disabled={busy} onClick={()=>void connectBrowser(p.provider)}><span className="wallet-letter">{p.name.slice(0,1)}</span><span>{p.name}</span><ArrowRight size={16}/></Button>) : <Button variant="outline" disabled={busy || (intent==='payment'&&!quote)} onClick={()=>void connectBrowser()}><WalletIcon size={20}/><span>{network==='solana'?'Phantom / Solana wallet':'Browser wallet'}</span><ArrowRight size={16}/></Button>}
-          <Button variant="outline" disabled={busy || (intent==='payment'&&!quote)} onClick={()=>void connectQr()}><QrCode size={20}/><span>WalletConnect</span><span className="wallet-option-hint">Scan QR</span></Button>
+          {network==='ethereum' && injected.length>0 ? injected.map(p=><Button key={p.id} variant="outline" disabled={busy} onClick={()=>void connectBrowser(p.provider)}><WalletProviderIcon icon={p.icon}/><span>{p.name}</span><ArrowRight size={16}/></Button>) : <Button variant="outline" disabled={busy || (intent==='payment'&&!quote)} onClick={()=>void connectBrowser()}><WalletProviderIcon icon={network==='solana'?'/brand/phantom.svg':undefined}/><span>{network==='solana'?'Phantom / Solana wallet':'Browser wallet'}</span><ArrowRight size={16}/></Button>}
+          <Button variant="outline" disabled={busy || (intent==='payment'&&!quote)} onClick={()=>void connectQr()}><svg className="wallet-provider-logo walletconnect-logo" viewBox="0 0 32 22" aria-hidden="true"><path d="M6 6c5.5-5.4 14.5-5.4 20 0l1 1-4 4-1-1a8.5 8.5 0 0 0-12 0l-1 1-4-4 1-1ZM0 10l4-4 8 8 4-4 4 4 8-8 4 4-12 12-4-4-4 4L0 10Z" fill="currentColor"/></svg><span>WalletConnect</span><span className="wallet-option-hint">Scan QR</span></Button>
           {qr && <div className="wallet-qr"><img src={qr} width="280" height="280" alt="Scan with your wallet to connect"/><p>Scan in your wallet’s WalletConnect screen.</p></div>}
           {busy && <p className="wallet-wait" role="status"><LoaderCircle className="spin" size={16}/>Waiting for your wallet…</p>}
         </div> : <div className="wallet-confirm"><p className="fine">Connected</p><code className="wallet-address">{wallet.address}</code><Button className="full" disabled={busy||(intent==='payment'&&(!quote||Date.parse(quote.expires_at)<=now+15000))} onClick={()=>void confirm()}>{busy?'Check your wallet…':intent==='signin'?accepted?'Open my account':'Sign in':'Confirm payment'}</Button><Button variant="ghost" disabled={busy||accepted} onClick={()=>setWallet(null)}>Choose another wallet</Button></div>}
         {error && <p className="notice error" role="alert">{error}</p>}
+        {intent==='signin' && wallet && <div className="wallet-welcome"><strong>Welcome to Patchriot!</strong><p>By signing this message, you are securely logging into your account.</p><ul><li>This action will NOT cost any gas fees.</li><li>This does not authorize any transactions or payments.</li></ul><p>Click sign to verify your wallet and enter!</p></div>}
         <p className="wallet-footnote">{intent==='signin'?'No transaction or token approval. Wallet, Google and password logins are separate accounts.':'Only this payment is requested. Your sign-in account stays the same.'}</p>
       </>}
     </DialogContent>

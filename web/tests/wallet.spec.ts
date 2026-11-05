@@ -166,3 +166,26 @@ test('changing the selected account stops signing until it is reconnected',async
   await expect(page.getByRole('alert')).toContainText('wallet changed');
   expect((await calls(page)).some(c=>c.method==='personal_sign')).toBe(false);
 });
+
+test('wallet chooser uses announced local icons and never fetches a provider-supplied remote image', async ({page,context}) => {
+  await setup(context,false);
+  await context.addInitScript(() => {
+    window.addEventListener('eip6963:requestProvider', () => {
+      const provider = (window as unknown as {ethereum:unknown}).ethereum;
+      for (const [uuid,name,icon] of [
+        ['fixture-local','Installed wallet','data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="blue"/></svg>'],
+        ['fixture-remote','Untrusted icon wallet','https://untrusted.example/tracker.svg'],
+      ]) window.dispatchEvent(new CustomEvent('eip6963:announceProvider',{detail:{info:{uuid,name,icon},provider}}));
+    });
+  });
+  const external:string[]=[];
+  page.on('request',r=>{if(new URL(r.url()).hostname==='untrusted.example')external.push(r.url());});
+  await page.goto('/');
+  await page.locator('header').getByRole('button',{name:'App',exact:true}).click();
+  await page.getByRole('button',{name:'Connect wallet',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Installed wallet',exact:true}).locator('img')).toHaveAttribute('src',/^data:image\/svg/);
+  await expect(page.getByRole('button',{name:'Untrusted icon wallet',exact:true}).locator('img')).toHaveCount(0);
+  await page.getByRole('tab',{name:'Solana',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Phantom / Solana wallet',exact:true}).locator('img')).toHaveAttribute('src','/brand/phantom.svg');
+  expect(external).toEqual([]);
+});

@@ -66,7 +66,7 @@ test('workspace separates requests and pairing from the public introduction', as
   await expect(page.getByLabel('Website URL')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');
-  await expect(page.getByRole('heading', { name: 'Agent pairing is staff-only.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bring your agents. Soon.' })).toBeVisible();
   await page.getByRole('button', { name: 'Patchriot home' }).click();
   await expect(page).toHaveURL(/#\/home$/);
   await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toBeVisible();
@@ -96,7 +96,8 @@ test('the access link reopens account access after closing the sign-in popup', a
   await setup(page);
   await page.goto('/');
   const access = page.getByRole('region', { name: 'Account access' });
-  const contribute = page.locator('.access-invitation').getByRole('button', { name: 'Get started', exact: false });
+  const contribute = page.locator('header').getByRole('button', { name: 'App', exact: true });
+  await expect(page.locator('.access-invitation, .tm-join')).toHaveCount(0);
   await contribute.click();
   await expect(access.getByRole('heading', { name: 'Sign in to Patchriot.' })).toBeVisible();
   await expect(access.getByLabel('Username', { exact: true })).toBeVisible();
@@ -109,11 +110,15 @@ test('the access link reopens account access after closing the sign-in popup', a
 test('members cannot load connection details or open a pairing dialog', async ({ page }) => {
   const calls = await setup(page, true);
   await page.goto('/#/guide');
-  await expect(page.getByRole('heading', { name: 'Agent pairing is staff-only.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bring your agents. Soon.' })).toBeVisible();
   expect(calls).not.toContain('/api/pairing-info');
   expect(calls).not.toContain('/api/pairings/claim');
   await page.goto('/#/devices');
   await expect(page.getByRole('button', { name: 'Pair a relay +', exact: true })).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(calls).not.toContain('/api/pairing-info');
+  await page.goto('/#/earnings');
+  await expect(page.getByRole('heading', {name:'Earnings are coming soon.'})).toBeVisible();
+  expect(calls).not.toContain('/api/earnings');
+  expect(calls).not.toContain('/api/devices');
 });

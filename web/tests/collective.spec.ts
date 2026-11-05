@@ -263,6 +263,7 @@ test('mode selection preserves an edited domain and keeps white-box unavailable'
   await page.getByRole('button', { name: 'Choose grey-box' }).click();
   await expect(page.getByLabel('Website URL')).toHaveValue('https://example.com');
   await expect(page.getByLabel('Access method')).toHaveValue('session');
+  await page.getByText('Optional sign-in hints', { exact: true }).click();
   await expect(page.getByLabel('Login page', {exact: false})).toBeVisible();
   await expect(page.getByLabel('Username field name')).toHaveCount(0);
   await expect(page.getByLabel('Test password', {exact: true})).toHaveCount(0);
