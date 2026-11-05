@@ -17,6 +17,16 @@ test('Exposure shows the selected hero, logo and consistent navigation', async (
   await expect(page.locator('.exposure-eyebrow')).toHaveText('WEB APPLICATION SECURITY TESTING');
   await expect(page.locator('.exposure-art img')).toHaveAttribute('src', '/brand/exposure-hero.png');
   await expect(page.locator('.exposure-hero input[type=checkbox]')).toHaveCount(0);
+  const input = page.locator('.exposure-input input');
+  await expect(input).toHaveAttribute('placeholder', 'https://your-site.com');
+  await input.focus();
+  await expect(page.locator('.exposure-input')).toHaveCSS('outline-style', 'solid');
+  const alignment = await input.evaluate(element => {
+    const input = element.getBoundingClientRect(), box = element.parentElement!.getBoundingClientRect();
+    return Math.abs((input.top + input.bottom) / 2 - (box.top + box.bottom) / 2);
+  });
+  expect(alignment).toBeLessThanOrEqual(1);
+  await page.locator('.exposure-hero').screenshot({path:test.info().outputPath('hero-focus.png')});
   await expect(page.locator('header .brand-mark')).toHaveAttribute('src', '/brand/white-hat.png');
   expect((await page.locator('header .brand-mark').boundingBox())!.width).toBeGreaterThanOrEqual(64);
   const navigation = page.getByRole('navigation', { name: 'Website' });
@@ -210,7 +220,7 @@ test('Collective audit choices keep readable text when hovered or focused', asyn
 });
 
 
-test('the architecture animation stops by itself and needs no pause control', async ({ page }) => {
+test('the architecture animation continues while visible without a pause control', async ({ page }) => {
   await page.route('**/api/session', r => r.fulfill({ json: { account: null, csrf_token: null } }));
   await page.route('**/api/incidents', r => r.fulfill({ json: [] }));
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -220,8 +230,20 @@ test('the architecture animation stops by itself and needs no pause control', as
     await map.scrollIntoViewIfNeeded();
     await expect(map.locator('animateMotion')).toHaveCount(5);
     await expect(map.getByRole('button')).toHaveCount(0);
-    await expect(map).toHaveAttribute('data-paused', 'true', { timeout: 6000 });
+    // It previously stopped at four seconds. Confirm both continued activity
+    // and actual movement, not just an animation element in the DOM.
+    await page.waitForTimeout(4500);
+    await expect(map).toHaveAttribute('data-paused', 'false');
+    const position = () => map.locator('animateMotion').first().evaluate(animation => {
+      const matrix = (animation.parentElement as unknown as SVGGraphicsElement).getCTM();
+      return [matrix?.e, matrix?.f];
+    });
+    const before = await position();
+    await expect.poll(position).not.toEqual(before);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(map).toHaveAttribute('data-paused', 'true');
     await expect(map.locator('animateMotion')).toHaveCount(0);
+
   }
 });
 

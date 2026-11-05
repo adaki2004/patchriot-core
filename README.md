@@ -65,7 +65,7 @@ flowchart LR
 
 A free-test campaign offers **one requested coupon per account**, with a 24/48-hour claim window and an administrator-set total limit. Claiming does not start work. Coupons last seven days and do not create cash or funded operator rewards. Different sign-ins can represent one person, so the campaign cap is essential.
 
-> **DON’T TRUST! VERIFY!** Inspect the public source—or have your own security agent inspect it. Test only systems you own and control. This is an automated assessment with evidence, not a security certificate. Prefer staging and disposable data; even read requests can have side effects.
+> **DON’T TRUST! VERIFY!** Inspect the public source—or have your own security agent inspect it. Test only systems you own or have explicit permission from their owner to assess. This is an automated assessment with evidence, not a security certificate. Prefer staging and disposable data; even read requests can have side effects.
 
 ## Implementation status
 
@@ -239,7 +239,7 @@ Choose **Request an audit → Black-box website test**. The setup has three step
 
 Confirm the three named devices, their operators and the **inference providers shown for that team**. Scout and Recon run in sequence; the reserved Verifier joins when the escalation checks require it. Open the private report to inspect findings and recorded requests, download it or cancel unfinished work. Recommended fixes can include code examples; these remain untested suggestions displayed as inert text.
 
-This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v1** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes stay read-only. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
+This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v2** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes keep their original permissions. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
 Live assessments use the same access policy as snapshot and source reviews: `pilot` is free, `coupons` requires a one-use code, `paid` accepts payment or a code, and `closed` pauses new work. The free `/api/pentests/:id/review` route remains blocked in coupon and paid modes. Use `/api/pentests/:id/review-code` or `/api/pentests/:id/checkout`, with the same live consent fields inside `consent`. Ownership, the exact scope/profile, the named team and provider consent are checked before admission. A paid reservation cannot lease agents until a matching settlement is recorded; permission and team eligibility are checked again then. Revoked or expired permission cannot be purchased back. Failed or cancelled paid work retains funds for staff review; cancellation does not automatically refund a settled payment.
 
@@ -494,7 +494,7 @@ Do not put the treasury signing key in the web service. Payment reconciliation a
 
 ### Test accounts and recorded coverage
 
-Choose **Grey-box** and provide your login page and a protected page or API. The protected URL must return 2xx with the test account and 401/403 without it; a public page returning 200 to everyone does not prove login worked. The relay can detect one standard HTML form, its username/password fields, same-origin action and hidden values. Ambiguous forms stop without submitting credentials. **Custom login settings** supports explicit form fields or JSON session login. HTTP Basic and bearer API tokens are also supported.
+Choose **Grey-box** and provide your login page and a protected page or API. The protected URL must return 2xx with the test account and refuse anonymous visitors (401/403) or redirect them to the declared same-origin login page; a public page returning 200 to everyone does not prove login worked. The relay can detect one standard HTML form, its username/password fields, same-origin action and hidden values. Ambiguous forms stop without submitting credentials. **Custom login settings** supports explicit form fields or JSON session login. HTTP Basic and bearer API tokens are also supported.
 
 Add the dedicated password or token after domain verification. It is encrypted separately and never put in model prompts, browser storage or report bodies. Login is attempted once per role; redirects are not followed. Other POST tests need separate permission. JavaScript-only login, SSO, MFA, CAPTCHA, SSH access and token-only JSON login responses are unsupported. These require different integrations, not more permissive agent instructions.
 
@@ -570,3 +570,10 @@ At expiry, report reads hide findings, HTTP evidence and tool output immediately
 Deploy dispatcher and its migration before core. Clients using the previous GET download route must use the explicit POST; this prevents prefetching or cross-site links from starting deletion.
 
 </details>
+
+
+### Editing a website setup
+
+Use **Your website · Edit** to correct a saved setup before checkout. `POST /api/pentests/:id/setup` requires the current `scope_sha256`, the new scope, permission note and explicit consent. Only the requester can edit. Changing origins requires a fresh DNS proof; same-origin changes keep the existing proof and expiry. A changed scope clears saved test credentials and invalidates older consent/quotes. Once any assessment or checkout is admitted, the setup is locked.
+
+After verification, **Testing permissions** offers a visible POST checkbox. The default remains read-only. POST requires permission to change test data and acknowledgement of disruption risk; staging is recommended. Version `web_active_v2` records this wording without rewriting existing `web_active_v1` scopes. It requires `active_web_v2` agents (relay adapter 12); deploy dispatcher migration 27 before those agents advertise it.

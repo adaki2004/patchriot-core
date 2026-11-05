@@ -29,6 +29,8 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  test_setup_locked: 'Checkout or testing has already reserved this setup, or it has expired. Start a new request to change it.',
+  test_setup_changed: 'This setup changed in another tab. Refresh and check the saved settings before editing again.',
   wallet_signin_failed: 'The wallet message could not be verified. Start again and sign the new message.',
   wallet_unavailable: 'Wallet sign-in is not configured on this installation.',
 
