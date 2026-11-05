@@ -9,6 +9,7 @@ mod contact;
 mod diagnostics;
 mod gateway;
 mod incidents;
+mod login_page;
 pub mod payments;
 mod pentests;
 pub mod review_codes;
@@ -267,6 +268,9 @@ pub fn router(state: AppState) -> Router {
             }),
         )
         .route("/api/session", get(auth::session))
+        .route("/api/account", get(auth::account))
+        .route("/login", get(login_page::page).post(login_page::submit))
+        .route("/login.css", get(login_page::styles))
         .route("/api/analytics", get(analytics::settings))
         .route("/api/analytics/frame/{page}", get(analytics::frame))
         .route("/api/contact", get(contact::details).post(contact::create))

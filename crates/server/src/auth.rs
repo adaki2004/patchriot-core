@@ -176,6 +176,19 @@ pub async fn session(
     }
 }
 
+/// Unlike the public session probe, this endpoint requires authentication.
+/// HTTP assessment clients can compare an anonymous 401 with a signed-in 200.
+pub(crate) async fn account(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let session = require_session(&headers, &state).await?;
+    Ok(Json(serde_json::json!({"account": Account {
+        id: session.id, display_name: session.display_name,
+        role: session.role, auth_method: session.auth_method,
+    }})))
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Redeem {
