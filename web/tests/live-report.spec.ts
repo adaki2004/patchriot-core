@@ -328,11 +328,12 @@ test('a missing assessment is explained as unfinished work, not zero vulnerabili
 
 test('requested discovery without a receipt is unconfirmed and summary waits stay visible', async ({ page }) => {
   await setup(page);
+  let recovered = false;
   await page.route(`**/api/reviews/${id}`, async route => {
     const response = { id, mode:'pentest_agent', state:'running', created_at:1793640000,
       pentest:{scope:{origins:['https://owned.example'],tools:['artex_engine_v1']},reviewers:[]},
       steps:[{role:'investigator',state:'completed',result:{...result,assessment:null},evidence_complete:false},
-        {role:'reproducer',state:'leased',result:null,progress:{received_at:1793640020,progress:{
+        {role:'reproducer',state:'leased',result:recovered ? {...result,tool_runs:[{...result.tool_runs![0],tool:'artex-engine'}]} : null,progress:{received_at:1793640020,progress:{
           phase:'investigating',http_requests:12,inference_calls:5,completed_tools:1,
           model_request:{purpose:'summary',elapsed_seconds:95}}}}] };
     await route.fulfill({json:response});
@@ -342,6 +343,11 @@ test('requested discovery without a receipt is unconfirmed and summary waits sta
   await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
   await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
+  recovered = true;
+  await page.reload();
+  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
+  await expect(page.getByRole('row').filter({hasText:'artex-engine'})).toContainText('Recon');
 });
 
 test('stopped tests retain a report without fake motion or example actions', async ({ page }) => {
