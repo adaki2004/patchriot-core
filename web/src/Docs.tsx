@@ -17,7 +17,7 @@ const content: Record<DocPage, ReactNode> = {
       <li><div className="docs-step-art docs-step-report" aria-hidden="true" /><div className="docs-step-copy"><span>03</span><h2>Get your report</h2><p>Evidence, suggested fixes and what still needs checking.</p></div></li>
     </ol>
     <p><a className="primary doc-cta" href="#/request">Start a website test ↗</a> <a href="#/docs/workflow">See what a review includes →</a></p>
-    <h2>Use the hosted service</h2><p>Open <Link to="https://patchriot.tech">patchriot.tech</Link> and sign in with an available Google, GitHub or wallet option. Existing pilot accounts can use their password. You need no VPS or model subscription.</p><p>When a free-test campaign is open, request your coupon from the dashboard. Otherwise, add credit from Account and use it after verification. <a href="#/docs/payments">Free trials and payment →</a></p>
+    <h2>Use the hosted service</h2><p>Open <Link to="https://patchriot.net">patchriot.net</Link> and sign in with an available Google, GitHub or wallet option. Existing pilot accounts can use their password. You need no VPS or model subscription.</p><p>When a free-test campaign is open, request your coupon from the dashboard. Otherwise, add credit from Account and use it after verification. <a href="#/docs/payments">Free trials and payment →</a></p>
     <aside className="doc-callout"><strong>A useful check before a human penetration test.</strong><p>Review the evidence and retest your fixes. Completing a run does not certify that the application is safe.</p></aside>
   </>,
   infrastructure: <>
