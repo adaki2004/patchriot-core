@@ -316,12 +316,32 @@ test('raw tool output is hidden until requested and never interpreted as HTML', 
 test('a missing assessment is explained as unfinished work, not zero vulnerabilities', async ({ page }) => {
   await setup(page, true);
   await expect(page.getByText('No agent has returned a usable assessment.', { exact: false })).toBeVisible();
+  await expect(page.locator('.report-counts div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
   await page.getByRole('button', { name: 'Agent reports', exact: true }).click();
   await expect(page.getByText('No assessment', { exact: true })).toBeVisible();
+  await expect(page.locator('.report-agent').first().locator('dl div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
   await expect(page.getByText(/The agent reached its allowed AI usage budget/)).toBeVisible();
   await page.getByRole('button', { name: 'View recorded evidence' }).click();
   await page.getByText('Request evidence (2)', { exact: true }).click();
   await expect(page.getByText('HTTP #1', { exact: true })).toBeVisible();
+});
+
+test('requested discovery without a receipt is unconfirmed and summary waits stay visible', async ({ page }) => {
+  await setup(page);
+  await page.route(`**/api/reviews/${id}`, async route => {
+    const response = { id, mode:'pentest_agent', state:'running', created_at:1793640000,
+      pentest:{scope:{origins:['https://owned.example'],tools:['artex_engine_v1']},reviewers:[]},
+      steps:[{role:'investigator',state:'completed',result:{...result,assessment:null},evidence_complete:false},
+        {role:'reproducer',state:'leased',result:null,progress:{received_at:1793640020,progress:{
+          phase:'investigating',http_requests:12,inference_calls:5,completed_tools:1,
+          model_request:{purpose:'summary',elapsed_seconds:95}}}}] };
+    await route.fulfill({json:response});
+  });
+  await page.reload();
+  await page.getByText('Latest activity', {exact:true}).click();
+  await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
+  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
 });
 
 test('stopped tests retain a report without fake motion or example actions', async ({ page }) => {

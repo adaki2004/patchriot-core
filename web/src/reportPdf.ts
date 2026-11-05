@@ -115,7 +115,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.paragraph(summary.headline, 15, rgb(1, .65, .57));
   p.y = 215;
   p.paragraph(`Started ${new Date(input.created_at * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`, 10, rgb(.78, .82, .88));
-  p.paragraph(`${summary.findings.length} observations / ${summary.assessments} of ${summary.expected} usable assessments`, 12, rgb(.94, .95, .98));
+  p.paragraph(`${summary.assessments ? `${summary.findings.length} observations` : 'No usable assessment'} / ${summary.assessments} of ${summary.expected} usable assessments`, 12, rgb(.94, .95, .98));
   p.paragraph(`Report ${input.id}`, 9, rgb(.66, .73, .84));
   p.paragraph('Prepared from saved agent reports. Incomplete work is disclosed; this is not a certification of security.', 10, rgb(.78, .82, .88));
 

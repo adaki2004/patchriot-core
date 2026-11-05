@@ -4,7 +4,7 @@
 
 Give us your website URL. Our hosted agents run an automated web application security assessment against the running app, often called dynamic application security testing (DAST). You get a private report: what they found, the evidence behind it and what to fix next. **You install nothing.** Add a dedicated test account for checks behind the login.
 
-**[Open Patchriot ↗](https://patchriot.tech)** · [How it works](https://patchriot.tech/#/docs/workflow) · [Testing FAQ](https://patchriot.tech/#/docs/safety)
+**[Open Patchriot ↗](https://patchriot.net)** · [How it works](https://patchriot.net/#/docs/workflow) · [Testing FAQ](https://patchriot.net/#/docs/safety)
 
 ## URL in. Evidence out.
 
@@ -35,7 +35,7 @@ Download **PDF, Markdown, evidence JSON or observed endpoints**. Your first expo
 - **NEAR AI:** our Hermes agents use DeepSeek V4.1 Flash Abliterated in NEAR AI’s private, hardware-protected inference environment. The relay encrypts requests and verifies attestation and signed responses. This protects model inference; the Kali agents and report storage are separate.
 - **NEAR Intents:** top-ups convert supported crypto into service credit. The server confirms settlement before credit is available. A top-up does not start work; a browser transaction hash never creates a balance.
 
-A disclosed Venice fallback can recover temporary model failures when the requester agrees. It is not a TEE route; usage appears in the report. [Data handling and retention →](https://patchriot.tech/#/docs/privacy)
+A disclosed Venice fallback can recover temporary model failures when the requester agrees. It is not a TEE route; usage appears in the report. [Data handling and retention →](https://patchriot.net/#/docs/privacy)
 
 ## The three parts
 
@@ -58,7 +58,7 @@ flowchart LR
 
 ## Start a test
 
-1. Enter your web app’s URL at **[patchriot.tech](https://patchriot.tech)**, sign in and choose black-box or grey-box testing.
+1. Enter your web app’s URL at **[patchriot.net](https://patchriot.net)**, sign in and choose black-box or grey-box testing.
 2. Add the supplied DNS TXT record. For grey box, add a disposable test account.
 3. Confirm the named team and providers. Use a coupon or your account credit. Add credit from Account before starting.
 4. Follow progress, inspect the findings and download the report. Cancel from the app if needed.
@@ -153,7 +153,7 @@ Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are s
 
 To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing pilot login codes still work through **Use a pilot login code**. Password sign-in and setup are limited by username, socket peer and a shared backstop; forwarded IP headers are not trusted. A reverse proxy therefore shares the peer limit. Add edge rate limits before a public rollout. GitHub and Google sign-in are available when configured below. MFA is not enforced by Patchriot; a verified provider email is not proof of target ownership.
 
-**GitHub and Google sign-in.** Configure a separate OAuth application with each provider. Set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` and `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` on core only. Each pair enables that provider; neither is enabled by default. Register the exact callbacks `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/github/callback` and `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/google/callback`. For the hosted service these start with `https://patchriot.tech`. Google uses the `openid email profile` scopes; GitHub uses `user:email`, with no repository permissions. Use a separate OAuth application for localhost and register its exact origin and callback.
+**GitHub and Google sign-in.** Configure a separate OAuth application with each provider. Set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` and `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` on core only. Each pair enables that provider; neither is enabled by default. Register the exact callbacks `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/github/callback` and `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/google/callback`. For the hosted service these start with `https://patchriot.net`. Google uses the `openid email profile` scopes; GitHub uses `user:email`, with no repository permissions. Use a separate OAuth application for localhost and register its exact origin and callback.
 
 Sign-in creates a member account from the provider's stable account ID. Matching emails never merge accounts or grant administrator access. Callbacks use PKCE, a one-use state and an HttpOnly browser cookie; Google identity tokens are signature-, issuer-, audience-, expiry- and nonce-checked. Provider access tokens are not saved. Existing password accounts and staff invitations remain separate. Login does not authorize testing: domain ownership, scope and payment are still checked before work starts. A wallet login is not required for payment; the unique order, deposit address and any required memo bind each deposit to its requester.
 
