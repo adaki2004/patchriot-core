@@ -164,6 +164,8 @@ async fn request_as<T: Serialize, R: DeserializeOwned>(
                     "ownership_refresh_limit",
                     "scope_changed_or_expired",
                     "test_credentials_locked",
+                    "test_setup_locked",
+                    "test_setup_changed",
                 ],
             )
             .await

@@ -370,6 +370,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/pentests", get(pentests::list).post(pentests::create))
         .route("/api/pentests/{id}/decision", post(pentests::decide))
+        .route("/api/pentests/{id}/setup", post(pentests::update_setup))
         .route(
             "/api/pentests/{id}/credentials",
             post(pentests::set_credentials),

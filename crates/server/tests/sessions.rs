@@ -209,6 +209,67 @@ async fn ownership_refresh_requires_session_csrf_and_forwards_only_the_authentic
 }
 
 #[tokio::test]
+async fn setup_edit_requires_origin_and_csrf_and_cannot_spoof_the_requester() {
+    let id = Uuid::new_v4();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let records = seen.clone();
+    let downstream = Router::new().fallback(move |headers: HeaderMap, uri: axum::http::Uri| {
+        let records = records.clone();
+        async move {
+            records.lock().unwrap().push((headers["x-patchriot-account"].to_str().unwrap().to_owned(), headers["x-patchriot-role"].to_str().unwrap().to_owned(), uri.path().to_owned()));
+            Json(json!({"id":id,"request_id":Uuid::new_v4(),"scope":{"origins":["https://example.com"],"objective":"Owned fixture","methods":["GET","HEAD","OPTIONS"]},"scope_sha256":"b".repeat(64),"permission_note":"Explicit permission","state":"pending_approval","created_at":1,"expires_at":9999999999_i64,"decision_note":null,"can_start":false,"can_edit_setup":true,"private_connection":"do not forward"}))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let path = format!("/api/pentests/{id}/setup");
+    let body = json!({"scope_sha256":"a".repeat(64),"scope":{"origins":["https://example.com"],"profile":"web_baseline_v1","methods":["GET","HEAD","OPTIONS"]},"permission_note":"Explicit permission","accepts_live_requests":true});
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &[("origin", ORIGIN)])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (cookie, session) = test.login("member").await;
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &[("cookie", &cookie)])
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert!(seen.lock().unwrap().is_empty());
+    let reply = test
+        .request(
+            "POST",
+            &path,
+            body,
+            &[
+                ("cookie", &cookie),
+                ("origin", ORIGIN),
+                ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+                ("x-patchriot-role", "admin"),
+                ("x-patchriot-account", "fake-account"),
+            ],
+        )
+        .await;
+    assert_eq!(reply.0, StatusCode::OK);
+    assert_eq!(reply.2["can_edit_setup"], true);
+    assert!(reply.2.get("private_connection").is_none());
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![(
+            session["account"]["id"].as_str().unwrap().to_owned(),
+            "member".into(),
+            format!("/internal/pentests/{id}/setup")
+        )]
+    );
+    server.abort();
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn live_pilot_requires_session_csrf_and_cannot_bypass_coupon_or_closed_access() {
     use patchriot_core::payments::access::ReviewAccess;
     for mode in [ReviewAccess::Coupons, ReviewAccess::Closed] {
