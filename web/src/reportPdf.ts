@@ -1,5 +1,5 @@
 import { reportBlocks } from './reportFormatting';
-import { fallbackDescription } from './LiveReport';
+import { fallbackDescription, browserAccessDescription } from './LiveReport';
 import { coverageChecks, checkLabels, findingRequest } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
@@ -135,7 +135,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.begin('02 / Scope & method');
   p.label('Authorized origins', input.origins.join('\n'));
   p.label('Profile', input.profile ?? 'Recorded custom scope');
-  p.label('Test-account scope', input.authentication ? `${input.authentication === 'basic' ? 'HTTP Basic' : input.authentication === 'session' ? 'Session login' : 'Bearer token'} · protected control path ${input.auth_check_path ?? 'not recorded'}. Credentials are not included.` : 'No test account supplied.');
+  p.label('Test-account scope', input.authentication ? `${input.authentication === 'basic' ? 'HTTP Basic' : input.authentication === 'session' ? 'Session login' : input.authentication === 'wallet' ? 'Disposable wallet login' : 'Bearer token'} · protected control path ${input.auth_check_path ?? (input.browser_login ? 'discovered by the agent' : 'not recorded')}. Credentials are not included.` : 'No test account supplied.');
   p.label('Approved HTTP methods', input.methods?.join(', ') ?? 'See the saved scope');
   p.label('Scope fingerprint (SHA-256)', input.scope_sha256 ?? 'Not recorded');
   p.heading('Assessment process');
@@ -148,6 +148,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.ensure(200);
     p.heading(`${reportRoles[s.role]} — ${roleOutcome(s).label}`);
     p.paragraph(roleOutcome(s).detail);
+    if (input.browser_login) p.paragraph(browserAccessDescription(s.result), 10, blue);
     if (!s.result) continue;
     p.paragraph(`${s.result.evidence.length} recorded requests · ${s.result.execution.inference_calls} model calls · ${Math.round(s.result.execution.duration_ms / 1000)} seconds`, 9, muted);
     if (s.result.execution.fallback) p.paragraph(fallbackDescription(s.result.execution.fallback), 9, muted);

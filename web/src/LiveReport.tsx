@@ -11,7 +11,8 @@ export type LiveFinding = { title: string; severity: string; support: string; ex
 export type LiveToolRun = { tool: string; version: string; arguments: string[]; started_at: number; duration_ms: number; exit_code: number | null; failure: string | null; evidence_ids: number[]; output_sha256: string; output_excerpt: string; output_truncated: boolean };
 export type FallbackReceipt = { model: string; reason: string; primary_attempts: number; fallback_attempts: number; fallback_completed: number };
 export function fallbackDescription(receipt: FallbackReceipt) { return `Venice fallback: ${receipt.model}. ${receipt.fallback_completed} completed replies from ${receipt.fallback_attempts} attempts; ${receipt.primary_attempts} NEAR attempts. Trigger: ${receipt.reason.replaceAll('_', ' ')}. Backup inference is not NEAR TEE execution. Recovery attempts share one logical call; both providers count toward the cost limit.`; }
-export type LiveResult = { kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
+export type LiveResult = { browser_access?: { authenticated_id: number; anonymous_id: number; check: { kind: 'protected_resource' | 'account_identity'; json_pointer?: string } }; kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
+export function browserAccessDescription(result: LiveResult | null) { const proof = result?.browser_access; return proof ? `Signed-in access verified: ${proof.check.kind === 'account_identity' ? 'the account response matched the supplied identity and differed from the anonymous response' : 'the protected resource was accessible with the account and refused anonymously'}. Evidence #${proof.authenticated_id} and #${proof.anonymous_id}. This establishes access to that resource, not coverage of every private page.` : 'Signed-in access was not verified. Public checks and saved findings may still be useful; authenticated coverage remains a gap.'; }
 export type LiveActivity = { received_at: number; progress: { phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number } };
 export type LiveStep = { role: LiveRole; state: string; result: LiveResult | null; evidence_complete?: boolean | null; progress?: LiveActivity | null };
 export type LiveTiming = { role_limit_seconds: number; started_at: number | null; active_role_deadline_at: number | null; requests_ahead: number };
@@ -19,7 +20,7 @@ const roleDuty = { investigator: 'Map the application and investigate leads.', r
 const phases = { starting: 'Starting the isolated runner', scoped_tools: 'Running scoped tools', investigating: 'Investigating the evidence', finishing: 'Preparing the report' };
 const support: Record<string, string> = { observed: 'Observed behavior', reproduced: 'Agent reports reproduction', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
 
-export function LiveProgress({ steps, state, policy }: { steps: LiveStep[]; state: string; policy?: Pick<ReportInput, 'review_policy' | 'third_review'> }) {
+export function LiveProgress({ steps, state, policy }: { steps: LiveStep[]; state: string; policy?: Pick<ReportInput, 'review_policy' | 'third_review' | 'browser_login'> }) {
   const expected = expectedReports(policy ?? {});
   const received = steps.filter(s => s.result !== null).length;
   return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><h3>The review team</h3><span className="fine">{received} of {expected} reports received</span></div><progress aria-label="Role reports received" value={received} max={expected} />
@@ -53,7 +54,7 @@ export function saveReportFile(filename: string, content: string, mime: string) 
 // Keep model/target text inert when someone opens the exported Markdown.
 const block = fencedText;
 
-export function reportMarkdown(id: string, steps: LiveStep[], origins: string[], policy: Pick<ReportInput, 'review_policy' | 'third_review'> = {}) {
+export function reportMarkdown(id: string, steps: LiveStep[], origins: string[], policy: Pick<ReportInput, 'review_policy' | 'third_review' | 'browser_login'> = {}) {
   const lines = ['# Patchriot — private website review', `Review: ${id}`, 'Scope:', block(origins.join('\n')), 'Role reports and operator-recorded HTTP evidence. Agreement is not proof of safety. Remediation is a recommendation; no production patch was tested.'];
   const findings = reportFindings({ id, steps, origins, state: '', created_at: 0 });
   lines.push('## Review method', reviewMethod(policy));
@@ -65,6 +66,7 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
   }
   for (const s of steps) {
     lines.push(`## ${liveRoles[s.role]}`, s.evidence_complete ? 'Report received with recorded requests.' : 'Incomplete role: inspect the evidence and missing checks.');
+    if (policy.browser_login || s.result?.browser_access) lines.push('### Sign-in verification', browserAccessDescription(s.result));
     if (!s.result) { lines.push('No report received.'); continue; }
     const r = s.result;
     if (r.execution.fallback) lines.push(block(fallbackDescription(r.execution.fallback)));
@@ -146,7 +148,7 @@ function RequestEvidence({ entry }: { entry: HttpRecord }) {
 
 export function Remediation({ text }: { text: string }) { return <ReportText text={text} />; }
 
-export function LiveEvidence({ result, complete, technicalOnly = false }: { result: LiveResult; complete?: boolean | null; technicalOnly?: boolean }) {
+export function LiveEvidence({ result, complete, technicalOnly = false, browserLogin = false }: { result: LiveResult; complete?: boolean | null; technicalOnly?: boolean; browserLogin?: boolean }) {
   const evidence = useRef<HTMLDetailsElement>(null);
   const [selected, setSelected] = useState<number[]>([]);
   const [filter, setFilter] = useState('all');
@@ -158,6 +160,7 @@ export function LiveEvidence({ result, complete, technicalOnly = false }: { resu
       {result.execution.failure_reason && <p>{stopExplanation(result.execution.failure_reason)}</p>}
       <details><summary>What does this status mean?</summary><p>“Received” means the server accepted a structured report and recorded requests. It does not mean the findings are correct. Missing evidence, interrupted execution or unconfirmed cleanup keep a role marked for review.</p></details>
     </div>
+    {(browserLogin || result.browser_access) && <p className="notice">{browserAccessDescription(result)}</p>}
     {result.execution.fallback && <p className="notice" role="status">{fallbackDescription(result.execution.fallback)}</p>}
     <dl className="role-metrics"><div><dt>Requests recorded</dt><dd>{result.execution.http_requests}</dd></div><div><dt>Model calls</dt><dd>{result.execution.inference_calls}</dd></div><div><dt>Run time</dt><dd>{Math.round(result.execution.duration_ms / 1000)}s</dd></div></dl>
     {!!result.tool_runs?.length && <details className="tool-evidence"><summary>Tools run ({result.tool_runs.length})</summary><p>The pinned runner recorded these checks before the agent investigated their output. Matches are leads, not confirmed vulnerabilities. Open the referenced requests to see what the target actually returned.</p>{result.tool_runs.map((run, i) => <article className="request-evidence" key={i}><div className="section-heading"><strong>{run.tool} · {run.version}</strong><span className="pill">{run.failure ? run.failure.replaceAll('_', ' ') : run.exit_code === 0 ? 'Finished' : 'Tool error'}</span></div><p className="fine">{new Date(run.started_at * 1000).toLocaleString()} · {Math.round(run.duration_ms / 1000)}s · {run.evidence_ids.length} recorded requests</p><details><summary>Command arguments</summary><pre>{JSON.stringify(run.arguments, null, 2)}</pre></details><details><summary>Tool output</summary><pre>{run.output_excerpt || (run.exit_code === 0 && !run.failure ? 'No matching observations were printed. This does not prove the site is safe.' : 'No tool output was retained.')}</pre></details>{run.output_truncated && <p className="fine">Output was shortened; inspect the request evidence for the recorded response excerpts.</p>}{run.evidence_ids.length > 0 && <button className="text-button" onClick={() => inspect(run.evidence_ids)}>Inspect tool requests →</button>}</article>)}</details>}
