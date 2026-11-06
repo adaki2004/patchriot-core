@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { workflowStateLabels as statusText, workflowCaveat } from './workflow';
 import { UIIcon } from './UIIcon';
 
@@ -12,18 +12,57 @@ export type WorkflowNode = {
   status: WorkflowNodeStatus;
   detail?: string;
   evidence_count?: number;
+  measured_duration_ms?: number;
   source_role?: string;
 };
+/** Anchor every edge to rendered node bounds, including row changes and responsive layouts. */
+function useWorkflowEdges(key: string) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [drawing, setDrawing] = useState<{width:number;height:number;edges:{from:string;to:string;path:string}[]}>({width:0,height:0,edges:[]});
+  useLayoutEffect(() => {
+    const root=ref.current;
+    if (!root) return;
+    const update=()=>{
+      const bounds=root.getBoundingClientRect();
+      const nodes=[...root.querySelectorAll<HTMLElement>('.workflow-node')].map(node=>{
+        const rect=node.getBoundingClientRect();
+        return {id:node.closest<HTMLElement>('[data-check]')!.dataset.check!,row:node.closest('.workflow-lower')?'lower':'public',x:rect.left-bounds.left+rect.width/2,y:rect.top-bounds.top+rect.height/2,r:rect.width/2};
+      });
+      const edges=nodes.slice(1).map((b,i)=>{
+        const a=nodes[i]; let path:string;
+        if(Math.abs(a.y-b.y)<2) path=`M${a.x+a.r} ${a.y}H${b.x-b.r}`;
+        else if(Math.abs(a.x-b.x)<2) path=`M${a.x} ${a.y+a.r}V${b.y-b.r}`;
+        else if(a.row===b.row) path=`M${a.x+a.r} ${a.y}H${(a.x+b.x)/2}V${b.y}H${b.x-b.r}`;
+        else if(nodes.length===6) path=`M${a.x+a.r} ${a.y}H${bounds.width-3}V${b.y}H${b.x+b.r}`;
+        else {
+          const lower=root.querySelector('.workflow-lower')!.getBoundingClientRect();
+          const turn=lower.top-bounds.top-14;
+          path=`M${a.x+a.r} ${a.y}H${bounds.width-3}V${turn}H3V${b.y}H${b.x-b.r}`;
+        }
+        return {from:a.id,to:b.id,path};
+      });
+      setDrawing({width:bounds.width,height:bounds.height,edges});
+    };
+    const observer=new ResizeObserver(update);observer.observe(root);
+    root.querySelectorAll('.workflow-node').forEach(node=>observer.observe(node));
+    window.addEventListener('resize',update);update();
+    return ()=>{observer.disconnect();window.removeEventListener('resize',update);};
+  },[key]);
+  return {ref,drawing};
+}
+
 /** A fixed workflow graph with accessible node controls, never a simulated event feed. */
 export function WorkflowGraph({ publicNodes, accessNodes, reportNode, recorded, live }: {
   publicNodes: WorkflowNode[]; accessNodes: WorkflowNode[]; reportNode: WorkflowNode; recorded: boolean; live: boolean;
 }) {
   const nodes = [...publicNodes, ...accessNodes, reportNode];
+  const marker=useId().replaceAll(':','');
+  const {ref,drawing}=useWorkflowEdges(nodes.map(node=>node.id).join(','));
   const [choice, setChoice] = useState<string | null>(null);
   const selected = nodes.find(node => node.id === choice) ?? nodes.find(node => node.status === 'running') ?? nodes.find(node => node.status === 'incomplete') ?? nodes[0];
   const label = (node: WorkflowNode) => node.status === 'running' && !live ? 'Last reported running' : statusText[node.status];
   function nodeButton(node: WorkflowNode, index: number, icon: 'shield' | 'globe' | 'agent' | 'lock' | 'file') {
-    return <li key={node.id} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step">
+    return <li key={node.id} data-check={node.id} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step">
       <button type="button" aria-pressed={selected.id === node.id} onClick={() => setChoice(node.id)} aria-label={`${node.title}: ${label(node)}`}>
         <span className="workflow-node"><UIIcon name={icon} /><span className="workflow-index">{String(index + 1).padStart(2, '0')}</span></span>
         <strong>{node.title}</strong><span className="workflow-tool">{node.tool}</span><span className="workflow-state">{label(node)}</span>
@@ -31,18 +70,21 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, recorded, 
     </li>;
   }
   return <div className="workflow-map" data-recorded={recorded}>
-    <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>Public first. Deeper with access.</h4><p>Select a step to inspect its record.</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
+    <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>Public first. Deeper with access.</h4><p>Public checks run first; approved access adds the signed-in checks. Select a step for its evidence.</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
     {!recorded && <p className="workflow-history" role="status">Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.</p>}
+    <div ref={ref} className="workflow-diagram">
+      <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}</svg>
     <div className="workflow-lane workflow-public"><div className="workflow-lane-label"><span>01</span><strong>Public checks</strong><small>Shared by black-box and grey-box tests</small></div><ol aria-label="Public assessment workflow">{publicNodes.map((node,index) => nodeButton(node,index,index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol></div>
-    <div className="workflow-join" aria-hidden="true"><svg viewBox="0 0 1000 34" preserveAspectRatio="none"><path d={accessNodes.length ? 'M900 0V12H175V34M900 12H835V34' : 'M900 0V12H800V34'} /></svg></div>
     <div className="workflow-lower" data-authenticated={accessNodes.length > 0}>
       {accessNodes.length > 0 ? <div className="workflow-lane workflow-access"><div className="workflow-lane-label"><span>+</span><strong>Behind the login</strong><small>Additional grey-box checks</small></div><ol aria-label="Additional authenticated workflow">{accessNodes.map((node,index) => nodeButton(node,index + publicNodes.length,'lock'))}</ol></div> : <div className="workflow-public-only"><UIIcon name="shield" /><p><strong>Public scope</strong>Black-box checks continue to evidence review.</p></div>}
       <div className="workflow-lane workflow-output"><div className="workflow-lane-label"><span>→</span><strong>Evidence review</strong><small>Keep findings and gaps visible</small></div><ol aria-label="Report workflow">{nodeButton(reportNode,publicNodes.length + accessNodes.length,'file')}</ol></div>
     </div>
+    </div>
+    <p className="workflow-status-help"><strong>Recorded = finished work saved.</strong> These checks run once, often quickly; they are not continuous monitoring. Running marks the current step. Reused evidence comes from an earlier agent.</p>
     <section className="workflow-inspector" aria-label="Selected workflow step">
       <div><span className="assessment-kicker">STEP DETAILS</span><h5>{selected.title}</h5><p>{selected.description}</p></div>
       <div className="workflow-inspector-state" data-status={selected.status}><strong>{label(selected)}</strong><p>{selected.detail ?? (selected.status === 'not_recorded' ? 'No structured execution record was retained. A report or heartbeat does not establish that this step finished.' : 'Select the recorded evidence in the report to inspect what the target returned.')}</p></div>
-      {(selected.evidence_count !== undefined || selected.source_role) && <dl><div><dt>Evidence records</dt><dd>{selected.evidence_count ?? '—'}</dd></div>{selected.source_role && <div><dt>Evidence source</dt><dd>{selected.source_role}</dd></div>}</dl>}
+      {(selected.evidence_count !== undefined || selected.source_role || selected.measured_duration_ms !== undefined) && <dl><div><dt>Evidence records</dt><dd>{selected.evidence_count ?? '—'}</dd></div>{selected.measured_duration_ms !== undefined && <div><dt>Recorded tool time</dt><dd>{Math.round(selected.measured_duration_ms / 1000)}s</dd></div>}{selected.source_role && <div><dt>Evidence source</dt><dd>{selected.source_role}</dd></div>}</dl>}
     </section>
     <p className="workflow-footnote">{workflowCaveat}</p>
   </div>;

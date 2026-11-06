@@ -1,3 +1,4 @@
+import { toolCoverageDetail } from '../src/workflow';
 import { coverageChecks, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
@@ -368,12 +369,12 @@ test('requested discovery without a receipt is unconfirmed and summary waits sta
   await page.getByText('Latest activity', {exact:true}).click();
   await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
-  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
+  await expect(page.getByText('ARTEX_public-engine was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
   recovered = true;
   await page.reload();
   await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
-  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
-  await expect(page.getByRole('row').filter({hasText:'artex-engine'})).toContainText('Recon');
+  await expect(page.getByText('ARTEX_public-engine was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
+  await expect(page.getByRole('row').filter({hasText:'ARTEX_public-engine'})).toContainText('Recon');
 });
 
 test('stopped tests retain a report without fake motion or example actions', async ({ page }) => {
@@ -676,7 +677,26 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await expect(details).toContainText('curated signature checks');
   await expect(details.getByText('12',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await activity.screenshot({path:info.outputPath(`workflow-${grey?'grey':'black'}.png`)});
+  await expect(activity).toContainText('Recorded = finished work saved.');
+  for(const width of info.project.name==='desktop' ? [1280,1920,1024,760] : [390]) {
+    await page.setViewportSize({width,height:1000});
+    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe(grey?7:5);
+    await expect.poll(async()=>activity.evaluate(root=>{
+      const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;const origin=svg.getBoundingClientRect();
+      return [...svg.querySelectorAll<SVGPathElement>('path[data-from]')].every(path=>{
+        const a=root.querySelector<HTMLElement>(`[data-check="${path.dataset.from}"] .workflow-node`)!.getBoundingClientRect();
+        const b=root.querySelector<HTMLElement>(`[data-check="${path.dataset.to}"] .workflow-node`)!.getBoundingClientRect();
+        const first=path.getPointAtLength(0),last=path.getPointAtLength(path.getTotalLength());
+        const distance=(p:DOMPoint,r:DOMRect)=>Math.hypot(origin.x+p.x-r.x-r.width/2,origin.y+p.y-r.y-r.height/2);
+        const otherNodes=[...root.querySelectorAll<HTMLElement>('[data-check]')].filter(node=>![path.dataset.from,path.dataset.to].includes(node.dataset.check)).map(node=>node.querySelector('.workflow-node')!.getBoundingClientRect());
+        const avoidsNodes=Array.from({length:40},(_,i)=>path.getPointAtLength(path.getTotalLength()*(i+1)/41)).every(point=>otherNodes.every(rect=>distance(point,rect)>rect.width/2+1));
+        return avoidsNodes && Math.abs(distance(first,a)-a.width/2)<2 && Math.abs(distance(last,b)-b.width/2)<2;
+      });
+    })).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await activity.screenshot({path:info.outputPath(`workflow-${grey?'grey':'black'}-${width}.png`)});
+  }
+
 });
 
 test('structured graph keeps incomplete, reused, missing and stale states distinct', async ({page},info)=>{
@@ -685,12 +705,13 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   const workflow=structuredWorkflow(true);
   workflow.checks[0]={...workflow.checks[0],state:'reused',source_role:'investigator'};
   workflow.checks[1]={...workflow.checks[1],state:'incomplete',evidence_count:3};
+  workflow.checks[4]={...workflow.checks[4],state:'incomplete'};
   workflow.checks=workflow.checks.filter(check=>check.id!=='public_signatures');
   const now=Math.floor(Date.now()/1000);
   let finished=false;
   const response=()=>({id,mode:'pentest_agent',state:finished?'needs_review':'running',created_at:now-300,deadline_at:now+3600,
     pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],authentication:'session'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
-    steps:[{role:'reproducer',state:finished?'failed':'leased',evidence_complete:false,result:finished?{...result,workflow,assessment:{...result.assessment!,limitations:['The route map remained incomplete; signed-in investigation did not finish.']},execution:{...result.execution,state:'failed',failure_reason:'attempt_timeout'}}:null,progress:{received_at:now-200,progress:{phase:'investigating',http_requests:33,inference_calls:4,completed_tools:3,workflow}}}]});
+    steps:[{role:'reproducer',state:finished?'failed':'leased',evidence_complete:false,result:finished?{...result,workflow,tool_runs:[...result.tool_runs!,{...result.tool_runs![0],tool:'artex-engine',duration_ms:5500,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'target_request_budget',coverage_complete:false})}],assessment:{...result.assessment!,limitations:['The route map remained incomplete; signed-in investigation did not finish.']},execution:{...result.execution,state:'failed',failure_reason:'attempt_timeout'}}:null,progress:{received_at:now-200,progress:{phase:'investigating',http_requests:33,inference_calls:4,completed_tools:3,workflow}}}]});
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:response()}));
   await page.goto(`/#/reviews/${id}`);
   let activity=page.getByRole('region',{name:'Recorded assessment activity'});
@@ -710,6 +731,10 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
   await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
+  await activity.getByRole('button',{name:'Deeper public checks: Incomplete',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Reached this tool’s request limit.');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('6s');
+  await expect(activity).toContainText('ARTEX_public-engine');
   await activity.screenshot({path:info.outputPath('workflow-partial.png')});
   await mockExport(page,response());
   const pdfDownload=page.waitForEvent('download');
@@ -728,4 +753,11 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   expect(markdown).toContain('Map routes (Patchriot crawl): Incomplete · 3 evidence records');
   expect(markdown).toContain('It does not mean complete coverage or a finding-free website.');
   expect(markdown).toContain('Known signatures (Nuclei): Not recorded (no checklist entry)');
+});
+
+test('partial engine explanations require known structured receipt metadata',()=>{
+  const tool={...result.tool_runs![0],tool:'artex-engine'};
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'target_request_budget',coverage_complete:false})})).toContain('request limit');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'interrupted',coverage_complete:false})})).toContain('interrupted');
+  for(const output_excerpt of ['<script>bad()</script>','{"stop_reason":"target_request_budget"}',JSON.stringify({receipt_schema:1,stop_reason:'unknown_reason',coverage_complete:false}),JSON.stringify({receipt_schema:1,stop_reason:'time_budget',coverage_complete:true})]) expect(toolCoverageDetail({...tool,output_excerpt})).toBeUndefined();
 });

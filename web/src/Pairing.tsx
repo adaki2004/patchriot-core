@@ -1,3 +1,4 @@
+import { UIIcon } from './UIIcon';
 import { useState } from 'react';
 import { useLive } from './useLive';
 import type { AgentSystem } from './api';
@@ -20,7 +21,21 @@ function Command({ children }: { children: string }) {
 }
 
 export function PairingClosed({ earnings = false }: { earnings?: boolean }) {
-  return <section className="panel contributor-preview"><p className="eyebrow">CONTRIBUTORS · COMING SOON</p><h1 className="page-title">{earnings ? 'Earnings are coming soon.' : 'Bring your agents. Soon.'}</h1><p>{earnings ? 'Earnings will become available when users can provide inference. There are no contributor earnings to display yet.' : 'Users can’t yet provide inference. We run the testing agents while we prepare contributor access.'}</p><p>You can already request a security assessment and follow its progress in Audits.</p></section>;
+  const stages = earnings ? [
+    {icon:'file',title:'Complete approved work',text:'Accepted assignments will have a record of the work and its outcome.'},
+    {icon:'wallet',title:'Track your earnings',text:'See credited work, available balance and payout history in one place.'},
+    {icon:'shield',title:'Choose your payout',text:'Review the destination and quote before confirming a withdrawal.'},
+  ] as const : [
+    {icon:'agent',title:'Bring your inference',text:'Connect a machine and a supported model route when contributor access opens.'},
+    {icon:'shield',title:'Get approved',text:'Pairing, capability checks and approval come before private assignments.'},
+    {icon:'globe',title:'Join the work',text:'Accept scoped assignments and return evidence through the relay.'},
+  ] as const;
+  return <section className="contributor-preview" aria-label={earnings ? 'Contributor earnings preview' : 'Contributor agents preview'}>
+    <div className="contributor-hero"><div><p className="eyebrow">CONTRIBUTORS · COMING SOON</p><h1 className="page-title">{earnings ? 'Earnings are coming soon.' : 'Bring your agents. Soon.'}</h1><p>{earnings ? 'A home for the work you contribute and the rewards it earns. Contributor earnings will open alongside inference contributions.' : 'Put your inference capacity to work for a safer internet. We’re preparing contributor access; Patchriot runs the testing agents today.'}</p><span className="contributor-status"><UIIcon name="clock" />Public contributions are not open yet</span></div><div className="contributor-emblem" aria-hidden="true"><UIIcon name={earnings ? 'wallet' : 'agent'} /><span>PATCHRIOT / CONTRIBUTORS</span></div></div>
+    {earnings ? <div className="contributor-balances" aria-label="Planned earnings overview">{['Available balance','Work credited','Payout history'].map(label=><article key={label}><span>{label}</span><strong>—</strong><small>Available when contributions open</small></article>)}</div> : <div className="contributor-machine"><UIIcon name="agent" /><div><h2>Your agents will live here.</h2><p>Connection status, declared model and approved capabilities — together in your workspace.</p></div><span>Coming soon</span></div>}
+    <div className="contributor-plan"><div className="section-heading"><h2>{earnings ? 'From contribution to payout.' : 'A clear path into the network.'}</h2><span className="fine">PLANNED CONTRIBUTOR EXPERIENCE</span></div><ol>{stages.map((stage,index)=><li key={stage.title}><span className="contributor-step">0{index+1}<UIIcon name={stage.icon} /></span><h3>{stage.title}</h3><p>{stage.text}</p></li>)}</ol></div>
+    <div className="contributor-next"><p>You can already request a security assessment and follow its progress in Audits.</p><a href="#/audits">Open your audits <UIIcon name="arrow" /></a></div>
+  </section>;
 }
 
 export function Guide({ onPair }: { onPair: () => void }) {
@@ -90,7 +105,7 @@ export function AgentList({ compact = false, onAll }: { compact?: boolean; onAll
       <dl><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd>{compact && <><dt>Runtime</dt><dd>{agent.runtime_version || 'Not reported'}</dd><dt>Heartbeat</dt><dd>{agent.last_seen_at ? <time dateTime={new Date(agent.last_seen_at * 1000).toISOString()}>{new Date(agent.last_seen_at * 1000).toLocaleTimeString()}</time> : 'None yet'}</dd><dt>Reports</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd></>}{!compact && <>
         <dt>Runner version</dt><dd>{agent.runtime_version}</dd>
         {agent.system && <><dt>Architecture</dt><dd>{agent.system.architecture}</dd><dt>Relay version</dt><dd>{agent.system.relay_version}</dd></>}
-        <dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.includes('artex_engine_v1') ? 'ARTEX + standard checks' : 'Standard checks') : 'Not enabled'}</dd>
+        <dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.includes('artex_engine_v1') ? 'ARTEX_public-engine + standard checks' : 'Standard checks') : 'Not enabled'}</dd>
         {agent.live_tests && <><dt>Supported roles</dt><dd>Investigation, reproduction and evidence review. Assigned per assessment.</dd></>}<dt>Reports received</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd>
         <dt>Last heartbeat</dt><dd>{agent.last_seen_at ? new Date(agent.last_seen_at * 1000).toLocaleString() : 'None yet'}</dd></>}</dl>
       {!compact && <small className="subtle">Device {agent.id.slice(0, 8)}</small>}

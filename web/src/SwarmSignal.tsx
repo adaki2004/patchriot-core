@@ -74,15 +74,15 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
     return () => { observer.disconnect(); media.removeEventListener('change', update); document.removeEventListener('visibilitychange', update); };
   }, []);
   const stopped = paused === true || !playing;
-  const paths = ['M148 200V260', 'M255 325H320', 'M500 325H530', 'M710 325H740', 'M920 325H955'];
+  const paths = ['M225 320H285', 'M505 320H550V165H605', 'M505 320H605', 'M865 320H950', 'M395 385V535'];
   const packets = stopped ? '' : paths.map((path, i) => `<circle r="3" fill="#ffac9b"><animateMotion dur="4s" begin="${-i * .7}s" repeatCount="indefinite" path="${path}" /></circle>`).join('');
   // Only repository-owned SVG and fixed decorative paths are injected here.
   const drawing = architectureSvg.replace(/<\/svg>\s*$/, `${packets}</svg>`);
   return <div ref={root} className="service-map architecture-map" data-paused={stopped} aria-label="From your verified domain to a private security report">
     <div className="flow-permission"><span>YOU START HERE</span><strong>Verify your domain</strong><span aria-hidden="true">→</span><strong>Confirm access</strong></div>
     <div className="architecture-scroll" tabIndex={0} aria-label="Assessment architecture diagram" dangerouslySetInnerHTML={{ __html: drawing }} />
-    <span className="architecture-scroll-hint">Scroll the diagram sideways to explore all agents and providers →</span>
-    <ol className="map-key"><li><strong>1. Your web app</strong><span>Exact domain. Your permission.</span></li><li><strong>2. Dispatcher</strong><span>Sets the scope and queues work.</span></li><li><strong>3. Isolated Hermes agents</strong><span>Scout → Recon → Verifier if needed.</span></li><li><strong>4. Inference</strong><span>NEAR · VERIFIED TEE<br />VENICE · API ROUTE</span></li></ol>
-    <p className="flow-caption">Provider order and optional fallback are shown at checkout. This diagram explains supported routes, not live activity. <a href={architectureUrl} target="_blank" rel="noreferrer">Open full diagram ↗</a></p>
+    <span className="architecture-scroll-hint">Scroll sideways to explore the contributor network →</span>
+    <ol className="map-key"><li><strong>1. Your web app</strong><span>Exact domain. Your permission.</span></li><li><strong>2. Dispatcher</strong><span>Sets the scope and queues work.</span></li><li><strong>3. Isolated Hermes agents</strong><span>Agent 1, 2, …, N contribute inference capacity.</span></li><li><strong>4. Inference</strong><span>NEAR · VERIFIED TEE<br />VENICE · API ROUTE</span></li></ol>
+    <p className="flow-caption">The numbered agents are inference contributors, not fixed review roles. Patchriot operates them today; public contribution is coming soon. Provider order and optional fallback are shown at checkout. This illustrates the architecture, not live activity. <a href={architectureUrl} target="_blank" rel="noreferrer">Open full diagram ↗</a></p>
   </div>;
 }

@@ -1,5 +1,6 @@
 import { workflowRecordLines, workflowCaveat, workflowAbsent } from './workflow';
 import { AssessmentActivity } from './AssessmentActivity';
+import { ReviewTiming } from './ReviewTiming';
 import { ReportText } from './ReportText';
 import { prettyJson, fencedText, reportMarkdownText } from './reportFormatting';
 import { useRef, useState } from 'react';
@@ -49,6 +50,7 @@ export function LiveStatus({ steps, state, deadline, timing }: { steps: LiveStep
     <div className="assessment-status-copy"><span className="assessment-kicker">{state === 'failed' ? 'INCOMPLETE ASSESSMENT' : state === 'cancelled' ? 'STOPPED' : state === 'completed' ? 'REPORTS RECEIVED' : state === 'needs_review' ? 'NEEDS ATTENTION' : working ? 'TEST IN PROGRESS' : 'WAITING TO START'}</span><h2>{title}</h2><p>{description}</p>{['queued', 'running'].includes(state) && (timing ? <>
       {!working && <p>{timing.requests_ahead > 0 ? `${timing.requests_ahead} earlier test${timing.requests_ahead === 1 ? '' : 's'} share your selected agents. Ready work runs in order on each machine.` : timing.started_at ? 'Waiting for the next agent to become available.' : 'Waiting for your selected Scout to become available.'}</p>}
       <small>Each agent gets up to {Math.ceil(timing.role_limit_seconds / 60)} minutes after its own work starts. Waiting does not use that allowance.</small>
+      <ReviewTiming steps={steps} timing={timing} />
       {working && timing.active_role_deadline_at && <small className="role-deadline">This agent’s time limit ends at {new Date(timing.active_role_deadline_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}; it can finish earlier.</small>}
       <details><summary>Timing & permission</summary><p>The request remains valid until {new Date(deadline * 1000).toLocaleString()}. Work must stop if permission or test-account access expires, or you cancel. This separate limit also bounds how long a request can wait.</p></details>
     </> : <small>This request has a fixed expiry: {new Date(deadline * 1000).toLocaleString()}. Saved requests keep their original limits.</small>)}</div>

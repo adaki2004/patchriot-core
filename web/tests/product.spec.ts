@@ -123,16 +123,20 @@ test('members cannot load connection details or open a pairing dialog', async ({
   expect(calls).not.toContain('/api/devices');
 });
 
-test('shared architecture visibly names three isolated workers and separates inference routes', async ({page}, info) => {
+test('shared architecture names vertical numbered contributors and separates inference routes', async ({page}, info) => {
   await setup(page);
   await page.goto('/#/docs/infrastructure');
   const diagram=page.locator('.architecture-scroll');
   await expect(diagram.locator('svg').first()).toBeVisible();
-  for(const name of ['Scout','Recon','Verifier','Uncensored LLM']) await expect(diagram).toContainText(name);
+  for(const name of ['Agent 1','Agent 2','Agent N','Uncensored LLM']) await expect(diagram).toContainText(name);
   await expect(diagram.locator('text').filter({hasText:'Kali Linux®'})).toHaveCount(3);
-  await expect(diagram.locator('text').filter({hasText:'Hermes + relay'})).toHaveCount(3);
-  await expect(diagram).toContainText('Verified TEE + signed replies');
-  await expect(diagram).toContainText('API route');
+  await expect(diagram.locator('text').filter({hasText:'Scoped relay + model access'})).toHaveCount(3);
+  await expect(diagram).toContainText('NEAR · VERIFIED TEE');
+  await expect(diagram).toContainText('VENICE · API ROUTE');
+  for(const role of ['Scout','Recon','Verifier']) await expect(diagram).not.toContainText(role);
+  const positions=await diagram.locator('text').filter({hasText:/^Agent [12N]$/}).evaluateAll(nodes=>nodes.map(node=>({x:node.getAttribute('x'),y:Number(node.getAttribute('y'))})));
+  expect(new Set(positions.map(p=>p.x)).size).toBe(1);
+  expect(positions[0].y < positions[1].y && positions[1].y < positions[2].y).toBe(true);
   const image=await page.getByRole('link',{name:'Open full diagram'}).getAttribute('href');
   expect(image).toContain('assessment-architecture.svg');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

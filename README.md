@@ -39,9 +39,9 @@ Deployments can select NEAR AI or Venice DeepSeek as primary and optionally use 
 
 ## The three parts
 
-![Patchriot architecture: three isolated Kali Linux and Hermes agents, with approved NEAR AI or Venice uncensored LLM inference and private evidence returning through the dispatcher.](web/src/assets/assessment-architecture.svg)
+![Patchriot architecture: vertically stacked contributor agents 1, 2 through N, with approved NEAR AI or Venice inference and private evidence returning through the dispatcher.](web/src/assets/assessment-architecture.svg)
 
-Scout investigates, Recon reproduces, and Verifier challenges when needed. Roles run sequentially and may share an operator or machine. This same diagram appears on the website and in the architecture guide.
+The numbered agents are inference contributors, not fixed review roles. Each approved instance runs Kali Linux, Hermes and a scoped relay with access to its approved model route. Patchriot operates these agents today; public contributor access is coming soon. Review roles are assigned separately and run sequentially; agents may share an operator or machine. This same diagram appears on the website and in the architecture guide.
 
 | Repository | Role |
 | --- | --- |
