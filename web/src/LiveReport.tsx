@@ -58,10 +58,11 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
   const lines = ['# Patchriot — private website review', `Review: ${id}`, 'Scope:', block(origins.join('\n')), 'Role reports and operator-recorded HTTP evidence. Agreement is not proof of safety. Remediation is a recommendation; no production patch was tested.'];
   const findings = reportFindings({ id, steps, origins, state: '', created_at: 0 });
   lines.push('## Review method', reviewMethod(policy));
-  lines.push(`## Observations (${findings.length})`, 'Repeat claims are grouped by title and first cited request. Anonymous and test-account checks stay visible within that observation. Original contributions and role-scoped references are retained. Different severities or support require review; the highest reported severity is shown.');
+  lines.push(`## Observations (${findings.length})`, 'Matching titles on the same website are grouped for reading. Different endpoints, inputs and access conditions stay visible in the original contributions. Grouping does not prove a shared cause or independent confirmation. Differences in severity or support require review; the highest reported severity is shown.');
   for (const row of findings) {
     lines.push(`### ${row.id}`, block(`${row.finding.title}\nSeverity: ${row.finding.severity}`));
     if (row.disputed) lines.push('Roles differ — review needed.');
+    if (row.variedRequests) lines.push('Different request examples: compare the endpoints, inputs and access conditions in each contribution.');
     for (const c of row.contributions) lines.push(`#### ${liveRoles[c.role]} contribution`, block(`Severity: ${c.finding.severity}\nSupport: ${support[c.finding.support] ?? c.finding.support}\n${c.complete ? 'Assessment received' : 'Partial assessment'}\nFirst cited request: ${findingRequest(c)}`), 'Impact and evidence:', reportMarkdownText(c.finding.explanation), 'Reproduction:', reportMarkdownText(c.finding.reproduction), 'Recommended fix (not tested):', reportMarkdownText(c.finding.suggested_action), `HTTP references: ${c.finding.evidence_ids.map(n => `${c.role}#${n}`).join(', ')}`);
   }
   for (const s of steps) {

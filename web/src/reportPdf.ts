@@ -128,7 +128,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.heading('Reported severity');
   for (const severity of severities) p.paragraph(`${severity === 'info' ? 'Informational' : severity[0].toUpperCase() + severity.slice(1)}: ${summary.findings.filter(r => r.finding.severity === severity).length}`, 11);
   p.heading('How to use this report');
-  p.paragraph('Start with the numbered findings. Repeat claims with matching titles and first cited requests are grouped. Anonymous and test-account checks stay visible within that observation. Each original contribution remains available. Differences in severity or support are marked for review, with the highest reported severity shown. Agreement is not independent confirmation. Informational observations may describe intentional behavior.');
+  p.paragraph('Start with the numbered findings. Matching titles on the same website are grouped for reading. Different endpoints, inputs and access conditions remain in the original contributions. Grouping does not prove a shared cause or independent confirmation. Differences in severity or support are marked for review, with the highest reported severity shown. Informational observations may describe intentional behavior.');
   p.paragraph(summary.partial ? 'Follow up on the incomplete stages before treating this assessment as finished. A missing report is not a report of no vulnerabilities.' : 'Validate material findings and retest any changes. A completed automated run cannot establish the absence of vulnerabilities.');
   p.paragraph(reportLimits, 10, muted);
 
@@ -167,6 +167,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.heading(f.title, 1);
     p.paragraph(`${supportLabels[f.support] ?? 'Unconfirmed'}${row.complete ? '' : ' · From a partial assessment'}. Severity and support are the agent’s assessment.`, 10, muted);
     if (row.disputed) p.paragraph('Roles differ — review needed. The highest reported severity is shown, not a confirmed verdict.', 11, blue);
+    if (row.variedRequests) p.paragraph('Different request examples: compare the endpoints, inputs and access conditions in each contribution.', 10, muted);
     p.heading('Observation & impact'); p.formatted(f.explanation);
     p.heading('Recommended action'); p.formatted(f.suggested_action);
     p.paragraph('Recommendation only. No patch was applied or retested.', 9, muted);

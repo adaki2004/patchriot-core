@@ -398,19 +398,53 @@ test('repeated findings count once while keeping all roles, citations and confli
   expect(report.steps.every(s => s.result!.assessment!.findings.length === 2)).toBe(true);
 });
 
-test('matching labels do not merge different paths, query values or POST bodies', () => {
-  for (const change of ['path', 'query', 'body', 'missing']) {
+test('matching labels group request variants without altering their distinct evidence', () => {
+  for (const change of ['path', 'query', 'body']) {
     const report = repeatedReport();
     const evidence = report.steps[1].result!.evidence[0];
     if (change === 'path') evidence.url = 'https://owned.example/other?token=synthetic-value';
     if (change === 'query') evidence.url = 'https://owned.example/debug?token=another-value';
     if (change === 'body') { evidence.method = 'POST'; evidence.request_body_sha256 = 'c'.repeat(64); }
-    if (change === 'missing') report.steps[1].result!.evidence.shift();
+    const original = JSON.stringify(report);
+    const grouped = reportFindings(report);
+    expect(grouped, change).toHaveLength(2);
+    expect(grouped.every(g => g.variedRequests)).toBe(true);
+    expect(grouped[0].contributions[1].result.evidence[0]).toEqual(evidence);
+    expect(JSON.stringify(report)).toBe(original);
+  }
+});
+
+test('missing evidence, different origins and separate claims by one author stay separate', () => {
+  for (const change of ['missing', 'origin', 'mixed-origins', 'malformed']) {
+    const report = repeatedReport();
+    const evidence = report.steps[1].result!.evidence;
+    if (change === 'missing') evidence.shift();
+    if (change === 'origin') evidence.forEach(e => { e.url = e.url.replace('owned.example', 'other.example'); });
+    if (change === 'mixed-origins') evidence[0].url = 'https://other.example/debug';
+    if (change === 'malformed') evidence[0].url = 'invalid URL';
     expect(reportFindings(report), change).toHaveLength(4);
   }
   const report = repeatedReport();
   report.steps[0].result!.assessment!.findings.push(structuredClone(result.assessment!.findings[0]));
   expect(reportFindings(report)).toHaveLength(3); // Never erase two claims by one author.
+});
+
+test('the same schema-error observation across endpoints appears once with all examples', () => {
+  const report = repeatedReport();
+  for (const [i, step] of report.steps.entries()) {
+    const r = step.result!;
+    r.assessment!.findings = [{ ...r.assessment!.findings[0], title: 'Verbose deserialization errors disclose request schema', severity: 'info', evidence_ids: [1] }];
+    r.evidence[0] = { ...r.evidence[0], method: 'POST', url: `https://owned.example/${['auth/challenge', 'market-check', 'drafts'][i]}`, status: 422, request_body_sha256: String(i).repeat(64) };
+  }
+  report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
+  const original = JSON.stringify(report);
+  const rows = reportFindings(report);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].variedRequests).toBe(true);
+  expect(rows[0].disputed).toBe(true);
+  expect(rows[0].contributions.map(c => c.result.evidence[0].url)).toEqual(['auth/challenge', 'market-check', 'drafts'].map(p => `https://owned.example/${p}`));
+  expect(rows[0].contributions.map(c => c.finding.evidence_ids)).toEqual([[1], [1], [1]]);
+  expect(JSON.stringify(report)).toBe(original);
 });
 
 test('anonymous and account checks group without losing conflicting evidence or changing originals', () => {
@@ -443,6 +477,7 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   const report = repeatedReport();
   report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
   report.steps[0].result!.evidence[0].authenticated = true;
+  report.steps[2].result!.evidence[0].url = 'https://owned.example/another-example';
   const review = { ...report, mode: 'pentest_agent', deadline_at: 1793643000, pentest: { scope: { origins: report.origins, methods: ['GET'] }, reviewers: [] } };
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await mockExport(page, review);
@@ -450,6 +485,7 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   await expect(page.getByRole('button', { name: 'Findings (2)', exact: true })).toBeVisible();
   await expect(page.getByText(/Roles differ — review needed/)).toBeVisible();
   await page.locator('.report-finding > summary').first().click();
+  await expect(page.locator('.report-finding').first().getByText(/Different request examples/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Inspect Verifier evidence' })).toBeVisible();
   await expect(page.locator('.report-finding').first().getByText(/Scout · Test account · GET/)).toBeVisible();
   await expect(page.locator('.report-finding').first().getByText(/Recon · Anonymous · GET/)).toBeVisible();
@@ -461,6 +497,8 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   expect(md).toContain('Roles differ — review needed.');
   expect(md).toContain('First cited request: Test account · GET');
   expect(md).toContain('First cited request: Anonymous · GET');
+  expect(md).toContain('https://owned.example/another-example');
+  expect(md).toContain('Different request examples:');
   for (const role of ['investigator', 'reproducer', 'challenger']) expect(md).toContain(`${role}#1`);
   expect(md.match(/^### [SRV]-\d+$/gm)).toHaveLength(2);
 });

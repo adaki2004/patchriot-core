@@ -13,7 +13,7 @@ export const severities = ['critical', 'high', 'medium', 'low', 'info'] as const
 export const supportLabels: Record<string, string> = { observed: 'Observed', reproduced: 'Reproduction reported', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
 export type ReportInput = { tools?: string[]; browser_login?: boolean; review_policy?: ReviewPolicy; third_review?: ThirdReview; id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session' | 'wallet'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
 export type FindingContribution = { id: string; role: LiveRole; finding: LiveFinding; result: LiveResult; complete: boolean };
-export type ReportFinding = FindingContribution & { contributions: FindingContribution[]; disputed: boolean };
+export type ReportFinding = FindingContribution & { contributions: FindingContribution[]; disputed: boolean; variedRequests: boolean };
 
 /** These are execution problems, never findings about the assessed website. */
 export function stopExplanation(reason?: string): string {
@@ -21,6 +21,7 @@ export function stopExplanation(reason?: string): string {
     case 'model_history_limit': case 'model_request_too_large': return 'The agent’s conversation exceeded the runner’s input limit before its report was ready. Recorded requests remain available.';
     case 'model_messages_empty': case 'model_message_role': case 'model_message_content': case 'invalid_model_messages': return 'The runner rejected a model conversation before the agent could finish its assessment. This is an execution problem, not a finding about your website.';
     case 'inference_limit': return 'The runner reached its model-request limit before the agent could finish its report. This is a testing limit, not a vulnerability in your website.';
+    case 'agent_request_limit': return 'The agent exceeded the runner’s internal request allowance before returning its assessment. This is an execution failure, not a finding about your website.';
     case 'provider_budget_reached': case 'engine_budget_reached': return 'The agent reached its allowed AI usage budget. Saved evidence is available, but the remaining checks were not completed.';
     case 'timed_out': case 'timeout': return 'The allowed testing time ended before this work finished.';
     case 'provider_unavailable': case 'provider_rejected_request': case 'provider_stream_interrupted': return 'The AI provider did not complete a request. The agent could not finish this stage.';
@@ -49,9 +50,9 @@ export function findingRequest(claim: FindingContribution): string {
   return evidence ? `${evidence.authenticated === true ? 'Test account' : 'Anonymous'} · ${evidence.method} ${evidence.url}` : 'Request evidence unavailable';
 }
 
-/** Match the claim and first request, preserving different access contexts as
- * contributions to the same observation. A shared control URL elsewhere must
- * not join unrelated findings. Grouping is presentation, never consensus. */
+/** Group matching labels on one origin for reading, not to infer a shared root
+ * cause or reviewer consensus. Keep each author's separate claims, requests,
+ * inputs and access conditions intact, including disagreements. */
 export function reportFindings(input: ReportInput): ReportFinding[] {
   const claims = input.steps.flatMap(s => s.result?.assessment?.findings.map((finding, i) => ({
     id: `${({ investigator: 'S', reproducer: 'R', challenger: 'V' })[s.role]}-${String(i + 1).padStart(2, '0')}`,
@@ -60,22 +61,36 @@ export function reportFindings(input: ReportInput): ReportFinding[] {
   const groups = new Map<string, ReportFinding[]>();
   for (const claim of claims) {
     const evidence = claim.result.evidence.find(e => e.id === claim.finding.evidence_ids[0]);
-    // This spelling variant means the same HTTP header. No semantic/fuzzy
-    // title matching: different causes, paths, queries and inputs stay separate.
+    // No fuzzy matching. Similar-looking titles can describe different causes.
     const title = claim.finding.title.toLowerCase().trim().replace(/\s+/g, ' ').replace(/\bstrict-transport-security header\b/g, 'strict-transport-security');
-    const key = evidence?.status != null ? JSON.stringify([title, evidence.method, evidence.url, evidence.request_body_sha256 ?? null]) : claim.id;
+    let origin: string | undefined;
+    if (evidence?.status != null) {
+      try {
+        const origins = new Set(claim.finding.evidence_ids.map(id => {
+          const record = claim.result.evidence.find(e => e.id === id);
+          return record?.status != null ? new URL(record.url).origin : undefined;
+        }));
+        if (origins.size === 1 && !origins.has(undefined)) origin = [...origins][0];
+      } catch { /* Missing or malformed evidence must not join another claim. */ }
+    }
+    const key = origin ? JSON.stringify([title, origin]) : claim.id;
     const bucket = groups.get(key) ?? [];
     const group = bucket.find(g => !g.contributions.some(c => c.role === claim.role));
     if (group) group.contributions.push(claim);
-    else bucket.push({ ...claim, contributions: [claim], disputed: false });
+    else bucket.push({ ...claim, contributions: [claim], disputed: false, variedRequests: false });
     groups.set(key, bucket);
   }
   const rank = (f: LiveFinding) => severities.indexOf(f.severity as typeof severities[number]);
   return [...groups.values()].flat().map(group => {
     const highest = group.contributions.reduce((a, b) => rank(a.finding) <= rank(b.finding) ? a : b);
     const support = new Set(group.contributions.map(c => ['observed', 'reproduced'].includes(c.finding.support) ? 'positive' : c.finding.support));
+    const requests = new Set(group.contributions.map(c => {
+      const e = c.result.evidence.find(e => e.id === c.finding.evidence_ids[0]);
+      return e ? JSON.stringify([e.method, e.url, e.request_body_sha256 ?? null, e.authenticated === true]) : c.id;
+    }));
     return { ...group, role: highest.role, finding: highest.finding, result: highest.result,
       complete: group.contributions.every(c => c.complete),
+      variedRequests: requests.size > 1,
       disputed: support.size > 1 || new Set(group.contributions.map(c => c.finding.severity)).size > 1 };
   }).sort((a, b) => rank(a.finding) - rank(b.finding));
 }
