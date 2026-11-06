@@ -2,7 +2,7 @@ import { ReportText } from './ReportText';
 import { prettyJson, fencedText, reportMarkdownText } from './reportFormatting';
 import { useRef, useState } from 'react';
 import './assessment.css';
-import { expectedReports, reviewMethod, findingRequest, reportFindings, stopExplanation, type ReportInput } from './report';
+import { assessmentFinished, expectedReports, reviewMethod, findingRequest, reportFindings, roleOutcome, stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
@@ -66,7 +66,8 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
     for (const c of row.contributions) lines.push(`#### ${liveRoles[c.role]} contribution`, block(`Severity: ${c.finding.severity}\nSupport: ${support[c.finding.support] ?? c.finding.support}\n${c.complete ? 'Assessment received' : 'Partial assessment'}\nFirst cited request: ${findingRequest(c)}`), 'Impact and evidence:', reportMarkdownText(c.finding.explanation), 'Reproduction:', reportMarkdownText(c.finding.reproduction), 'Recommended fix (not tested):', reportMarkdownText(c.finding.suggested_action), `HTTP references: ${c.finding.evidence_ids.map(n => `${c.role}#${n}`).join(', ')}`);
   }
   for (const s of steps) {
-    lines.push(`## ${liveRoles[s.role]}`, s.evidence_complete ? 'Report received with recorded requests.' : 'Incomplete role: inspect the evidence and missing checks.');
+    const outcome = roleOutcome(s);
+    lines.push(`## ${liveRoles[s.role]}`, outcome.label, outcome.detail);
     if (policy.browser_login || s.result?.browser_access) lines.push('### Sign-in verification', browserAccessDescription(s.result));
     if (!s.result) { lines.push('No report received.'); continue; }
     const r = s.result;
@@ -154,10 +155,11 @@ export function LiveEvidence({ result, complete, technicalOnly = false, browserL
   const [selected, setSelected] = useState<number[]>([]);
   const [filter, setFilter] = useState('all');
   const findings = result.assessment?.findings ?? [];
+  const finished = assessmentFinished(result);
   const shown = findings.filter(f => filter === 'all' || filter === 'unconfirmed' && ['needs_review', 'not_reproduced'].includes(f.support) || filter === 'reproduced' && f.support === 'reproduced');
   function inspect(ids: number[]) { setSelected(ids); if (evidence.current) { evidence.current.open = true; evidence.current.scrollIntoView({ behavior: 'auto', block: 'start' }); evidence.current.querySelector('summary')?.focus(); } }
   return <div className="live-assessment">
-    <div className={`role-summary ${complete ? 'received' : 'incomplete'}`}><h4>{complete ? 'Report and requests received.' : 'This role needs review.'}</h4><p>{complete ? 'Read the finding, the claimed impact and the requests behind it.' : result.assessment ? 'An assessment arrived, but the run or supporting evidence did not finish cleanly. Treat these findings as incomplete.' : 'The agent did not return a usable assessment. Any requests it recorded are still available below.'}</p>
+    <div className={`role-summary ${complete ? 'received' : 'incomplete'}`}><h4>{finished ? complete ? 'Report and requests received.' : 'Report received with coverage limits.' : 'This role needs review.'}</h4><p>{finished ? complete ? 'Read the finding, the claimed impact and the requests behind it.' : 'The agent finished its report. Some checks or access could not be verified; the limits below show what remains untested.' : result.assessment ? 'The agent returned findings but its execution did not finish cleanly. Review its stop reason and supporting requests.' : 'The agent did not return a usable assessment. Any requests it recorded are still available below.'}</p>
       {result.execution.failure_reason && <p>{stopExplanation(result.execution.failure_reason)}</p>}
       <details><summary>What does this status mean?</summary><p>“Received” means the server accepted a structured report and recorded requests. It does not mean the findings are correct. Missing evidence, interrupted execution or unconfirmed cleanup keep a role marked for review.</p></details>
     </div>

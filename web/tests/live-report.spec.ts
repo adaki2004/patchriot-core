@@ -1,4 +1,4 @@
-import { coverageChecks, reportFindings, reportSummary, type ReportInput } from '../src/report';
+import { coverageChecks, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
@@ -26,6 +26,29 @@ test('two completed reports are complete only for the resolved conditional polic
   expect(stopped.description).not.toContain('Verifier did not finish');
   expect(reportSummary({...report,review_policy:undefined,third_review:undefined}).partial).toBe(true);
   expect(reportSummary({...report,third_review:{reasons:['serious_finding']}}).description).toContain('2 of 3 agent reports');
+});
+
+test('finished reports keep coverage limits separate from missing login or interrupted execution', () => {
+  const report: ReportInput = { id, state:'needs_review', created_at:1793640000, origins:['https://owned.example'], review_policy:'investigate_verify_v1', third_review:{reasons:[]}, steps: (['investigator','reproducer'] as const).map(role=>({role,state:'completed',result,evidence_complete:false})) };
+  const summary = reportSummary(report);
+  expect(summary.headline).toBe('Report ready · coverage limits');
+  expect(summary.partial).toBe(true);
+  expect(summary.complete).toBe(0); // Presentation never upgrades the server's evidence decision.
+  expect(roleOutcome(report.steps[0]).label).toBe('Report received · coverage limits');
+  expect(reportSummary({...report, browser_login:true}).headline).toBe('Report ready · sign-in not verified');
+  for (const execution of [
+    {...result.execution, state:'failed', failure_reason:'provider_unavailable'},
+    {...result.execution, cleanup_confirmed:false},
+  ]) {
+    const interrupted = {...report.steps[0], result:{...result,execution}};
+    expect(roleOutcome(interrupted).label).toBe('Interrupted assessment');
+    expect(reportSummary({...report, steps:[interrupted,report.steps[1]]}).reportsReady).toBe(false);
+  }
+  expect(reportSummary({...report, third_review:undefined}).reportsReady).toBe(false);
+  expect(reportSummary({...report, state:'cancelled'}).reportsReady).toBe(false);
+  expect(reportSummary({...report, steps:[report.steps[0], report.steps[0]]}).reportsReady).toBe(false);
+  expect(stopExplanation('near_verification_timeout')).toContain('model response or verification');
+  expect(stopExplanation('near_signature_invalid')).toContain('verification could not be completed');
 });
 
 async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false, browser?: 'verified' | 'gap') {

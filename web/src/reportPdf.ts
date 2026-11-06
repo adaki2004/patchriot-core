@@ -129,7 +129,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   for (const severity of severities) p.paragraph(`${severity === 'info' ? 'Informational' : severity[0].toUpperCase() + severity.slice(1)}: ${summary.findings.filter(r => r.finding.severity === severity).length}`, 11);
   p.heading('How to use this report');
   p.paragraph('Start with the numbered findings. Matching titles on the same website are grouped for reading. Different endpoints, inputs and access conditions remain in the original contributions. Grouping does not prove a shared cause or independent confirmation. Differences in severity or support are marked for review, with the highest reported severity shown. Informational observations may describe intentional behavior.');
-  p.paragraph(summary.partial ? 'Follow up on the incomplete stages before treating this assessment as finished. A missing report is not a report of no vulnerabilities.' : 'Validate material findings and retest any changes. A completed automated run cannot establish the absence of vulnerabilities.');
+  p.paragraph(summary.partial ? summary.reportsReady ? 'The reports are available with coverage limits. Read those limits before relying on a finding or assuming an area was tested.' : 'Follow up on the incomplete stages before treating this assessment as finished. A missing report is not a report of no vulnerabilities.' : 'Validate material findings and retest any changes. A completed automated run cannot establish the absence of vulnerabilities.');
   p.paragraph(reportLimits, 10, muted);
 
   p.begin('02 / Scope & method');

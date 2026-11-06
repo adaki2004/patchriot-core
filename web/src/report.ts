@@ -30,7 +30,9 @@ export function stopExplanation(reason?: string): string {
     case 'provider_rate_limited': return 'The AI provider limited a request. This stage stopped before completing; saved website evidence remains available.';
     case 'provider_context_limit': return 'The request exceeded the AI provider’s input limit. This stage could not finish.';
     case 'provider_invalid_json': case 'provider_missing_completion_id': case 'provider_missing_message': case 'unexpected_provider_response': return 'The AI provider returned a response the runner could not interpret. This stage is incomplete; it is not a finding about your website.';
-    case 'near_attestation_invalid': case 'near_signature_invalid': case 'near_attestation_unavailable': case 'near_model_attestation_required': case 'near_signature_unavailable': case 'near_model_signature_required': case 'near_verification_timeout': return 'NEAR AI verification could not be completed. The agent stopped rather than trust an unverified model response. Saved website requests remain available; this stage needs another assessment.';
+    // This legacy code covers the whole request, including model generation.
+    case 'near_verification_timeout': return 'NEAR AI did not return a verified reply before the request deadline. The delay may be in the model response or verification; this code alone does not identify which. Saved website requests remain available.';
+    case 'near_attestation_invalid': case 'near_signature_invalid': case 'near_attestation_unavailable': case 'near_model_attestation_required': case 'near_signature_unavailable': case 'near_model_signature_required': return 'NEAR AI verification could not be completed. The agent stopped rather than trust an unverified model response. Saved website requests remain available; this stage needs another assessment.';
     case 'cancelled': return 'This stage was cancelled. Work already recorded remains available.';
     case 'invalid_tool_records': return 'The runner could not validate the recorded tool output. Its conclusions need review.';
     case undefined: return 'Some checks or supporting evidence are incomplete. Review the recorded limits before relying on these findings.';
@@ -38,10 +40,16 @@ export function stopExplanation(reason?: string): string {
   }
 }
 
+/** A returned report and complete requested coverage are separate facts. */
+export function assessmentFinished(result: LiveResult | null): boolean {
+  return !!result?.assessment && result.execution.state === 'completed' && result.execution.cleanup_confirmed && !result.execution.failure_reason;
+}
+
 export function roleOutcome(step: LiveStep): { label: string; detail: string } {
   if (!step.result) return ['running', 'leased'].includes(step.state) ? { label: 'Working', detail: roleDuties[step.role] } : ['waiting', 'queued'].includes(step.state) ? { label: 'Waiting', detail: 'This stage has not started.' } : { label: 'No report', detail: 'This stage ended without a saved report.' };
   if (!step.result.assessment) return { label: 'No assessment', detail: stopExplanation(step.result.execution.failure_reason) };
-  return step.evidence_complete ? { label: 'Assessment received', detail: 'Findings and request evidence are available. The agent’s conclusions still need review.' } : { label: 'Partial assessment', detail: stopExplanation(step.result.execution.failure_reason) };
+  if (!assessmentFinished(step.result)) return { label: 'Interrupted assessment', detail: stopExplanation(step.result.execution.failure_reason) };
+  return step.evidence_complete ? { label: 'Assessment received', detail: 'Findings and request evidence are available. The agent’s conclusions still need review.' } : { label: 'Report received · coverage limits', detail: 'The agent returned its assessment. Some requested checks or access could not be verified; read those limits alongside the findings.' };
 }
 
 /** First cited request, with access kept visible inside a grouped observation. */
@@ -113,12 +121,16 @@ export function reportSummary(input: ReportInput) {
   const requests = input.steps.reduce((sum, s) => sum + (s.result?.evidence.length ?? 0), 0);
   const finished = !['awaiting_payment', 'queued', 'running'].includes(input.state);
   const expected = expectedReports(input);
+  const requiredRoles: LiveRole[] = expected === 3 ? ['investigator', 'reproducer', 'challenger'] : ['investigator', 'reproducer'];
+  const reportsFinished = requiredRoles.every(role => input.steps.some(s => s.role === role && assessmentFinished(s.result)));
+  const loginMissing = input.browser_login && requiredRoles.some(role => !input.steps.find(s => s.role === role)?.result?.browser_access);
   const partial = complete < expected || input.state !== 'completed' || input.review_policy === 'investigate_verify_v1' && !input.third_review;
-  const headline = !finished ? 'Assessment in progress' : partial ? 'Run ended · some checks missing' : 'Report ready';
+  const reportsReady = finished && reportsFinished && ['completed', 'needs_review'].includes(input.state) && (input.review_policy !== 'investigate_verify_v1' || !!input.third_review);
+  const headline = !finished ? 'Assessment in progress' : !reportsReady ? 'Run ended · some checks missing' : loginMissing ? 'Report ready · sign-in not verified' : partial ? 'Report ready · coverage limits' : 'Report ready';
   const claims = findings.reduce((n, f) => n + f.contributions.length, 0);
   const missing = input.steps.filter(s => (expected === 3 || s.role !== 'challenger') && (!s.result?.assessment || !s.evidence_complete)).map(s => reportRoles[s.role]);
-  const description = `${assessments} of ${expected} agent reports are available. ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} to inspect${claims > findings.length ? ` from ${claims} agent observations` : ''}. ${!finished ? 'Work is still running.' : partial ? `Nothing is still running. ${missing.length ? missing.join(', ') + ' did not finish every required check. ' : ''}You can use the findings below; missing checks remain untested.` : 'The requested stages finished. Findings still need your review.'}`;
-  return { findings, assessments, complete, expected, requests, finished, partial, headline, description };
+  const description = `${assessments} of ${expected} agent reports are available. ${findings.length} ${findings.length === 1 ? 'finding' : 'findings'} to inspect${claims > findings.length ? ` from ${claims} agent observations` : ''}. ${!finished ? 'Work is still running.' : reportsReady && partial ? `The agents finished their reports. ${loginMissing ? 'Signed-in access was not verified by every required role. ' : ''}Use the saved findings alongside the listed coverage limits; unfinished checks remain untested.` : partial ? `Nothing is still running. ${missing.length ? missing.join(', ') + ' did not finish every required check. ' : ''}You can use the findings below; missing checks remain untested.` : 'The requested stages finished. Findings still need your review.'}`;
+  return { findings, assessments, complete, expected, requests, finished, partial, reportsReady, headline, description };
 }
 
 export function toolOutcome(run: NonNullable<LiveResult['tool_runs']>[number]) {
