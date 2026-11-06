@@ -19,6 +19,43 @@ fn password() -> String {
 }
 
 #[tokio::test]
+async fn login_username_rotation_does_not_bypass_the_peer_limit() {
+    let _serial = PASSWORD_TESTS.lock().await;
+    let mut test = TestApp::new("http://127.0.0.1:1").await;
+    test.app = test.app.layer(axum::Extension(axum::extract::ConnectInfo(
+        "192.0.2.1:12345".parse::<std::net::SocketAddr>().unwrap(),
+    )));
+    // A stricter account limit can fire while a different account is still
+    // accepted. That alone does not establish an unlimited spraying bypass.
+    for attempt in 1..=61 {
+        let username = if attempt <= 11 {
+            "rotation_fixture".to_string()
+        } else {
+            format!("rotation_fixture_{attempt}")
+        };
+        let forwarded = format!("198.51.100.{attempt}");
+        let (status, _, _) = test
+            .request(
+                "POST",
+                "/api/auth/login",
+                json!({"username":username,"password":"incorrect-fixture-password"}),
+                &[("origin", ORIGIN), ("x-forwarded-for", &forwarded)],
+            )
+            .await;
+        assert_eq!(
+            status,
+            if attempt == 11 || attempt == 61 {
+                StatusCode::TOO_MANY_REQUESTS
+            } else {
+                StatusCode::UNAUTHORIZED
+            },
+            "attempt {attempt}"
+        );
+    }
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn real_login_form_and_protected_account_work_without_javascript() {
     let _serial = PASSWORD_TESTS.lock().await;
     let test = TestApp::new("http://127.0.0.1:1").await;
