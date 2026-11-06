@@ -122,3 +122,19 @@ test('members cannot load connection details or open a pairing dialog', async ({
   expect(calls).not.toContain('/api/earnings');
   expect(calls).not.toContain('/api/devices');
 });
+
+test('shared architecture visibly names three isolated workers and separates inference routes', async ({page}, info) => {
+  await setup(page);
+  await page.goto('/#/docs/infrastructure');
+  const diagram=page.locator('.architecture-scroll');
+  await expect(diagram.locator('svg').first()).toBeVisible();
+  for(const name of ['Scout','Recon','Verifier','Uncensored LLM']) await expect(diagram).toContainText(name);
+  await expect(diagram.locator('text').filter({hasText:'Kali Linux®'})).toHaveCount(3);
+  await expect(diagram.locator('text').filter({hasText:'Hermes + relay'})).toHaveCount(3);
+  await expect(diagram).toContainText('Verified TEE + signed replies');
+  await expect(diagram).toContainText('API route');
+  const image=await page.getByRole('link',{name:'Open full diagram'}).getAttribute('href');
+  expect(image).toContain('assessment-architecture.svg');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('shared-architecture.png'),fullPage:true});
+});

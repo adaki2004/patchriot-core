@@ -161,9 +161,9 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
       {(detail.error || error) && <div className="notice error" role="alert">{detail.error || error} <button className="inline" onClick={detail.refresh}>Retry report</button></div>}
       {!['completed', 'needs_review'].includes(review.state) && <LiveStatus steps={liveSteps} state={review.state} deadline={review.deadline_at} timing={review.timing} />}
       {['awaiting_payment', 'queued', 'running'].includes(review.state) && <LiveProgress steps={liveSteps} state={review.state} policy={review.pentest} />}
-      {retentionNotice}<PdfReportDownload report={report} loadReport={loadReport} disabled={!canExport} />
+      <div className="report-export-bar"><PdfReportDownload report={report} loadReport={loadReport} disabled={!canExport} />{retentionNotice}</div>
       <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a web application ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && <a className="quiet" href="#/account">Manage credit purchase →</a>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
-      <p className="fine" aria-label="Review method">{reviewMethod(report)}</p>
+      <details className="report-method"><summary>Review method</summary><p className="fine" aria-label="Review method">{reviewMethod(report)}</p></details>
       <VulnerabilityReport report={report} />
       {['completed', 'needs_review'].includes(review.state) && <ReportCheck key={id} id={id} csrf={csrf} beforeExport={exportReview} />}
       <details className="assessment-disclosure report-technical"><summary>Other downloads & test details</summary>

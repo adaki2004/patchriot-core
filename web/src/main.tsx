@@ -36,6 +36,7 @@ import { Sources } from './Sources';
 import { Earnings } from './Earnings';
 import { EnterpriseContact, ContactInbox } from './Contact';
 import './form-polish.css';
+import './activity.css';
 
 function Mark() {
   return <img className="brand-mark" src="/brand/white-hat.png" alt="" width="44" height="44" />;

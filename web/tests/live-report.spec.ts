@@ -51,20 +51,20 @@ test('finished reports keep coverage limits separate from missing login or inter
   expect(stopExplanation('near_signature_invalid')).toContain('verification could not be completed');
 });
 
-async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false, browser?: 'verified' | 'gap') {
+async function setup(page: import('@playwright/test').Page, failed = false, stopped: boolean | 'cancelled' = false, finished = false, browser?: 'verified' | 'gap') {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role: 'member' }, csrf_token: 'test-csrf' } }));
   await page.route('**/api/fleet', r => r.fulfill({ json: {} }));
   await page.route('**/api/review-codes', r => r.fulfill({ json: [] }));
   await page.route('**/api/devices', r => r.fulfill({ json: [] }));
-  const review = { id, mode: 'pentest_agent', state: stopped ? 'failed' : (failed || finished) ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  const review = { id, mode: 'pentest_agent', state: stopped === 'cancelled' ? 'cancelled' : stopped ? 'failed' : (failed || finished) ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
   if (browser) {
     Object.assign(review.pentest.scope, { authentication: 'session', browser_login: {} });
     review.steps[0].evidence_complete = browser === 'verified';
     review.steps[0].result = { ...result, ...(browser === 'verified' ? { browser_access: { authenticated_id: 1, anonymous_id: 2, check: { kind: 'protected_resource' as const } } } : {}), evidence: result.evidence.map((e, i) => ({...e, url:'https://owned.example/account', status:i ? 401 : 200, authenticated:!i, body_excerpt:i ? 'Sign in required' : '{"account":"fixture"}'})) };
   }
   await mockExport(page, review);
-  if (stopped) review.steps = review.steps.map((step, i) => ({ ...step, state: i ? 'cancelled' : 'failed', result: null, progress: null }));
+  if (stopped) review.steps = review.steps.map((step, i) => ({ ...step, state: stopped === 'cancelled' || i ? 'cancelled' : 'failed', result: null, progress: null }));
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.goto(`/#/reviews/${id}`);
 }
@@ -570,7 +570,7 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   const body=await readFile((await file.path())!,'utf8');
   expect(body).toContain('deepseek-v4-1-flash-1017-uncensored');
   expect(body).toContain('4 completed replies from 4 attempts; 1 NEAR attempts.');
-  expect(body).toContain('not NEAR TEE execution');
+  expect(body).toContain('relay-verified TEE protection applies to NEAR replies');
 });
 
 test('NEAR recovery reports the actual backup and retains Venice primary attempts in exports', async ({page}) => {
@@ -595,4 +595,45 @@ test('NEAR recovery reports the actual backup and retains Venice primary attempt
   expect(body).toContain('NEAR AI fallback: '+secondary);
   expect(body).toContain('3 completed replies from 3 attempts; 2 Venice attempts.');
   expect(body).toContain('earlier Venice attempts were a separate API route');
+});
+
+test('activity map shows recorded phases and tool evidence without inventing completion', async ({page}, info) => {
+  await setup(page);
+  const activity = page.getByRole('region', {name:'Recorded assessment activity'});
+  await expect(activity.getByRole('button', {name:'Recon Working'})).toHaveAttribute('aria-pressed', 'true');
+  await expect(activity.getByText('Awaiting a fresh update', {exact:true})).toBeVisible();
+  await expect(activity.locator('.activity-graph [data-observed=true]')).toHaveCount(1);
+  await expect(activity.locator('.activity-graph [data-observed=true]')).toContainText('Scoped checks');
+  await expect(activity.locator('.activity-graph [data-live=true]')).toHaveCount(0);
+  await expect(activity.getByText('Tool names and outcomes appear when the agent returns its evidence.')).toBeVisible();
+  await expect(activity).not.toContainText('nuclei');
+  await activity.getByRole('button',{name:'Scout Report received'}).click();
+  await expect(activity.getByText('Saved execution', {exact:true})).toBeVisible();
+  await expect(activity.locator('.activity-graph [data-observed=true]')).toHaveCount(0);
+  await activity.getByText('Recorded tools · 1', {exact:true}).click();
+  await expect(activity.getByText('nuclei', {exact:true})).toBeVisible();
+  await expect(activity).toContainText('2s · 2 request references');
+  await expect(activity).not.toContainText('http://127.0.0.1');
+  await activity.getByRole('button',{name:'Verifier Waiting'}).click();
+  await expect(activity).toContainText('No activity snapshot received yet.');
+  await expect(activity.locator('.activity-runtime dd')).toHaveText(['—','—','—','—']);
+  await activity.getByRole('button',{name:'Recon Working'}).click();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('assessment-activity.png'),fullPage:true});
+});
+
+for (const stopped of [false, true, 'cancelled'] as const) test(`ended assessment keeps recorded activity inspectable: stopped=${stopped}`, async ({page}) => {
+  await setup(page,false,stopped,!stopped);
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity).toBeVisible();
+  await expect(activity.locator('[data-live=true]')).toHaveCount(0);
+  if(stopped) {
+    await expect(activity.getByText(stopped === 'cancelled' ? 'Execution cancelled' : 'Execution stopped',{exact:true})).toBeVisible();
+    await expect(activity).not.toContainText('Waiting for an agent');
+  } else {
+    await activity.getByRole('button',{name:'Scout Report received'}).click();
+    await activity.getByText('Recorded tools · 1',{exact:true}).click();
+    await expect(activity.getByText('nuclei',{exact:true})).toBeVisible();
+  }
 });

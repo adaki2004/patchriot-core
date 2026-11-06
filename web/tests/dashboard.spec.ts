@@ -594,3 +594,18 @@ test('agent reports preserve missing evidence and render model prose as inert te
   await expect(report.getByText(`sha256:${'b'.repeat(64)}`, { exact: true }).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test('workspace shows real runner facts and a qualified NEAR integration', async ({page}, info) => {
+  await setup(page,true);
+  await page.route('**/api/agents',r=>r.fulfill({json:[{id:'fixture-agent',runtime:'hermes',runtime_version:'fixture-runtime-15',declared_model:'fixture-model',state:'online',last_seen_at:1793640020,reports_received:17,system:{os_name:'Kali',os_version:'2026',architecture:'x86_64',relay_version:'fixture-relay'}}]}));
+  await page.goto('/');
+  const network=page.locator('.network-work');
+  await expect(network).toContainText('fixture-runtime-15');
+  await expect(network).toContainText('Heartbeat');
+  await expect(network).toContainText('17');
+  await expect(network.getByRole('img',{name:'NEAR AI',exact:true})).toBeVisible();
+  await expect(network).toContainText('Your checkout and report identify the providers used.');
+  await expect(page.locator('.workspace-art')).toHaveCSS('object-fit','contain');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('workspace-runtime.png'),fullPage:true});
+});

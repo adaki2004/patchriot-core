@@ -39,16 +39,9 @@ Deployments can select NEAR AI or Venice DeepSeek as primary and optionally use 
 
 ## The three parts
 
-```mermaid
-flowchart LR
-    B[Browser] --> C[Core: accounts, checkout, reports]
-    C --> I[NEAR Intents]
-    C --> D[Dispatcher: permission + queue]
-    D --> R[Relay + isolated Hermes on Kali]
-    R <-->|Approved inference route| N[NEAR AI Private TEE or Venice]
-    R -->|Evidence| D
-    D --> C
-```
+![Patchriot architecture: three isolated Kali Linux and Hermes agents, with approved NEAR AI or Venice uncensored LLM inference and private evidence returning through the dispatcher.](web/src/assets/assessment-architecture.svg)
+
+Scout investigates, Recon reproduces, and Verifier challenges when needed. Roles run sequentially and may share an operator or machine. This same diagram appears on the website and in the architecture guide.
 
 | Repository | Role |
 | --- | --- |

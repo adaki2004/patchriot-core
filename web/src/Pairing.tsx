@@ -87,7 +87,7 @@ export function AgentList({ compact = false, onAll }: { compact?: boolean; onAll
     {agents.data?.length === 0 && <p>No approved agents to show yet.</p>}
     <div className="agent-directory">{(compact ? agents.data?.slice(0, 3) : agents.data)?.map(agent => <article key={agent.id} className="agent-entry">
       <div><strong>{agent.runtime === 'hermes' ? 'Hermes' : 'Built-in example'} <span className="subtle">{agent.id.slice(0, 8)}</span></strong><span className="pill">{agent.state.replaceAll('_', ' ')}</span></div>
-      <dl><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd>{!compact && <>
+      <dl><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd>{compact && <><dt>Runtime</dt><dd>{agent.runtime_version || 'Not reported'}</dd><dt>Heartbeat</dt><dd>{agent.last_seen_at ? <time dateTime={new Date(agent.last_seen_at * 1000).toISOString()}>{new Date(agent.last_seen_at * 1000).toLocaleTimeString()}</time> : 'None yet'}</dd><dt>Reports</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd></>}{!compact && <>
         <dt>Runner version</dt><dd>{agent.runtime_version}</dd>
         {agent.system && <><dt>Architecture</dt><dd>{agent.system.architecture}</dd><dt>Relay version</dt><dd>{agent.system.relay_version}</dd></>}
         <dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.includes('artex_engine_v1') ? 'ARTEX + standard checks' : 'Standard checks') : 'Not enabled'}</dd>
