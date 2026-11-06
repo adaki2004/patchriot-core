@@ -560,7 +560,7 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   await mockExport(page,review);
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
-  await expect(page.getByRole('status').filter({hasText:'Venice recovery was attempted'})).toContainText('Backup inference is not NEAR TEE execution.');
+  await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toContainText('providers, verification and completed replies');
   await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Venice fallback:'})).toContainText('4 completed replies');
   await page.getByText('Other downloads & test details', {exact:true}).click();
@@ -571,4 +571,28 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   expect(body).toContain('deepseek-v4-1-flash-1017-uncensored');
   expect(body).toContain('4 completed replies from 4 attempts; 1 NEAR attempts.');
   expect(body).toContain('not NEAR TEE execution');
+});
+
+test('NEAR recovery reports the actual backup and retains Venice primary attempts in exports', async ({page}) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r=>r.fulfill({json:{account:{id,display_name:'Owner',role:'member'},csrf_token:'test-csrf'}}));
+  const primary='deepseek-v4-1-flash-1017-uncensored', secondary='deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated';
+  const routed={...result,execution:{...result.execution,provider:'venice.ai',model:primary,fallback:{model:secondary,reason:'provider_unavailable',primary_attempts:2,fallback_attempts:3,fallback_completed:3}}};
+  const review={id,mode:'pentest_agent',state:'needs_review',created_at:1793640000,deadline_at:1793643000,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Owned fixture'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'venice.ai',fallback_model:secondary},
+    steps:[{role:'investigator',state:'completed',evidence_complete:true,result:routed}]};
+  await mockExport(page,review);
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toBeVisible();
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'NEAR AI fallback:'})).toContainText('2 Venice attempts');
+  await page.getByText('Other downloads & test details',{exact:true}).click();
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report ↓'}).click();
+  const file=await download;
+  const body=await readFile((await file.path())!,'utf8');
+  expect(body).toContain('NEAR AI fallback: '+secondary);
+  expect(body).toContain('3 completed replies from 3 attempts; 2 Venice attempts.');
+  expect(body).toContain('earlier Venice attempts were a separate API route');
 });

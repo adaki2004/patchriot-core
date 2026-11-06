@@ -85,22 +85,22 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
   const stopped = paused === true || !playing;
   return <div ref={root} className="service-map animated-map" data-paused={stopped} aria-label="From your verified domain to a private security report">
     <div className="flow-permission"><span>YOU START HERE</span><strong>Verify your domain</strong><span aria-hidden="true">→</span><strong>Confirm access</strong></div>
-    <svg className="coordination-map" viewBox="0 0 880 410" role="img" aria-label="Your verified website connects through the dispatcher to isolated Hermes agents. Encrypted model requests go to NEAR AI; private evidence returns to you.">
+    <svg className="coordination-map" viewBox="0 0 880 410" role="img" aria-label="Your verified website connects through the dispatcher to isolated Hermes agents. Model requests follow the approved NEAR AI or Venice route; private evidence returns to you.">
       <defs><pattern id={grid} width="25" height="25" patternUnits="userSpaceOnUse"><path d="M25 0H0V25" fill="none" stroke="currentColor" strokeOpacity=".09" /></pattern></defs>
       <rect width="880" height="410" fill={`url(#${grid})`} />
       <rect className="map-boundary" x="230" y="65" width="370" height="300" rx="8" />
       <text x="250" y="94" className="map-caption">PATCHRIOT / MANAGED AGENTS</text>
       <rect className="map-tee-boundary" x="655" y="105" width="190" height="180" rx="12" />
       {paths.map((path, index) => <g key={path}><path className={`map-link link-${index % 2}`} d={path} />{!stopped && <rect x="-3" y="-3" width="6" height="6" className="map-packet"><animateMotion dur="4s" begin={`${-index * .7}s`} repeatCount="indefinite" path={path} /></rect>}</g>)}
-      {[{x:110,title:'YOUR WEB APP',detail:'VERIFIED SCOPE'}, {x:300,title:'DISPATCHER',detail:'PERMISSION + QUEUE'}, {x:510,title:'KALI + HERMES',detail:'ISOLATED AGENTS'}, {x:750,title:'NEAR AI',detail:'PRIVATE TEE'}].map(({x,title,detail},i) => <g key={title} transform={`translate(${x},200)`}>
+      {[{x:110,title:'YOUR WEB APP',detail:'VERIFIED SCOPE'}, {x:300,title:'DISPATCHER',detail:'PERMISSION + QUEUE'}, {x:510,title:'KALI + HERMES',detail:'ISOLATED AGENTS'}, {x:750,title:'INFERENCE',detail:'NEAR AI / VENICE'}].map(({x,title,detail},i) => <g key={title} transform={`translate(${x},200)`}>
         {i===2 && <><rect className="map-isolation" x="-46" y="-45" width="92" height="88" rx="6" /><rect className="map-node node-1" x="-13" y="-35" width="48" height="48" /></>}
         <rect className={`map-node node-${i%2}`} x="-24" y="-24" width="48" height="48" /><path className="map-face" d={i===3?'M-9 0v-7a9 9 0 0 1 18 0v7M-12 0h24v14h-24Z':'M-8-3h4m8 0h4M-6 6H6'} />
         <text className="node-label" y="-60" textAnchor="middle">{title}</text><text className="node-label" y="62" textAnchor="middle">{detail}</text>
       </g>)}
       <text className="map-caption" x="405" y="350" textAnchor="middle">PRIVATE REPORT + EVIDENCE</text>
-      <text className="node-label" x="750" y="320" textAnchor="middle">ENCRYPTED REQUEST</text><text className="node-label" x="750" y="343" textAnchor="middle">VERIFIED RESPONSE</text>
+      <text className="node-label" x="750" y="320" textAnchor="middle">NEAR · VERIFIED TEE</text><text className="node-label" x="750" y="343" textAnchor="middle">VENICE · API ROUTE</text>
     </svg>
-    <ol className="map-key"><li><strong>1. Your web app</strong><span>Exact domain. Your permission.</span></li><li><strong>2. Dispatcher</strong><span>Sets the scope and queues work.</span></li><li><strong>3. Isolated Hermes agents</strong><span>Investigate, reproduce, review.</span></li><li><strong>4. NEAR AI</strong><span>Private model inference.</span></li></ol>
-    <p className="flow-caption">Model inference is protected by NEAR’s TEE. Agent hosts and report storage are separate. The animation explains the route; it is not live activity.</p>
+    <ol className="map-key"><li><strong>1. Your web app</strong><span>Exact domain. Your permission.</span></li><li><strong>2. Dispatcher</strong><span>Sets the scope and queues work.</span></li><li><strong>3. Isolated Hermes agents</strong><span>Investigate, reproduce, review.</span></li><li><strong>4. Inference</strong><span>The approved provider route.</span></li></ol>
+    <p className="flow-caption">The NEAR AI route protects model inference with verified TEE execution. Provider order and optional fallback are configured per deployment and shown at checkout. Agent hosts and report storage are separate. This diagram explains supported routes, not live activity.</p>
   </div>;
 }

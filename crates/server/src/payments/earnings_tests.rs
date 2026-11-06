@@ -38,6 +38,7 @@ async fn completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
         presentation: None,
         consent: patchriot_protocol::website_reviews::CreateWebsiteReview {
             allows_venice_fallback: false,
+            fallback_model: None,
             review_policy: Default::default(),
             request_id: payment.request_id,
             snapshot_sha256: "a".repeat(64),
@@ -248,6 +249,7 @@ async fn live_completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
     view.scenario = patchriot_protocol::FixtureScenario::LiveHttpV1;
     view.pentest = Some(PentestContext {
         allows_venice_fallback: false,
+        fallback_model: None,
         review_policy: Default::default(),
         third_review: None,
         pentest_id: website.site_check_id,

@@ -32,10 +32,10 @@ Download **PDF, Markdown, evidence JSON or observed endpoints**. A finished repo
 
 ## Two NEAR building blocks
 
-- **NEAR AI:** our Hermes agents use DeepSeek V4.1 Flash Abliterated in NEAR AI’s private, hardware-protected inference environment. The relay encrypts requests and verifies attestation and signed responses. This protects model inference; the Kali agents and report storage are separate.
+- **NEAR AI:** the supported NEAR route runs DeepSeek V4.1 Flash Abliterated in a private, hardware-protected inference environment. The relay encrypts requests and verifies attestation and signed responses. This protects model inference; the Kali agents and report storage are separate.
 - **NEAR Intents:** top-ups convert supported crypto into service credit. The server confirms settlement before credit is available. A top-up does not start work; a browser transaction hash never creates a balance.
 
-A disclosed Venice fallback can recover temporary model failures when the requester agrees. It is not a TEE route; usage appears in the report. [Data handling and retention →](https://patchriot.net/#/docs/privacy)
+Deployments can select NEAR AI or Venice DeepSeek as primary and optionally use the other as a backup. Checkout names the approved routes; reports record any fallback. TEE verification applies to the NEAR route, not the separate Venice API route. [Data handling and retention →](https://patchriot.net/#/docs/privacy)
 
 ## The three parts
 
@@ -45,7 +45,7 @@ flowchart LR
     C --> I[NEAR Intents]
     C --> D[Dispatcher: permission + queue]
     D --> R[Relay + isolated Hermes on Kali]
-    R <-->|Encrypted inference| N[NEAR AI Private TEE]
+    R <-->|Approved inference route| N[NEAR AI Private TEE or Venice]
     R -->|Evidence| D
     D --> C
 ```
@@ -533,9 +533,9 @@ Before admission, requesters can replace credentials through `POST /api/pentests
 
 ### Inference providers
 
-A live agent declares `abliterated-model-large-v2` at Abliteration, `abliteration-abliterated-model-large-v2` at Venice, or `deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated` at NEAR AI. Checkout shows each route; the saved team and report keep it. Changing the primary provider requires a separately paired device and fresh consent. Optional NEAR-to-Venice recovery uses the separate saved permission below. Existing requests keep their original devices. The first two routes use the same upstream model family, so they do not establish independent model diversity.
+A live agent declares `abliterated-model-large-v2` at Abliteration, `abliteration-abliterated-model-large-v2` or `deepseek-v4-1-flash-1017-uncensored` at Venice, or `deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated` at NEAR AI. Checkout shows each route; the saved team and report keep it. Changing the primary provider requires a separately paired device and fresh consent. Optional NEAR/Venice DeepSeek recovery uses a saved `fallback_model` permission. Both orders are supported; the original `allows_venice_fallback` field remains readable for older requests. Existing requests keep their original devices. The first two routes use the same upstream model family, so they do not establish independent model diversity.
 
-Venice describes this model as **anonymized**, not private: the upstream provider receives the content. We do not claim upstream zero retention, TEE execution or end-to-end encryption for it. The relay disables provider web search/scraping, added system prompts, storage and model fallbacks. See [Venice privacy](https://docs.venice.ai/overview/privacy). Deleting a Patchriot report does not recall copies already processed by operators or providers.
+Venice describes its Large v2 route as **anonymized**, not private: the upstream provider receives the content. We do not claim upstream zero retention, TEE execution or end-to-end encryption for it. The relay disables provider web search/scraping, added system prompts, storage and model fallbacks. See [Venice privacy](https://docs.venice.ai/overview/privacy). Deleting a Patchriot report does not recall copies already processed by operators or providers.
 
 The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated) with end-to-end encryption and verified model-response signatures. Hermes receives a reply only after verification passes. This protects and verifies the model-service exchange; it does not attest the Kali host, hide task content from its operator or prove a finding is correct. The optional report check is a separate, requester-approved step.
 
@@ -550,13 +550,13 @@ Checkout names all three available devices so escalation never sends private mat
 
 ### Inference recovery
 
-When the dispatcher enables Venice recovery, checkout names NEAR as primary and Venice’s DeepSeek V4.1 Flash 1017 Uncensored as backup. The requester’s consent and payment terms save that permission. Existing requests do not gain a new provider automatically.
+The dispatcher can offer either supported DeepSeek route as primary and the other as backup. Checkout names both; the saved `fallback_model` becomes part of consent, coupon redemption and payment terms. Existing requests do not gain a new provider automatically. Older NEAR-to-Venice consent keeps its original format.
 
-A temporary NEAR failure can use one backup completion, then keep that role on Venice. It consumes one logical model call; both provider attempts still count toward the spending cap. Reports and exports identify the backup, its trigger and completed replies. Venice inference is not presented as NEAR TEE execution. Invalid signatures, scope failures and exhausted budgets remain hard stops.
+An eligible temporary failure can use one backup completion, then keep that role on the backup. It consumes one logical model call; both provider attempts still count toward the spending cap. Reports and exports identify the backup, its trigger and completed replies. Venice inference is not presented as NEAR TEE execution. Invalid signatures, scope failures and exhausted budgets remain hard stops.
 
-Deployment: update core, dispatcher/gateway and relay; configure the private Venice key on managed NEAR relays; then set `PATCHRIOT_VENICE_FALLBACK_ENABLED=true` on dispatcher. See the relay README for exact configuration and provider pricing. No new migration is needed.
+Deployment: update core, dispatcher/gateway and relay before changing routing. Set `PATCHRIOT_INFERENCE_PRIMARY_MODEL` and optionally `PATCHRIOT_INFERENCE_SECONDARY_MODEL` in the dispatcher’s private environment. Each selected relay needs the matching primary model and optional `secondary_model` / `secondary_key_file`. Only approved devices declaring that primary model are offered for new requests. Keep old devices available for previously approved work; changing a device’s primary model needs a fresh identity and approval. Leave both new settings unset to retain legacy selection. Do not combine them with `PATCHRIOT_VENICE_FALLBACK_ENABLED=true`. See the relay README for configuration and rates. No new migration is needed.
 
-The relay also checks buffered NEAR responses for the repetition pattern that stops Hermes. With prior Venice consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.
+The relay also checks buffered responses for the repetition pattern that stops Hermes. With prior backup consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.
 
 </details>
 

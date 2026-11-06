@@ -120,8 +120,10 @@ test('one service diagram explains scope, agents and inference and respects redu
   await expect(page.getByRole('slider')).toHaveCount(0);
   await expect(page.locator('.service-map')).toContainText('Verify your domain');
   await expect(page.locator('.service-map')).toContainText('Confirm access');
-  await expect(page.locator('.service-map .map-key strong')).toHaveText(['1. Your web app', '2. Dispatcher', '3. Isolated Hermes agents', '4. NEAR AI']);
-  await expect(page.locator('.service-map')).toContainText('PRIVATE TEE');
+  await expect(page.locator('.service-map .map-key strong')).toHaveText(['1. Your web app', '2. Dispatcher', '3. Isolated Hermes agents', '4. Inference']);
+  await expect(page.locator('.service-map')).toContainText('NEAR · VERIFIED TEE');
+  await expect(page.locator('.service-map')).toContainText('VENICE · API ROUTE');
+  await expect(page.locator('.service-map')).toContainText('shown at checkout');
   await expect(page.locator('.service-map')).toHaveAttribute('data-paused', 'true');
   await expect(page.locator('link[rel=icon]')).toHaveAttribute('href', '/brand/white-hat.png');
   await expect(page.getByRole('heading', { name: 'YOUR WEB APP. UNDER REVIEW.' })).toBeVisible();

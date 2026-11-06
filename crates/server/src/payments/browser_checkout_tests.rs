@@ -604,6 +604,7 @@ async fn existing_quote_retries_preserve_terms_across_config_changes_and_reject_
     let browser = Browser::new(&db, &network, network.access(&policy)).await;
     let mut body = input(&policy);
     body["consent"]["allows_venice_fallback"] = json!(false);
+    body["consent"]["fallback_model"] = Value::Null;
     body["consent"]["review_policy"] = json!("legacy_three");
     let path = format!("/api/site-checks/{}/checkout", Uuid::new_v4());
     let (code, first) = browser.call("POST", &path, body.clone()).await;
@@ -616,6 +617,10 @@ async fn existing_quote_retries_preserve_terms_across_config_changes_and_reject_
         ("/consent/snapshot_sha256", json!("b".repeat(64))),
         ("/consent/accepts_operator_access", json!(false)),
         ("/consent/allows_venice_fallback", json!(true)),
+        (
+            "/consent/fallback_model",
+            json!(patchriot_protocol::pentests::VENICE_FALLBACK_MODEL),
+        ),
         ("/consent/review_policy", json!("investigate_verify_v1")),
     ] {
         let mut changed = body.clone();

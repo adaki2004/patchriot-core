@@ -78,8 +78,13 @@ impl ReviewTarget {
                 Self::Pentest(_) => view.pentest.as_ref().is_none_or(|c| {
                     c.review_policy != consent.review_policy
                         || c.allows_venice_fallback != consent.allows_venice_fallback
+                        || c.fallback_model != consent.fallback_model
                 }),
-                _ => !consent.review_policy.is_legacy() || consent.allows_venice_fallback,
+                _ => {
+                    !consent.review_policy.is_legacy()
+                        || consent.allows_venice_fallback
+                        || consent.fallback_model.is_some()
+                }
             }
         {
             return false;

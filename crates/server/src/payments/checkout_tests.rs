@@ -11,6 +11,7 @@ fn terms(db: &TestDb) -> (CheckoutTerms, QuoteResponse) {
     let (payment, quote) = db.quote();
     let consent = CreateWebsiteReview {
         allows_venice_fallback: false,
+        fallback_model: None,
         review_policy: Default::default(),
         request_id: payment.request_id,
         snapshot_sha256: "a".repeat(64),
