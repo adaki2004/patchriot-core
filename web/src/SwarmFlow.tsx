@@ -7,6 +7,6 @@ export function SwarmFlow({ compact = false }: { compact?: boolean }) {
     <div className="flow-connection"><span>YOU CONFIRM THE OPERATORS BEFORE SHARING</span></div>
     <ol className="flow-team" aria-label="Three review roles"><li><span className="flow-avatar">01</span><h3>Investigate</h3><p>Find an issue.<br />Point to the evidence.</p></li><li><span className="flow-avatar">02</span><h3>Reproduce</h3><p>Check the claim.<br />Record what holds up.</p></li><li><span className="flow-avatar">03</span><h3>Challenge</h3><p>Question the conclusion.<br />Keep the gaps visible.</p></li></ol>
     <div className="flow-result"><UIIcon name="file" /><div><strong>Your private report</strong><span>Evidence, disagreements, next steps. You decide what to change.</span></div><UIIcon name="lock" /></div>
-    {!compact && <figcaption>Managed agents make bounded requests to your verified web application. The relay connects Hermes to NEAR AI Private TEE for model inference. Approved operators handle the task outside that enclave.</figcaption>}
+    {!compact && <figcaption>Managed agents make bounded requests to your verified web application. The relay connects Hermes to the approved inference route. NEAR AI supports verified Private TEE inference; Venice is also supported. Approved operators handle the task outside the model service.</figcaption>}
   </figure>;
 }

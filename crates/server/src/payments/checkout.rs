@@ -96,7 +96,9 @@ pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, Che
         .is_none()
         || (terms.pentest_id.is_some() && !terms.consent.accepts_provider_access)
         || (terms.pentest_id.is_none()
-            && (!terms.consent.review_policy.is_legacy() || terms.consent.allows_venice_fallback))
+            && (!terms.consent.review_policy.is_legacy()
+                || terms.consent.allows_venice_fallback
+                || terms.consent.fallback_model.is_some()))
         || terms.payment.account_id.is_nil()
         || terms.consent.request_id.is_nil()
         || terms.consent.request_id != terms.payment.request_id

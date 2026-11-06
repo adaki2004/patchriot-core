@@ -1,4 +1,4 @@
-import { coverageChecks, reportFindings, reportSummary, type ReportInput } from '../src/report';
+import { coverageChecks, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
@@ -26,6 +26,29 @@ test('two completed reports are complete only for the resolved conditional polic
   expect(stopped.description).not.toContain('Verifier did not finish');
   expect(reportSummary({...report,review_policy:undefined,third_review:undefined}).partial).toBe(true);
   expect(reportSummary({...report,third_review:{reasons:['serious_finding']}}).description).toContain('2 of 3 agent reports');
+});
+
+test('finished reports keep coverage limits separate from missing login or interrupted execution', () => {
+  const report: ReportInput = { id, state:'needs_review', created_at:1793640000, origins:['https://owned.example'], review_policy:'investigate_verify_v1', third_review:{reasons:[]}, steps: (['investigator','reproducer'] as const).map(role=>({role,state:'completed',result,evidence_complete:false})) };
+  const summary = reportSummary(report);
+  expect(summary.headline).toBe('Report ready · coverage limits');
+  expect(summary.partial).toBe(true);
+  expect(summary.complete).toBe(0); // Presentation never upgrades the server's evidence decision.
+  expect(roleOutcome(report.steps[0]).label).toBe('Report received · coverage limits');
+  expect(reportSummary({...report, browser_login:true}).headline).toBe('Report ready · sign-in not verified');
+  for (const execution of [
+    {...result.execution, state:'failed', failure_reason:'provider_unavailable'},
+    {...result.execution, cleanup_confirmed:false},
+  ]) {
+    const interrupted = {...report.steps[0], result:{...result,execution}};
+    expect(roleOutcome(interrupted).label).toBe('Interrupted assessment');
+    expect(reportSummary({...report, steps:[interrupted,report.steps[1]]}).reportsReady).toBe(false);
+  }
+  expect(reportSummary({...report, third_review:undefined}).reportsReady).toBe(false);
+  expect(reportSummary({...report, state:'cancelled'}).reportsReady).toBe(false);
+  expect(reportSummary({...report, steps:[report.steps[0], report.steps[0]]}).reportsReady).toBe(false);
+  expect(stopExplanation('near_verification_timeout')).toContain('model response or verification');
+  expect(stopExplanation('near_signature_invalid')).toContain('verification could not be completed');
 });
 
 async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false, browser?: 'verified' | 'gap') {
@@ -316,12 +339,38 @@ test('raw tool output is hidden until requested and never interpreted as HTML', 
 test('a missing assessment is explained as unfinished work, not zero vulnerabilities', async ({ page }) => {
   await setup(page, true);
   await expect(page.getByText('No agent has returned a usable assessment.', { exact: false })).toBeVisible();
+  await expect(page.locator('.report-counts div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
   await page.getByRole('button', { name: 'Agent reports', exact: true }).click();
   await expect(page.getByText('No assessment', { exact: true })).toBeVisible();
+  await expect(page.locator('.report-agent').first().locator('dl div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
   await expect(page.getByText(/The agent reached its allowed AI usage budget/)).toBeVisible();
   await page.getByRole('button', { name: 'View recorded evidence' }).click();
   await page.getByText('Request evidence (2)', { exact: true }).click();
   await expect(page.getByText('HTTP #1', { exact: true })).toBeVisible();
+});
+
+test('requested discovery without a receipt is unconfirmed and summary waits stay visible', async ({ page }) => {
+  await setup(page);
+  let recovered = false;
+  await page.route(`**/api/reviews/${id}`, async route => {
+    const response = { id, mode:'pentest_agent', state:'running', created_at:1793640000,
+      pentest:{scope:{origins:['https://owned.example'],tools:['artex_engine_v1']},reviewers:[]},
+      steps:[{role:'investigator',state:'completed',result:{...result,assessment:null},evidence_complete:false},
+        {role:'reproducer',state:'leased',result:recovered ? {...result,tool_runs:[{...result.tool_runs![0],tool:'artex-engine'}]} : null,progress:{received_at:1793640020,progress:{
+          phase:'investigating',http_requests:12,inference_calls:5,completed_tools:1,
+          model_request:{purpose:'summary',elapsed_seconds:95}}}}] };
+    await route.fulfill({json:response});
+  });
+  await page.reload();
+  await page.getByText('Latest activity', {exact:true}).click();
+  await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
+  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
+  recovered = true;
+  await page.reload();
+  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
+  await expect(page.getByRole('row').filter({hasText:'artex-engine'})).toContainText('Recon');
 });
 
 test('stopped tests retain a report without fake motion or example actions', async ({ page }) => {
@@ -372,19 +421,53 @@ test('repeated findings count once while keeping all roles, citations and confli
   expect(report.steps.every(s => s.result!.assessment!.findings.length === 2)).toBe(true);
 });
 
-test('matching labels do not merge different paths, query values or POST bodies', () => {
-  for (const change of ['path', 'query', 'body', 'missing']) {
+test('matching labels group request variants without altering their distinct evidence', () => {
+  for (const change of ['path', 'query', 'body']) {
     const report = repeatedReport();
     const evidence = report.steps[1].result!.evidence[0];
     if (change === 'path') evidence.url = 'https://owned.example/other?token=synthetic-value';
     if (change === 'query') evidence.url = 'https://owned.example/debug?token=another-value';
     if (change === 'body') { evidence.method = 'POST'; evidence.request_body_sha256 = 'c'.repeat(64); }
-    if (change === 'missing') report.steps[1].result!.evidence.shift();
+    const original = JSON.stringify(report);
+    const grouped = reportFindings(report);
+    expect(grouped, change).toHaveLength(2);
+    expect(grouped.every(g => g.variedRequests)).toBe(true);
+    expect(grouped[0].contributions[1].result.evidence[0]).toEqual(evidence);
+    expect(JSON.stringify(report)).toBe(original);
+  }
+});
+
+test('missing evidence, different origins and separate claims by one author stay separate', () => {
+  for (const change of ['missing', 'origin', 'mixed-origins', 'malformed']) {
+    const report = repeatedReport();
+    const evidence = report.steps[1].result!.evidence;
+    if (change === 'missing') evidence.shift();
+    if (change === 'origin') evidence.forEach(e => { e.url = e.url.replace('owned.example', 'other.example'); });
+    if (change === 'mixed-origins') evidence[0].url = 'https://other.example/debug';
+    if (change === 'malformed') evidence[0].url = 'invalid URL';
     expect(reportFindings(report), change).toHaveLength(4);
   }
   const report = repeatedReport();
   report.steps[0].result!.assessment!.findings.push(structuredClone(result.assessment!.findings[0]));
   expect(reportFindings(report)).toHaveLength(3); // Never erase two claims by one author.
+});
+
+test('the same schema-error observation across endpoints appears once with all examples', () => {
+  const report = repeatedReport();
+  for (const [i, step] of report.steps.entries()) {
+    const r = step.result!;
+    r.assessment!.findings = [{ ...r.assessment!.findings[0], title: 'Verbose deserialization errors disclose request schema', severity: 'info', evidence_ids: [1] }];
+    r.evidence[0] = { ...r.evidence[0], method: 'POST', url: `https://owned.example/${['auth/challenge', 'market-check', 'drafts'][i]}`, status: 422, request_body_sha256: String(i).repeat(64) };
+  }
+  report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
+  const original = JSON.stringify(report);
+  const rows = reportFindings(report);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].variedRequests).toBe(true);
+  expect(rows[0].disputed).toBe(true);
+  expect(rows[0].contributions.map(c => c.result.evidence[0].url)).toEqual(['auth/challenge', 'market-check', 'drafts'].map(p => `https://owned.example/${p}`));
+  expect(rows[0].contributions.map(c => c.finding.evidence_ids)).toEqual([[1], [1], [1]]);
+  expect(JSON.stringify(report)).toBe(original);
 });
 
 test('anonymous and account checks group without losing conflicting evidence or changing originals', () => {
@@ -417,6 +500,7 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   const report = repeatedReport();
   report.steps[2].result!.assessment!.findings[0].support = 'not_reproduced';
   report.steps[0].result!.evidence[0].authenticated = true;
+  report.steps[2].result!.evidence[0].url = 'https://owned.example/another-example';
   const review = { ...report, mode: 'pentest_agent', deadline_at: 1793643000, pentest: { scope: { origins: report.origins, methods: ['GET'] }, reviewers: [] } };
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await mockExport(page, review);
@@ -424,6 +508,7 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   await expect(page.getByRole('button', { name: 'Findings (2)', exact: true })).toBeVisible();
   await expect(page.getByText(/Roles differ — review needed/)).toBeVisible();
   await page.locator('.report-finding > summary').first().click();
+  await expect(page.locator('.report-finding').first().getByText(/Different request examples/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Inspect Verifier evidence' })).toBeVisible();
   await expect(page.locator('.report-finding').first().getByText(/Scout · Test account · GET/)).toBeVisible();
   await expect(page.locator('.report-finding').first().getByText(/Recon · Anonymous · GET/)).toBeVisible();
@@ -435,6 +520,8 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   expect(md).toContain('Roles differ — review needed.');
   expect(md).toContain('First cited request: Test account · GET');
   expect(md).toContain('First cited request: Anonymous · GET');
+  expect(md).toContain('https://owned.example/another-example');
+  expect(md).toContain('Different request examples:');
   for (const role of ['investigator', 'reproducer', 'challenger']) expect(md).toContain(`${role}#1`);
   expect(md.match(/^### [SRV]-\d+$/gm)).toHaveLength(2);
 });
@@ -473,7 +560,7 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   await mockExport(page,review);
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
-  await expect(page.getByRole('status').filter({hasText:'Venice recovery was attempted'})).toContainText('Backup inference is not NEAR TEE execution.');
+  await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toContainText('providers, verification and completed replies');
   await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
   await expect(page.getByRole('status').filter({hasText:'Venice fallback:'})).toContainText('4 completed replies');
   await page.getByText('Other downloads & test details', {exact:true}).click();
@@ -484,4 +571,28 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   expect(body).toContain('deepseek-v4-1-flash-1017-uncensored');
   expect(body).toContain('4 completed replies from 4 attempts; 1 NEAR attempts.');
   expect(body).toContain('not NEAR TEE execution');
+});
+
+test('NEAR recovery reports the actual backup and retains Venice primary attempts in exports', async ({page}) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r=>r.fulfill({json:{account:{id,display_name:'Owner',role:'member'},csrf_token:'test-csrf'}}));
+  const primary='deepseek-v4-1-flash-1017-uncensored', secondary='deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated';
+  const routed={...result,execution:{...result.execution,provider:'venice.ai',model:primary,fallback:{model:secondary,reason:'provider_unavailable',primary_attempts:2,fallback_attempts:3,fallback_completed:3}}};
+  const review={id,mode:'pentest_agent',state:'needs_review',created_at:1793640000,deadline_at:1793643000,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Owned fixture'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'venice.ai',fallback_model:secondary},
+    steps:[{role:'investigator',state:'completed',evidence_complete:true,result:routed}]};
+  await mockExport(page,review);
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toBeVisible();
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'NEAR AI fallback:'})).toContainText('2 Venice attempts');
+  await page.getByText('Other downloads & test details',{exact:true}).click();
+  const download=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report ↓'}).click();
+  const file=await download;
+  const body=await readFile((await file.path())!,'utf8');
+  expect(body).toContain('NEAR AI fallback: '+secondary);
+  expect(body).toContain('3 completed replies from 3 attempts; 2 Venice attempts.');
+  expect(body).toContain('earlier Venice attempts were a separate API route');
 });

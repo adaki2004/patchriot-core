@@ -4,7 +4,7 @@
 
 Give us your website URL. Our hosted agents run an automated web application security assessment against the running app, often called dynamic application security testing (DAST). You get a private report: what they found, the evidence behind it and what to fix next. **You install nothing.** Add a dedicated test account for checks behind the login.
 
-**[Open Patchriot ↗](https://patchriot.tech)** · [How it works](https://patchriot.tech/#/docs/workflow) · [Testing FAQ](https://patchriot.tech/#/docs/safety)
+**[Open Patchriot ↗](https://patchriot.net)** · [How it works](https://patchriot.net/#/docs/workflow) · [Testing FAQ](https://patchriot.net/#/docs/safety)
 
 ## URL in. Evidence out.
 
@@ -28,14 +28,14 @@ flowchart LR
 
 Scout maps the application. Recon checks leads with fresh requests. A reserved third agent reviews serious claims, disagreements or incomplete evidence. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
 
-Download **PDF, Markdown, evidence JSON or observed endpoints**. Your first export starts a fixed 12-hour report deletion timer; repeated downloads do not extend it. Existing snapshot and source-text reports remain accessible.
+Download **PDF, Markdown, evidence JSON or observed endpoints**. A finished report can have coverage limits; missing sign-in access and interrupted agents are shown separately. Your first export starts a fixed 12-hour report deletion timer; repeated downloads do not extend it. Existing snapshot and source-text reports remain accessible.
 
 ## Two NEAR building blocks
 
-- **NEAR AI:** our Hermes agents use DeepSeek V4.1 Flash Abliterated in NEAR AI’s private, hardware-protected inference environment. The relay encrypts requests and verifies attestation and signed responses. This protects model inference; the Kali agents and report storage are separate.
+- **NEAR AI:** the supported NEAR route runs DeepSeek V4.1 Flash Abliterated in a private, hardware-protected inference environment. The relay encrypts requests and verifies attestation and signed responses. This protects model inference; the Kali agents and report storage are separate.
 - **NEAR Intents:** top-ups convert supported crypto into service credit. The server confirms settlement before credit is available. A top-up does not start work; a browser transaction hash never creates a balance.
 
-A disclosed Venice fallback can recover temporary model failures when the requester agrees. It is not a TEE route; usage appears in the report. [Data handling and retention →](https://patchriot.tech/#/docs/privacy)
+Deployments can select NEAR AI or Venice DeepSeek as primary and optionally use the other as a backup. Checkout names the approved routes; reports record any fallback. TEE verification applies to the NEAR route, not the separate Venice API route. [Data handling and retention →](https://patchriot.net/#/docs/privacy)
 
 ## The three parts
 
@@ -45,7 +45,7 @@ flowchart LR
     C --> I[NEAR Intents]
     C --> D[Dispatcher: permission + queue]
     D --> R[Relay + isolated Hermes on Kali]
-    R <-->|Encrypted inference| N[NEAR AI Private TEE]
+    R <-->|Approved inference route| N[NEAR AI Private TEE or Venice]
     R -->|Evidence| D
     D --> C
 ```
@@ -58,7 +58,7 @@ flowchart LR
 
 ## Start a test
 
-1. Enter your web app’s URL at **[patchriot.tech](https://patchriot.tech)**, sign in and choose black-box or grey-box testing.
+1. Enter your web app’s URL at **[patchriot.net](https://patchriot.net)**, sign in and choose black-box or grey-box testing.
 2. Add the supplied DNS TXT record. For grey box, add a disposable test account.
 3. Confirm the named team and providers. Use a coupon or your account credit. Add credit from Account before starting.
 4. Follow progress, inspect the findings and download the report. Cancel from the app if needed.
@@ -153,7 +153,7 @@ Setup invitations expire after 24 hours; sessions last 12 hours. Passwords are s
 
 To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing pilot login codes still work through **Use a pilot login code**. Password sign-in and setup are limited by username, socket peer and a shared backstop; forwarded IP headers are not trusted. A reverse proxy therefore shares the peer limit. Add edge rate limits before a public rollout. GitHub and Google sign-in are available when configured below. MFA is not enforced by Patchriot; a verified provider email is not proof of target ownership.
 
-**GitHub and Google sign-in.** Configure a separate OAuth application with each provider. Set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` and `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` on core only. Each pair enables that provider; neither is enabled by default. Register the exact callbacks `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/github/callback` and `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/google/callback`. For the hosted service these start with `https://patchriot.tech`. Google uses the `openid email profile` scopes; GitHub uses `user:email`, with no repository permissions. Use a separate OAuth application for localhost and register its exact origin and callback.
+**GitHub and Google sign-in.** Configure a separate OAuth application with each provider. Set `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` and `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` on core only. Each pair enables that provider; neither is enabled by default. Register the exact callbacks `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/github/callback` and `${PATCHRIOT_PUBLIC_ORIGIN}/api/auth/google/callback`. For the hosted service these start with `https://patchriot.net`. Google uses the `openid email profile` scopes; GitHub uses `user:email`, with no repository permissions. Use a separate OAuth application for localhost and register its exact origin and callback.
 
 Sign-in creates a member account from the provider's stable account ID. Matching emails never merge accounts or grant administrator access. Callbacks use PKCE, a one-use state and an HttpOnly browser cookie; Google identity tokens are signature-, issuer-, audience-, expiry- and nonce-checked. Provider access tokens are not saved. Existing password accounts and staff invitations remain separate. Login does not authorize testing: domain ownership, scope and payment are still checked before work starts. A wallet login is not required for payment; the unique order, deposit address and any required memo bind each deposit to its requester.
 
@@ -533,9 +533,9 @@ Before admission, requesters can replace credentials through `POST /api/pentests
 
 ### Inference providers
 
-A live agent declares `abliterated-model-large-v2` at Abliteration, `abliteration-abliterated-model-large-v2` at Venice, or `deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated` at NEAR AI. Checkout shows each route; the saved team and report keep it. Changing the primary provider requires a separately paired device and fresh consent. Optional NEAR-to-Venice recovery uses the separate saved permission below. Existing requests keep their original devices. The first two routes use the same upstream model family, so they do not establish independent model diversity.
+A live agent declares `abliterated-model-large-v2` at Abliteration, `abliteration-abliterated-model-large-v2` or `deepseek-v4-1-flash-1017-uncensored` at Venice, or `deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated` at NEAR AI. Checkout shows each route; the saved team and report keep it. Changing the primary provider requires a separately paired device and fresh consent. Optional NEAR/Venice DeepSeek recovery uses a saved `fallback_model` permission. Both orders are supported; the original `allows_venice_fallback` field remains readable for older requests. Existing requests keep their original devices. The first two routes use the same upstream model family, so they do not establish independent model diversity.
 
-Venice describes this model as **anonymized**, not private: the upstream provider receives the content. We do not claim upstream zero retention, TEE execution or end-to-end encryption for it. The relay disables provider web search/scraping, added system prompts, storage and model fallbacks. See [Venice privacy](https://docs.venice.ai/overview/privacy). Deleting a Patchriot report does not recall copies already processed by operators or providers.
+Venice describes its Large v2 route as **anonymized**, not private: the upstream provider receives the content. We do not claim upstream zero retention, TEE execution or end-to-end encryption for it. The relay disables provider web search/scraping, added system prompts, storage and model fallbacks. See [Venice privacy](https://docs.venice.ai/overview/privacy). Deleting a Patchriot report does not recall copies already processed by operators or providers.
 
 The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated) with end-to-end encryption and verified model-response signatures. Hermes receives a reply only after verification passes. This protects and verifies the model-service exchange; it does not attest the Kali host, hide task content from its operator or prove a finding is correct. The optional report check is a separate, requester-approved step.
 
@@ -550,13 +550,13 @@ Checkout names all three available devices so escalation never sends private mat
 
 ### Inference recovery
 
-When the dispatcher enables Venice recovery, checkout names NEAR as primary and Venice’s DeepSeek V4.1 Flash 1017 Uncensored as backup. The requester’s consent and payment terms save that permission. Existing requests do not gain a new provider automatically.
+The dispatcher can offer either supported DeepSeek route as primary and the other as backup. Checkout names both; the saved `fallback_model` becomes part of consent, coupon redemption and payment terms. Existing requests do not gain a new provider automatically. Older NEAR-to-Venice consent keeps its original format.
 
-A temporary NEAR failure can use one backup completion, then keep that role on Venice. It consumes one logical model call; both provider attempts still count toward the spending cap. Reports and exports identify the backup, its trigger and completed replies. Venice inference is not presented as NEAR TEE execution. Invalid signatures, scope failures and exhausted budgets remain hard stops.
+An eligible temporary failure can use one backup completion, then keep that role on the backup. It consumes one logical model call; both provider attempts still count toward the spending cap. Reports and exports identify the backup, its trigger and completed replies. Venice inference is not presented as NEAR TEE execution. Invalid signatures, scope failures and exhausted budgets remain hard stops.
 
-Deployment: update core, dispatcher/gateway and relay; configure the private Venice key on managed NEAR relays; then set `PATCHRIOT_VENICE_FALLBACK_ENABLED=true` on dispatcher. See the relay README for exact configuration and provider pricing. No new migration is needed.
+Deployment: update core, dispatcher/gateway and relay before changing routing. Set `PATCHRIOT_INFERENCE_PRIMARY_MODEL` and optionally `PATCHRIOT_INFERENCE_SECONDARY_MODEL` in the dispatcher’s private environment. Each selected relay needs the matching primary model and optional `secondary_model` / `secondary_key_file`. Only approved devices declaring that primary model are offered for new requests. Keep old devices available for previously approved work; changing a device’s primary model needs a fresh identity and approval. Leave both new settings unset to retain legacy selection. Do not combine them with `PATCHRIOT_VENICE_FALLBACK_ENABLED=true`. See the relay README for configuration and rates. No new migration is needed.
 
-The relay also checks buffered NEAR responses for the repetition pattern that stops Hermes. With prior Venice consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.
+The relay also checks buffered responses for the repetition pattern that stops Hermes. With prior backup consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.
 
 </details>
 

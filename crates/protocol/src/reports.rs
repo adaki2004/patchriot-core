@@ -25,7 +25,7 @@ pub struct WorkReceipt {
     pub http_requests: u16,
     pub cleanup_confirmed: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub fallback: Option<crate::pentests::VeniceFallbackReceipt>,
+    pub fallback: Option<crate::pentests::ProviderFallbackReceipt>,
 }
 
 impl WorkReceipt {
@@ -76,9 +76,7 @@ impl WorkReceipt {
             && !self.model.chars().any(char::is_control)
             && self.duration_ms <= crate::MAX_AGENT_RESULT_DURATION_MS
             && self.fallback.as_ref().is_none_or(|receipt| {
-                mode == "pentest_agent"
-                    && self.model == crate::pentests::LiveProvider::NearDeepSeek.model()
-                    && receipt.valid(self.inference_calls)
+                mode == "pentest_agent" && receipt.valid_for(&self.model, self.inference_calls)
             })
             && if mode == "pentest_agent" {
                 self.inference_calls <= crate::pentests::MAX_LIVE_INFERENCE_CALLS
