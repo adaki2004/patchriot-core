@@ -1,3 +1,4 @@
+import { workflowRecordLines, workflowCaveat, workflowAbsent } from './workflow';
 import { reportBlocks } from './reportFormatting';
 import { fallbackDescription, browserAccessDescription } from './LiveReport';
 import { coverageChecks, checkLabels, findingRequest } from './report';
@@ -191,8 +192,14 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   });
 
   p.begin('05 / Coverage & limitations');
+  p.paragraph(workflowCaveat, 9, muted);
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);
+    const workflow = s.result ? s.result.workflow : s.progress?.progress.workflow;
+    if (workflow?.version === 1) {
+      p.paragraph('Structured checklist', 10, blue);
+      for (const line of workflowRecordLines(workflow)) p.paragraph(line, 9);
+    } else p.paragraph(workflowAbsent, 9, muted);
     for (const c of coverageChecks(s.result)) { p.paragraph(`${c.title} — ${checkLabels[c.status]}`, 10, blue); p.paragraph(c.summary, 9); p.paragraph(`${c.origin} · Requests: ${c.evidence_ids.join(', ') || 'none'}`, 8, muted); }
     const limits = s.result?.assessment?.limitations;
     if (limits?.length) limits.forEach((limit, i) => p.paragraph(`${i + 1}. ${limit}`));

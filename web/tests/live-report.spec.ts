@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
 import { PDFDocument, PDFName } from 'pdf-lib';
-import type { LiveResult } from '../src/LiveReport';
+import type { LiveResult, LiveWorkflow } from '../src/LiveReport';
 
 const id = '00000000-0000-4000-8000-000000000003';
 const fixExample = 'Disable the debug route in production.\n\n```html\n<script>window.fixExecuted=true</script>\n<!-- ' + 'untrusted-example-'.repeat(60) + ' -->\n```\n\nIllustrative only; verify the route returns 404. <img src=x onerror="window.fixExecuted=true">' + '\n\n```nginx\nlocation = /debug {\n    return 404;\n}\n```\n\n```json\n{"debug":true}\n```';
@@ -185,12 +185,13 @@ test('a compact report preserves the author, uncertainty and request references'
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }) => {
+test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }, info) => {
   await setup(page, false, false, true);
   const pdfDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download vulnerability report' }).click();
   const pdfFile = await pdfDownload;
   expect(pdfFile.suggestedFilename()).toBe(`patchriot-${id}-report.pdf`);
+  await pdfFile.saveAs(info.outputPath('workflow-legacy.pdf'));
   const pdf = await PDFDocument.load(await readFile((await pdfFile.path())!));
   expect(pdf.getTitle()).toBe('Patchriot vulnerability report');
   expect(pdf.getPageCount()).toBeGreaterThanOrEqual(8);
@@ -209,6 +210,8 @@ test('PDF, original report and endpoint downloads keep their distinct purposes',
   const md = await readFile((await (await report).path())!, 'utf8');
   expect(md).toContain('https://owned.example');
   expect(md).toContain('investigator#1');
+  expect(md).toContain('Structured checklist not recorded for this role.');
+  expect(md).not.toContain('Headers & config (Patchriot baseline):');
   expect(md).toContain('Recommended fix (not tested)');
   expect(md).toContain('```html\n<script>window.fixExecuted=true</script>');
   expect(md).toContain('&lt;img src=x');
@@ -597,19 +600,19 @@ test('NEAR recovery reports the actual backup and retains Venice primary attempt
   expect(body).toContain('earlier Venice attempts were a separate API route');
 });
 
-test('activity map shows recorded phases and tool evidence without inventing completion', async ({page}, info) => {
+test('historical activity keeps unknown checklist states and retained tool evidence', async ({page}, info) => {
   await setup(page);
   const activity = page.getByRole('region', {name:'Recorded assessment activity'});
   await expect(activity.getByRole('button', {name:'Recon Working'})).toHaveAttribute('aria-pressed', 'true');
   await expect(activity.getByText('Awaiting a fresh update', {exact:true})).toBeVisible();
-  await expect(activity.locator('.activity-graph [data-observed=true]')).toHaveCount(1);
-  await expect(activity.locator('.activity-graph [data-observed=true]')).toContainText('Scoped checks');
-  await expect(activity.locator('.activity-graph [data-live=true]')).toHaveCount(0);
-  await expect(activity.getByText('Tool names and outcomes appear when the agent returns its evidence.')).toBeVisible();
+  await expect(activity.getByText('Structured checklist not recorded for this role.', {exact:false})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(6);
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
+  await expect(activity.getByText('Full tool transcripts appear when the agent returns its evidence.')).toBeVisible();
   await expect(activity).not.toContainText('nuclei');
   await activity.getByRole('button',{name:'Scout Report received'}).click();
   await expect(activity.getByText('Saved execution', {exact:true})).toBeVisible();
-  await expect(activity.locator('.activity-graph [data-observed=true]')).toHaveCount(0);
+  await expect(activity.locator('.workflow-step[data-status=recorded]')).toHaveCount(0);
   await activity.getByText('Recorded tools · 1', {exact:true}).click();
   await expect(activity.getByText('nuclei', {exact:true})).toBeVisible();
   await expect(activity).toContainText('2s · 2 request references');
@@ -636,4 +639,93 @@ for (const stopped of [false, true, 'cancelled'] as const) test(`ended assessmen
     await activity.getByText('Recorded tools · 1',{exact:true}).click();
     await expect(activity.getByText('nuclei',{exact:true})).toBeVisible();
   }
+});
+
+const publicWorkflowIds = ['public_baseline','public_mapping','public_signatures','public_fingerprints','public_analysis'] as const;
+function structuredWorkflow(grey: boolean, state: 'running' | 'recorded' = 'running'): LiveWorkflow {
+  return {version:1,checks:[
+    ...publicWorkflowIds.map((id,index)=>({id,state:'recorded' as const,evidence_count:10+index})),
+    {id:'authentication',state:grey?'recorded':'not_applicable',evidence_count:grey?2:0},
+    {id:'authenticated_checks',state:grey?state:'not_applicable',evidence_count:grey?4:0},
+    {id:'evidence_review',state:'pending',evidence_count:0},
+  ]};
+}
+
+for(const grey of [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}`, async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(grey);
+  if(!grey) workflow.checks[4].state='running';
+  const received=Math.floor(Date.now()/1000);
+  const review={id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic workflow fixture',...(grey?{authentication:'session',browser_login:{}}:{})},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:received,progress:{phase:'investigating',http_requests:71,inference_calls:8,completed_tools:5,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.getByText('Public first. Deeper with access.',{exact:true})).toBeVisible();
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Deeper public checks']);
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(1);
+  await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
+  if(grey) {
+    await expect(activity.getByRole('list',{name:'Additional authenticated workflow'}).locator('strong')).toHaveText(['Verify access','Signed-in checks']);
+    await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveAttribute('aria-pressed','true');
+  } else await expect(activity.getByRole('list',{name:'Additional authenticated workflow'})).toHaveCount(0);
+  await activity.getByRole('button',{name:'Known signatures: Recorded',exact:true}).click();
+  const details=activity.getByRole('region',{name:'Selected workflow step'});
+  await expect(details).toContainText('curated signature checks');
+  await expect(details.getByText('12',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await activity.screenshot({path:info.outputPath(`workflow-${grey?'grey':'black'}.png`)});
+});
+
+test('structured graph keeps incomplete, reused, missing and stale states distinct', async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(true);
+  workflow.checks[0]={...workflow.checks[0],state:'reused',source_role:'investigator'};
+  workflow.checks[1]={...workflow.checks[1],state:'incomplete',evidence_count:3};
+  workflow.checks=workflow.checks.filter(check=>check.id!=='public_signatures');
+  const now=Math.floor(Date.now()/1000);
+  let finished=false;
+  const response=()=>({id,mode:'pentest_agent',state:finished?'needs_review':'running',created_at:now-300,deadline_at:now+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],authentication:'session'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'reproducer',state:finished?'failed':'leased',evidence_complete:false,result:finished?{...result,workflow,assessment:{...result.assessment!,limitations:['The route map remained incomplete; signed-in investigation did not finish.']},execution:{...result.execution,state:'failed',failure_reason:'attempt_timeout'}}:null,progress:{received_at:now-200,progress:{phase:'investigating',http_requests:33,inference_calls:4,completed_tools:3,workflow}}}]});
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:response()}));
+  await page.goto(`/#/reviews/${id}`);
+  let activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.getByText('Awaiting a fresh update',{exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
+  await expect(activity.getByRole('button',{name:'Signed-in checks: Last reported running',exact:true})).toBeVisible();
+  await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('not a fresh execution');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
+  await activity.getByRole('button',{name:'Map routes: Incomplete',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('explicit coverage gap');
+  await expect(activity.getByRole('button',{name:'Known signatures: Not recorded',exact:true})).toBeVisible();
+  finished=true;await page.getByRole('button',{name:'Refresh report',exact:false}).click();
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.getByRole('button',{name:'Map routes: Incomplete',exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
+  await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
+  await activity.screenshot({path:info.outputPath('workflow-partial.png')});
+  await mockExport(page,response());
+  const pdfDownload=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  const pdf=await pdfDownload;
+  await pdf.saveAs(info.outputPath('workflow-partial.pdf'));
+  expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(5);
+  await page.getByText('Other downloads & test details',{exact:true}).click();
+  const readable=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report'}).click();
+  const download=await readable;
+  await download.saveAs(info.outputPath('workflow-partial.md'));
+  const markdown=await readFile((await download.path())!,'utf8');
+  expect(markdown).toContain('Headers & config (Patchriot baseline): Reused evidence');
+  expect(markdown).toContain('Source: Scout');
+  expect(markdown).toContain('Map routes (Patchriot crawl): Incomplete · 3 evidence records');
+  expect(markdown).toContain('It does not mean complete coverage or a finding-free website.');
+  expect(markdown).toContain('Known signatures (Nuclei): Not recorded (no checklist entry)');
 });

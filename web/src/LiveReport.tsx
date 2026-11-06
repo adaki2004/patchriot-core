@@ -1,3 +1,4 @@
+import { workflowRecordLines, workflowCaveat, workflowAbsent } from './workflow';
 import { AssessmentActivity } from './AssessmentActivity';
 import { ReportText } from './ReportText';
 import { prettyJson, fencedText, reportMarkdownText } from './reportFormatting';
@@ -16,21 +17,24 @@ export function fallbackDescription(receipt: FallbackReceipt) {
   const near = receipt.model === nearModel;
   return `${near ? 'NEAR AI' : 'Venice'} fallback: ${receipt.model}. ${receipt.fallback_completed} completed replies from ${receipt.fallback_attempts} attempts; ${receipt.primary_attempts} ${near ? 'Venice' : 'NEAR'} attempts. Trigger: ${receipt.reason.replaceAll('_', ' ')}. ${near ? 'Completed NEAR replies passed the relay’s attestation and signature checks; earlier Venice attempts were a separate API route.' : 'Venice replies use its API route; relay-verified TEE protection applies to NEAR replies.'} Recovery attempts share one logical call; both providers count toward the cost limit.`;
 }
-export type LiveResult = { browser_access?: { authenticated_id: number; anonymous_id: number; check: { kind: 'protected_resource' | 'account_identity'; json_pointer?: string } }; kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
+export type WorkflowCheckId = 'public_baseline' | 'public_mapping' | 'public_signatures' | 'public_fingerprints' | 'public_analysis' | 'authentication' | 'authenticated_checks' | 'evidence_review';
+export type WorkflowCheckState = 'pending' | 'running' | 'recorded' | 'incomplete' | 'reused' | 'not_applicable';
+export type LiveWorkflow = { version: 1; checks: { id: WorkflowCheckId; state: WorkflowCheckState; evidence_count: number; source_role?: LiveRole }[] };
+export type LiveResult = { workflow?: LiveWorkflow; browser_access?: { authenticated_id: number; anonymous_id: number; check: { kind: 'protected_resource' | 'account_identity'; json_pointer?: string } }; kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
 export function browserAccessDescription(result: LiveResult | null) { const proof = result?.browser_access; return proof ? `Signed-in access verified: ${proof.check.kind === 'account_identity' ? 'the account response matched the supplied identity and differed from the anonymous response' : 'the protected resource was accessible with the account and refused anonymously'}. Evidence #${proof.authenticated_id} and #${proof.anonymous_id}. This establishes access to that resource, not coverage of every private page.` : 'Signed-in access was not verified. Public checks and saved findings may still be useful; authenticated coverage remains a gap.'; }
-export type LiveActivity = { received_at: number; progress: { phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number; model_request?: { purpose: 'discovery' | 'investigation' | 'summary'; elapsed_seconds: number } } };
+export type LiveActivity = { received_at: number; progress: { workflow?: LiveWorkflow; phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number; model_request?: { purpose: 'discovery' | 'investigation' | 'summary'; elapsed_seconds: number } } };
 export type LiveStep = { role: LiveRole; state: string; result: LiveResult | null; evidence_complete?: boolean | null; progress?: LiveActivity | null };
 export type LiveTiming = { role_limit_seconds: number; started_at: number | null; active_role_deadline_at: number | null; requests_ahead: number };
 const roleDuty = { investigator: 'Map the application and investigate leads.', reproducer: 'Repeat probes and challenge the initial claims.', challenger: 'Check the evidence, impact and recommended fixes.' };
 const phases = { starting: 'Starting the isolated runner', scoped_tools: 'Running scoped tools', investigating: 'Investigating the evidence', finishing: 'Preparing the report' };
 const support: Record<string, string> = { observed: 'Observed behavior', reproduced: 'Agent reports reproduction', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
 
-export function LiveProgress({ steps, state, policy }: { steps: LiveStep[]; state: string; policy?: Pick<ReportInput, 'review_policy' | 'third_review' | 'browser_login'> }) {
+export function LiveProgress({ steps, state, policy, authenticatedScope = false }: { steps: LiveStep[]; state: string; authenticatedScope?: boolean; policy?: Pick<ReportInput, 'review_policy' | 'third_review' | 'browser_login'> }) {
   const expected = expectedReports(policy ?? {});
   const received = steps.filter(s => s.result !== null).length;
   return <section className="live-progress" aria-label="Live test progress"><div className="section-heading"><h3>The review team</h3><span className="fine">{received} of {expected} reports received</span></div><progress aria-label="Role reports received" value={received} max={expected} />
     <ol className="live-stage-list">{steps.map((s, i) => <li key={s.role} data-state={s.state}><span className="stage-number" aria-hidden="true">{s.result && s.evidence_complete ? '✓' : `0${i + 1}`}</span><div><strong>{liveRoles[s.role]}</strong><small>{s.result ? s.evidence_complete ? 'Report received' : 'Needs review' : s.state === 'leased' || s.state === 'running' ? 'Working' : s.state === 'failed' ? 'Stopped' : s.state === 'cancelled' ? 'Not completed' : 'Up next'}</small></div><p>{roleDuty[s.role]}</p>{!s.result && ['leased', 'running'].includes(s.state) && s.progress && <details className="live-activity"><summary>Latest activity</summary><strong>{phases[s.progress.progress.phase]}</strong><p>{s.progress.progress.http_requests} requests · {s.progress.progress.inference_calls} model calls · {s.progress.progress.completed_tools} tool runs recorded</p>{s.progress.progress.model_request && <p>{s.progress.progress.model_request.purpose === 'summary' ? 'Summarizing the investigation' : s.progress.progress.model_request.purpose === 'discovery' ? 'Discovery model response and verification' : 'Model response and verification'} · {s.progress.progress.model_request.elapsed_seconds}s</p>}<small>Last heartbeat: {new Date(s.progress.received_at * 1000).toLocaleTimeString()}</small></details>}</li>)}</ol>
-    <AssessmentActivity steps={steps} state={state} />
+    <AssessmentActivity steps={steps} state={state} authenticatedScope={authenticatedScope} />
     <p className="fine">{state === 'failed' || state === 'cancelled' ? 'This test has stopped. Any reports received remain available below.' : 'Agents work one after another. You can leave this page and return later.'}</p>
   </section>;
 }
@@ -75,6 +79,9 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
     const outcome = roleOutcome(s);
     lines.push(`## ${liveRoles[s.role]}`, outcome.label, outcome.detail);
     if (policy.browser_login || s.result?.browser_access) lines.push('### Sign-in verification', browserAccessDescription(s.result));
+    const workflow = s.result ? s.result.workflow : s.progress?.progress.workflow;
+    lines.push('### Structured checklist', workflow?.version === 1 ? workflowCaveat : workflowAbsent);
+    for (const line of workflowRecordLines(workflow)) lines.push(`- ${line}`);
     if (!s.result) { lines.push('No report received.'); continue; }
     const r = s.result;
     if (r.execution.fallback) lines.push(block(fallbackDescription(r.execution.fallback)));
