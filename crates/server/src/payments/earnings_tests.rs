@@ -389,3 +389,30 @@ async fn adaptive_earnings_follow_actual_roles_preserve_units_and_reject_changed
         db.finish().await;
     }
 }
+
+#[tokio::test]
+async fn fixed_two_earnings_require_matching_consent_and_exactly_two_reports() {
+    use patchriot_protocol::pentests::{LiveReviewPolicy, ThirdReviewDecision};
+    let db = TestDb::new().await;
+    let (mut candidate, mut view) = live_completed(&db, 10_000_002).await;
+    let context = view.pentest.as_mut().unwrap();
+    context.review_policy = LiveReviewPolicy::InvestigateValidateV1;
+    context.reviewers.truncate(2);
+    assert!(credits(&view, candidate.amount).is_err());
+    view.steps.truncate(2);
+    assert!(allocate(&db.pool, &candidate, &view).await.is_err());
+    candidate.terms["consent"]["review_policy"] = json!("investigate_validate_v1");
+    candidate.terms["consent"]["device_ids"]
+        .as_array_mut()
+        .unwrap()
+        .truncate(2);
+    let mut bad = view.clone();
+    bad.pentest.as_mut().unwrap().third_review = Some(ThirdReviewDecision { reasons: vec![] });
+    assert!(credits(&bad, candidate.amount).is_err());
+    let shares = credits(&view, candidate.amount).unwrap();
+    assert_eq!(shares.len(), 2);
+    assert_eq!(shares.iter().map(|r| r.amount).sum::<i64>(), 9_000_002);
+    assert!(allocate(&db.pool, &candidate, &view).await.unwrap());
+    assert!(!allocate(&db.pool, &candidate, &view).await.unwrap());
+    db.finish().await;
+}

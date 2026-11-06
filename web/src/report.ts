@@ -104,9 +104,10 @@ export function reportFindings(input: ReportInput): ReportFinding[] {
 }
 
 export function expectedReports(input: Pick<ReportInput, 'review_policy' | 'third_review'>) {
-  return input.review_policy === 'investigate_verify_v1' && !input.third_review?.reasons.length ? 2 : 3;
+  return input.review_policy === 'investigate_validate_v1' || input.review_policy === 'investigate_verify_v1' && !input.third_review?.reasons.length ? 2 : 3;
 }
 export function reviewMethod(input: Pick<ReportInput, 'review_policy' | 'third_review'>) {
+  if (input.review_policy === 'investigate_validate_v1') return 'Two agents: a full scoped investigation, followed by targeted validation of its findings. No automatic third agent. Unresolved claims and coverage gaps remain visible.';
   if (input.review_policy !== 'investigate_verify_v1') return 'This saved request uses three required agents.';
   const decision = input.third_review;
   if (!decision) return 'Two required agents: investigation and verification. A third review may follow for serious findings, disagreement or incomplete evidence.';

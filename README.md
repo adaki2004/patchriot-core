@@ -14,10 +14,7 @@ flowchart LR
     V --> C[Confirm team + coupon or credit]
     C --> S[Scout investigates]
     S --> R[Recon verifies]
-    R --> T{Further review?}
-    T -->|Yes| X[Verifier challenges]
-    T -->|No| P[Private report]
-    X --> P
+    R --> P[Private report]
 ```
 
 | Choose | You provide | You get |
@@ -26,7 +23,7 @@ flowchart LR
 | **Grey box** | The same, plus a dedicated test account, API token or permission to use an empty test wallet | Public checks plus verified signed-in access where supported; unsupported or inconclusive checks are clearly marked |
 | **White box** | Source + a deployment | Roadmap; not part of current onboarding |
 
-Scout maps the application. Recon checks leads with fresh requests. A reserved third agent reviews serious claims, disagreements or incomplete evidence. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
+Scout runs the full scoped investigation and hands its findings and evidence to Recon. Recon validates those claims with fresh controls. New requests use these two agents, with no automatic third role. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
 
 Download **PDF, Markdown, evidence JSON or observed endpoints**. A finished report can have coverage limits; missing sign-in access and interrupted agents are shown separately. Your first export starts a fixed 12-hour report deletion timer; repeated downloads do not extend it. Existing snapshot and source-text reports remain accessible.
 
@@ -248,7 +245,7 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. Adapted discovery tooling is included by default. Verification opens checkout without another staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff supplied one.
 
-Confirm the three named devices, their operators and the **inference providers shown for that team**. Scout and Recon run in sequence; the reserved Verifier joins when the escalation checks require it. Open the private report to inspect findings and recorded requests, download it or cancel unfinished work. Recommended fixes can include code examples; these remain untested suggestions displayed as inert text.
+Confirm the two named devices, their operators and the **inference providers shown for that team**. Scout and Recon run in sequence: investigation, then targeted validation. Open the private report to inspect findings and recorded requests, download it or cancel unfinished work. Recommended fixes can include code examples; these remain untested suggestions displayed as inert text.
 
 This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v2** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes keep their original permissions. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
@@ -543,9 +540,9 @@ The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/D
 <details>
 <summary>Conditional live review</summary>
 
-New live checkout uses `investigate_verify_v1`: Scout investigates and Recon verifies. A third, pre-consented Verifier runs for high/critical findings, disagreement, an unchecked claim or incomplete evidence. The dispatcher records its reasons before scheduling the third role. It compares exact claim titles and cited requests conservatively; it does not infer that similarly worded claims are the same. Discovery tools run once; later agents use fresh scoped requests. An incomplete earlier stage remains incomplete even if a later report arrives.
+New live checkout uses `investigate_validate_v1`: one full scoped investigation followed by one targeted validator. The second agent receives the first report and evidence, uses fresh controls for its claims and does not repeat broad discovery. There is no automatic third agent. Coverage gaps and disputed claims remain visible. Saved `investigate_verify_v1` requests retain conditional escalation; legacy requests retain three required roles.
 
-Checkout names all three available devices so escalation never sends private material to a new operator. The third execution is included in the displayed service price. Report progress, exports and the ledger count only required roles. Clients that omit `review_policy`, saved orders, snapshots and source reviews retain three roles. Deploy the updated dispatcher/gateway before core; core requires migration 0014. No relay capability or automatic retry is added by this policy.
+Checkout binds the two named devices and their providers. Existing orders retain their original team and policy. Deploy the compatible protocol and dispatcher/gateway (including migration 0031 for explicitly configured longer runs), core, then the matching relay and adapter 18. Operators must configure the longer allowance on both dispatcher and relay; defaults and saved deadlines remain unchanged.
 
 ### Inference recovery
 

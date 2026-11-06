@@ -21,6 +21,9 @@ test('two completed reports are complete only for the resolved conditional polic
   expect(reportSummary(report).partial).toBe(false);
   expect(reportSummary(report).description).toContain('2 of 2 agent reports');
   expect(reportSummary({...report,third_review:undefined}).partial).toBe(true);
+  const fixed = reportSummary({...report,review_policy:'investigate_validate_v1',third_review:undefined});
+  expect(fixed.partial).toBe(false);
+  expect(fixed.description).toContain('2 of 2 agent reports');
   const stopped = reportSummary({...report, state:'needs_review', steps:[report.steps[0],{role:'reproducer',state:'failed',result:null}]});
   expect(stopped.headline).toBe('Run ended · some checks missing');
   expect(stopped.description).toContain('Nothing is still running. Recon did not finish');
