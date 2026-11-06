@@ -10,7 +10,7 @@ test('account top-up waits for server credit and keeps manual payment details re
   await page.route('**/api/**',async r=>{
     const path=new URL(r.request().url()).pathname;
     if(path==='/api/session')return r.fulfill({json:{account:{id:account,display_name:'Test member',role:'member',auth_method:'google'},csrf_token:'fixture-csrf'}});
-    if(path==='/api/credits')return r.fulfill({json:{available_cents:confirmed?500:0,history:confirmed?[{id:topup,kind:'topup',amount_cents:500,created_at:new Date().toISOString(),topup_id:topup,purchase_id:null}]:[],purchases:[],topups:created?[{id:topup,amount_cents:500,state:confirmed?'settled':'pending',expires_at:new Date(Date.now()+300000).toISOString(),created_at:new Date().toISOString()}]:[],topup_offer:offer,minimum_topup_cents:200,maximum_topup_cents:100000,prices:{black:199,grey:499,white:999},white_available:false}});
+    if(path==='/api/credits')return r.fulfill({json:{available_cents:confirmed?500:0,history:confirmed?[{id:topup,kind:'topup',amount_cents:500,created_at:new Date().toISOString(),topup_id:topup,purchase_id:null}]:[],purchases:[],topups:created?[{id:topup,amount_cents:500,state:confirmed?'settled':'pending',expires_at:new Date(Date.now()+300000).toISOString(),created_at:new Date().toISOString()}]:[],topup_offer:offer,minimum_topup_cents:200,maximum_topup_cents:500,prices:{black:199,grey:499,white:999},white_available:false}});
     if(path==='/api/credits/topups'){
       const body=r.request().postDataJSON();expect(body.amount_cents).toBe(500);expect(body.refund_address).toBe('0x'+'1'.repeat(40));expect(r.request().headers()['x-csrf-token']).toBe('fixture-csrf');created=true;
       return r.fulfill({json:{payment_kind:'topup',order_id:topup,request_id:body.request_id,invoice_id:topup,amount_cents:500,input:{token,amount:'5020000'},output:{token,amount:'5000000'},deposit_address:'0x'+'2'.repeat(40),deposit_memo:null,refund_address:body.refund_address,expires_at:new Date(Date.now()+300000).toISOString()}});
@@ -27,10 +27,20 @@ test('account top-up waits for server credit and keeps manual payment details re
   await page.screenshot({path:info.outputPath('account.png'),fullPage:true});
   await page.getByRole('button',{name:'Add credit',exact:true}).click();
   const dialog=page.getByRole('dialog');
-  await expect(dialog.getByRole('button',{name:'$100',exact:true})).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'$100',exact:true})).toHaveCount(0);
+  await expect(dialog.getByText('per top-up during the pilot.',{exact:false})).toBeVisible();
   await dialog.getByRole('button',{name:'$5',exact:true}).click();
   await dialog.getByRole('radio',{name:'USDC · Base',exact:true}).check();
   await dialog.getByLabel('Refund address on Base').fill('0x'+'1'.repeat(40));
+  const amount = dialog.getByLabel('Or choose an amount in USD');
+  for (const invalid of ['5.01', '1000', '1.99', '2.001']) {
+    await amount.fill(invalid);
+    await expect(dialog.getByRole('button', {name: /^Continue/})).toBeDisabled();
+    expect(created).toBe(false);
+  }
+  await amount.fill('2.01');
+  await expect(dialog.getByRole('button', {name: 'Continue · $2.01', exact: true})).toBeEnabled();
+  await amount.fill('5');
   await page.screenshot({path:info.outputPath('topup.png'),fullPage:false});
   await dialog.getByRole('button',{name:'Continue · $5.00',exact:true}).click();
   await expect(dialog.getByRole('heading',{name:'How would you like to pay?'})).toBeVisible();

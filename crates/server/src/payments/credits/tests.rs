@@ -206,6 +206,95 @@ impl Fixture {
 }
 
 #[tokio::test]
+async fn pilot_topup_cap_rejects_new_excess_and_allows_repeat_deposits() {
+    let db = TestDb::new().await;
+    let f = Fixture::new(&db).await;
+    let (status, summary) = f.call("GET", "/api/credits", Value::Null).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(summary["minimum_topup_cents"], 200);
+    assert_eq!(summary["maximum_topup_cents"], 500);
+    let offer = service(&f.state).ok().unwrap().policy.id().unwrap();
+    for amount in [-1, 0, 199, 501, 100000, i64::MAX] {
+        let (status, body) = f
+            .call(
+                "POST",
+                "/api/credits/topups",
+                json!({
+                    "request_id":Uuid::new_v4(), "amount_cents":amount, "offer_id":offer,
+                    "origin_asset":"nep141:wrap.near", "refund_address":"refund.fixture.near"
+                }),
+            )
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{amount}: {body}");
+        assert_eq!(body["error"], "invalid_topup_amount");
+    }
+    assert_eq!(f.quotes.load(Ordering::SeqCst), 0);
+    let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM credit_topups")
+        .fetch_one(&db.pool)
+        .await
+        .unwrap();
+    assert_eq!(rows, 0);
+    for amount in [200, 500, 500] {
+        let quote = f.topup(amount).await;
+        f.settle(&quote, amount * ATOMS_PER_CENT).await;
+    }
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1200);
+    assert_eq!(f.quotes.load(Ordering::SeqCst), 3);
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn pilot_cap_preserves_preexisting_larger_topup_terms_and_settlement() {
+    let db = TestDb::new().await;
+    let f = Fixture::new(&db).await;
+    let template = f.topup(500).await;
+    let template_id: Uuid = serde_json::from_value(template["order_id"].clone()).unwrap();
+    let (mut terms, presentation, expires): (Value, Value, DateTime<Utc>) =
+        sqlx::query_as("SELECT terms,presentation,expires_at FROM credit_topups WHERE id=$1")
+            .bind(template_id)
+            .fetch_one(&db.pool)
+            .await
+            .unwrap();
+    // Represent a commitment saved before the pilot cap, awaiting its quote.
+    let id = Uuid::new_v4();
+    let request = Uuid::new_v4();
+    terms["request_id"] = json!(request);
+    terms["required_amount"] = json!(10_000_000);
+    terms["quote_request"]["amount"] = json!("10000000");
+    sqlx::query("INSERT INTO credit_topups(id,account_id,request_id,amount_cents,terms,presentation,expires_at) VALUES($1,$2,$3,1000,$4,$5,$6)")
+        .bind(id).bind(db.account).bind(request).bind(terms).bind(&presentation).bind(expires)
+        .execute(&db.pool).await.unwrap();
+    let body = json!({"request_id":request,"amount_cents":1000,"offer_id":presentation["offer_id"],
+        "origin_asset":"nep141:wrap.near","refund_address":"refund.fixture.near"});
+    let (status, quote) = f.call("POST", "/api/credits/topups", body.clone()).await;
+    assert_eq!(status, StatusCode::OK, "{quote}");
+    assert_eq!(quote["amount_cents"], 1000);
+    assert_eq!(quote["output"]["amount"], "10000000");
+    let (_, retry) = f.call("POST", "/api/credits/topups", body.clone()).await;
+    assert_eq!(quote, retry);
+    let (status, resumed) = f
+        .call(
+            "POST",
+            &format!("/api/credits/topups/{id}/quote"),
+            json!({}),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(quote, resumed);
+    let mut changed = body;
+    changed["amount_cents"] = json!(500);
+    assert_eq!(
+        f.call("POST", "/api/credits/topups", changed).await.0,
+        StatusCode::CONFLICT
+    );
+    f.settle(&quote, 10_000_000).await;
+    f.settle(&quote, 10_000_000).await;
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1000);
+    assert_eq!(f.quotes.load(Ordering::SeqCst), 2);
+    db.finish().await;
+}
+
+#[tokio::test]
 async fn credits_require_exact_settlement_and_never_emit_review_funding_for_topups() {
     let db = TestDb::new().await;
     let f = Fixture::new(&db).await;
