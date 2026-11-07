@@ -10,6 +10,40 @@ async function setup(page: Page, available = true) {
   await page.route('**/api/pentest-tools', route => route.fulfill({ json: capabilities.map(id => ({ id, available: id !== 'multi_account_v1' || available })) }));
 }
 
+for (const paired of [false, true]) test(`external account passwords accept six characters and reject empty values paired=${paired}`, async ({ page }) => {
+  await setup(page);
+  const target = { id, scope: { origins: ['https://example.com'], methods: ['GET'], authentication: 'session', browser_login: {}, ...(paired ? { account_policy: { allow_password_changes: false } } : {}) }, scope_sha256: 'a'.repeat(64), state: 'approved', expires_at: 9999999999, ownership_verified: true, is_requester: true, can_set_credentials: true, can_start: false };
+  await page.route('**/api/pentests?*', route => route.fulfill({ json: [target] }));
+  await page.route(`**/api/pentests/${id}/ownership`, route => route.fulfill({ json: { verified: true, challenges: [] } }));
+  let saved: Record<string, any> | undefined;
+  await page.route(`**/api/pentests/${id}/credentials`, route => { saved = route.request().postDataJSON(); return route.fulfill({ json: {} }); });
+  await page.goto(`/#/pentests/${id}`);
+  await page.getByLabel(paired ? 'Account 1 username / email' : 'Test username / email', { exact: true }).fill('fixture-testing');
+  const password = page.getByLabel(paired ? 'Account 1 password' : 'Test password', { exact: true });
+  const save = page.getByRole('button', { name: paired ? 'Save test accounts' : 'Save test account', exact: true });
+  await expect(password).toHaveAttribute('minlength', '1');
+  await expect(password).toHaveAttribute('maxlength', '256');
+  await save.click();
+  expect(await password.evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
+  expect(saved).toBeUndefined();
+  await password.fill('abc123');
+  if (paired) {
+    await page.getByLabel('Account 2 username / email', { exact: true }).fill('fixture-reference');
+    const reference = page.getByLabel('Account 2 password', { exact: true });
+    await expect(reference).toHaveAttribute('minlength', '1');
+    await expect(reference).toHaveAttribute('maxlength', '256');
+    await save.click();
+    expect(await reference.evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
+    expect(saved).toBeUndefined();
+    await reference.fill('def456');
+  }
+  await save.click();
+  await expect.poll(() => !!saved).toBe(true);
+  expect(saved?.credentials).toEqual(paired
+    ? { kind: 'session_accounts', testing: { username: 'fixture-testing', password: 'abc123' }, reference: { username: 'fixture-reference', password: 'def456' } }
+    : { kind: 'session', username: 'fixture-testing', password: 'abc123' });
+});
+
 for (const available of [true, false]) test(`second account setup follows capability availability ${available}`, async ({ page }) => {
   await setup(page, available);
   let submitted: Record<string, any> | undefined;
