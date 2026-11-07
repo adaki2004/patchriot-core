@@ -25,6 +25,8 @@ flowchart LR
 
 Scout runs the full scoped investigation and hands its findings and evidence to Recon. Recon validates those claims with fresh controls. New requests use these two agents, with no automatic third role. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
 
+Reports also retain scoped scanner receipts and an evidence-indexed coverage ledger with account context and unresolved areas.
+
 Download **PDF, Markdown, evidence JSON or observed endpoints**. A finished report can have coverage limits; missing sign-in access and interrupted agents are shown separately. Your first export starts a fixed 12-hour report deletion timer; repeated downloads do not extend it. Existing snapshot and source-text reports remain accessible.
 
 ## Two NEAR building blocks

@@ -158,9 +158,17 @@ export const reportLimits = 'An automated assessment within the approved scope. 
 
 export type CoverageCheck = { id: string; origin: string; title: string; status: string; summary: string; evidence_ids: number[] };
 export function coverageChecks(result: LiveResult | null): CoverageCheck[] {
-  return (result?.tool_runs ?? []).filter(t => t.tool === 'patchriot-baseline' && !t.output_truncated).flatMap(t => {
+  return (result?.tool_runs ?? []).filter(t => ['patchriot-baseline', 'patchriot-coverage'].includes(t.tool) && !t.output_truncated).flatMap(t => {
     try {
       const data = JSON.parse(t.output_excerpt);
+      if (t.tool === 'patchriot-coverage' && data.version === 1 && Array.isArray(data.units) && data.units.length <= 40) {
+        return data.units.filter((unit: { evidence_ids?: number[] }) => Array.isArray(unit.evidence_ids) && unit.evidence_ids.every(id => t.evidence_ids.includes(id) && result!.evidence.some(e => e.id === id)))
+          .map((unit: { id: string; url: string; method: string; account: string; class: string; state: string; reason: string; evidence_ids: number[] }) => ({
+            id: unit.id, origin: unit.url, title: `${unit.method} · ${unit.account} · ${unit.class.replaceAll('_', ' ')}`,
+            status: ({ tested: 'completed', blocked: 'inconclusive', deferred: 'skipped', inapplicable: 'unsupported' } as Record<string, string>)[unit.state] ?? 'inconclusive',
+            summary: unit.reason, evidence_ids: unit.evidence_ids,
+          }));
+      }
       if (data.profile !== 'web-checks-v1' || !Array.isArray(data.checks) || data.checks.length > 40) return [];
       return data.checks.filter((c: CoverageCheck) => c && ['id', 'origin', 'title', 'summary'].every(k => typeof c[k as keyof CoverageCheck] === 'string' && String(c[k as keyof CoverageCheck]).length <= 2000) && ['completed', 'finding', 'inconclusive', 'skipped', 'unsupported'].includes(c.status) && Array.isArray(c.evidence_ids) && c.evidence_ids.every(id => t.evidence_ids.includes(id) && result!.evidence.some(e => e.id === id)));
     } catch { return []; }
