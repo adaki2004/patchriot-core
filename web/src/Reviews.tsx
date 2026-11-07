@@ -39,7 +39,7 @@ function reportInput(review: Review): ReportInput {
 }
 
 const states: Record<string, string> = {
-  awaiting_payment: 'Waiting for payment', queued: 'Waiting for a relay', running: 'In progress', completed: 'Example checks complete',
+  awaiting_payment: 'Waiting for payment', queued: 'Waiting for a relay', running: 'In progress', completed: 'Report available',
   needs_review: 'Needs review', cancelled: 'Cancelled', failed: 'Incomplete', leased: 'Assigned',
 };
 const label = (value: string) => states[value] ?? value.replaceAll('_', ' ');

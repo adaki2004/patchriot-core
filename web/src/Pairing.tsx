@@ -105,7 +105,7 @@ export function AgentList({ compact = false, onAll }: { compact?: boolean; onAll
       <dl><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd>{compact && <><dt>Runtime</dt><dd>{agent.runtime_version || 'Not reported'}</dd><dt>Heartbeat</dt><dd>{agent.last_seen_at ? <time dateTime={new Date(agent.last_seen_at * 1000).toISOString()}>{new Date(agent.last_seen_at * 1000).toLocaleTimeString()}</time> : 'None yet'}</dd><dt>Reports</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd></>}{!compact && <>
         <dt>Runner version</dt><dd>{agent.runtime_version}</dd>
         {agent.system && <><dt>Architecture</dt><dd>{agent.system.architecture}</dd><dt>Relay version</dt><dd>{agent.system.relay_version}</dd></>}
-        <dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.includes('artex_engine_v1') ? 'ARTEX_public-engine + standard checks' : 'Standard checks') : 'Not enabled'}</dd>
+        <dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.includes('artex_engine_v1') ? 'Agentic security checks + standard checks' : 'Standard checks') : 'Not enabled'}</dd>
         {agent.live_tests && <><dt>Supported roles</dt><dd>Investigation, reproduction and evidence review. Assigned per assessment.</dd></>}<dt>Reports received</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd>
         <dt>Last heartbeat</dt><dd>{agent.last_seen_at ? new Date(agent.last_seen_at * 1000).toLocaleString() : 'None yet'}</dd></>}</dl>
       {!compact && <small className="subtle">Device {agent.id.slice(0, 8)}</small>}

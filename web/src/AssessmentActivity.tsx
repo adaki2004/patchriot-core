@@ -22,11 +22,11 @@ function workflowNodes(workflow: LiveWorkflow | undefined, tools: LiveToolRun[],
     const receiptDetail = check?.state === 'incomplete' ? records.map(toolCoverageDetail).find(Boolean) : undefined;
     const combined = records.map(combinedEngineAccess).find(Boolean);
     const presentation = definition.id === 'public_analysis' && combinedInvestigation ? {
-      title: 'ARTEX investigation',
+      title: 'Agentic investigation',
       tool: 'Anonymous + signed-in',
       description: combined
         ? `One engine run used combined anonymous and authenticated mode. Retained evidence includes ${combined.anonymous} anonymous and ${combined.authenticated} authenticated requests.`
-        : 'This workflow plans one ARTEX investigation after access verification. The completion receipt identifies retained anonymous and signed-in evidence.',
+        : 'This workflow plans one Agentic investigation after access verification. The completion receipt identifies retained anonymous and signed-in evidence.',
     } : {};
     return { ...definition, ...presentation, measured_duration_ms:records.length ? records.reduce((total,tool)=>total+tool.duration_ms,0) : undefined, status: check?.state ?? 'not_recorded', detail: receiptDetail ?? (check ? stateDetails[check.state] : undefined), evidence_count: check?.evidence_count, source_role: check?.source_role ? roles[check.source_role] : undefined };
   });
@@ -62,7 +62,7 @@ export function AssessmentActivity({ steps, state, authenticatedScope = false, p
   const combinedInvestigation = authenticatedScope && (pairedScope || tools.some(tool => !!combinedEngineAccess(tool)) ||
     !selected.result && (reportsCombinedInvestigation(selected) || observedCombined.current.has(selected.role)));
   const nodes = workflowNodes(workflow, tools, combinedInvestigation);
-  const coverage = combinedInvestigation ? { ...nodes[6], title: 'Signed-in coverage', description: 'Signed-in request evidence from ARTEX and any later agent investigation. Recorded means requests were retained with verified access. Inspect the evidence to see which resources and controls were checked.' } : undefined;
+  const coverage = combinedInvestigation ? { ...nodes[6], title: 'Signed-in coverage', description: 'Signed-in request evidence from the agentic investigation and any later agent investigation. Recorded means requests were retained with verified access. Inspect the evidence to see which resources and controls were checked.' } : undefined;
   return <section className="assessment-activity" aria-label="Recorded assessment activity">
     <div className="activity-heading"><div><span className="assessment-kicker">RECORDED ACTIVITY</span><h3>Inside the assessment</h3></div><span className="activity-refresh">{running && progress ? stale ? 'Awaiting a fresh update' : 'Updates automatically' : selected.result ? 'Saved execution' : selected.state === 'failed' || state === 'failed' ? 'Execution stopped' : selected.state === 'cancelled' || state === 'cancelled' ? 'Execution cancelled' : state === 'awaiting_payment' ? 'Waiting for payment' : ['completed', 'needs_review'].includes(state) ? 'No execution record' : 'Waiting for an agent'}</span></div>
     <div className="activity-role-tabs" aria-label="Activity by agent">{steps.map(step => <button key={step.role} aria-pressed={selected.role === step.role} onClick={() => setChoice(step.role)}>{roles[step.role]}<span>{step.result ? step.evidence_complete ? 'Report received' : 'Needs review' : ['leased', 'running'].includes(step.state) ? 'Working' : step.state === 'failed' ? 'Stopped' : step.state === 'cancelled' ? 'Cancelled' : 'Waiting'}</span></button>)}</div>

@@ -35,11 +35,11 @@ test('two completed reports are complete only for the resolved conditional polic
 test('finished reports keep coverage limits separate from missing login or interrupted execution', () => {
   const report: ReportInput = { id, state:'needs_review', created_at:1793640000, origins:['https://owned.example'], review_policy:'investigate_verify_v1', third_review:{reasons:[]}, steps: (['investigator','reproducer'] as const).map(role=>({role,state:'completed',result,evidence_complete:false})) };
   const summary = reportSummary(report);
-  expect(summary.headline).toBe('Report ready · coverage limits');
+  expect(summary.headline).toBe('Report available · needs review');
   expect(summary.partial).toBe(true);
   expect(summary.complete).toBe(0); // Presentation never upgrades the server's evidence decision.
   expect(roleOutcome(report.steps[0]).label).toBe('Report received · coverage limits');
-  expect(reportSummary({...report, browser_login:true}).headline).toBe('Report ready · sign-in not verified');
+  expect(reportSummary({...report, browser_login:true}).headline).toBe('Report available · needs review');
   for (const execution of [
     {...result.execution, state:'failed', failure_reason:'provider_unavailable'},
     {...result.execution, cleanup_confirmed:false},
@@ -53,6 +53,19 @@ test('finished reports keep coverage limits separate from missing login or inter
   expect(reportSummary({...report, steps:[report.steps[0], report.steps[0]]}).reportsReady).toBe(false);
   expect(stopExplanation('near_verification_timeout')).toContain('model response or verification');
   expect(stopExplanation('near_signature_invalid')).toContain('verification could not be completed');
+});
+
+test('report availability retains unresolved findings and incomplete coverage',()=>{
+  const report:ReportInput={id,state:'completed',created_at:1793640000,origins:['https://owned.example'],review_policy:'investigate_validate_v1',steps:(['investigator','reproducer'] as const).map(role=>({role,state:'completed',result,evidence_complete:true}))};
+  expect(reportSummary(report).headline).toBe('Report available · needs review');
+  expect(reportSummary(report).description).toContain('still unconfirmed');
+  const clean={...report,steps:report.steps.map(step=>({...step,result:{...result,assessment:{...result.assessment!,findings:[]}}}))};
+  expect(reportSummary(clean).headline).toBe('Report available');
+  expect(reportSummary({...clean,browser_login:true}).description).toContain('Signed-in access was not verified');
+  const incomplete={...clean,state:'needs_review',steps:clean.steps.map(step=>({...step,evidence_complete:false}))};
+  expect(reportSummary(incomplete).headline).toBe('Report available · needs review');
+  expect(reportSummary(incomplete).description).toContain('unfinished checks remain untested');
+  expect(reportSummary(incomplete).complete).toBe(0);
 });
 
 async function setup(page: import('@playwright/test').Page, failed = false, stopped: boolean | 'cancelled' = false, finished = false, browser?: 'verified' | 'gap') {
@@ -420,12 +433,12 @@ test('requested discovery without a receipt is unconfirmed and summary waits sta
   await page.getByText('Latest activity', {exact:true}).click();
   await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
-  await expect(page.getByText('ARTEX_public-engine was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
+  await expect(page.getByText('Agentic security checks was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
   recovered = true;
   await page.reload();
   await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
-  await expect(page.getByText('ARTEX_public-engine was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
-  await expect(page.getByRole('row').filter({hasText:'ARTEX_public-engine'})).toContainText('Recon');
+  await expect(page.getByText('Agentic security checks was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
+  await expect(page.getByRole('row').filter({hasText:'Agentic security checks'})).toContainText('Recon');
 });
 
 test('stopped tests retain a report without fake motion or example actions', async ({ page }) => {
@@ -724,6 +737,17 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
     await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveAttribute('aria-pressed','true');
   } else await expect(activity.getByRole('list',{name:'Additional authenticated workflow'})).toHaveCount(0);
   await activity.getByRole('button',{name:'Known signatures: Recorded',exact:true}).click();
+  const selectedNode=activity.locator('[data-check=public_signatures] .workflow-node');
+  const selectedButton=activity.getByRole('button',{name:'Known signatures: Recorded',exact:true});
+  await selectedButton.hover();
+  await expect(selectedButton).toHaveCSS('background-color','rgba(0, 0, 0, 0)');
+  const ring=await selectedNode.evaluate(node=>{
+    const style=getComputedStyle(node,'::after');
+    return {top:style.top,bottom:style.bottom,left:style.left,right:style.right,shape:style.borderRadius};
+  });
+  expect(ring.top).toBe(ring.bottom);
+  expect(ring.left).toBe(ring.right);
+  expect(ring.shape).toBe('50%');
   const details=activity.getByRole('region',{name:'Selected workflow step'});
   await expect(details).toContainText('curated signature checks');
   await expect(details.getByText('12',{exact:true})).toBeVisible();
@@ -791,7 +815,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await activity.getByRole('button',{name:'Deeper public checks: Incomplete',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Reached this tool’s request limit.');
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('6s');
-  await expect(activity).toContainText('ARTEX_public-engine');
+  await expect(activity).toContainText('Agentic security checks');
   await activity.screenshot({path:info.outputPath('workflow-partial.png')});
   await mockExport(page,response());
   const pdfDownload=page.waitForEvent('download');
@@ -866,12 +890,12 @@ test('combined engine receipt identifies both access modes without inventing usa
   await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await activity.getByRole('button',{name:'Scout Report received'}).click();
-  await activity.getByRole('button',{name:'ARTEX investigation: Recorded',exact:true}).click();
+  await activity.getByRole('button',{name:'Agentic investigation: Recorded',exact:true}).click();
   const selected=activity.getByRole('region',{name:'Selected workflow step'});
   await expect(selected).toContainText('One engine run used combined anonymous and authenticated mode.');
   await expect(selected).toContainText('1 anonymous and 1 authenticated requests.');
-  await expect(activity).toContainText('ARTEX-engine');
-  await expect(activity).not.toContainText('ARTEX_public-engine');
+  await expect(activity).toContainText('Agentic security checks');
+  await expect(activity).not.toContainText('ARTEX');
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
   await activity.getByRole('button',{name:'Signed-in coverage: Recorded',exact:true}).click();
   await expect(selected).toContainText('Signed-in coverage');
@@ -906,7 +930,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
   expect(await activity.locator('.workflow-step').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-check')))).toEqual([...publicWorkflowIds.slice(0,4),'authentication','public_analysis','evidence_review']);
-  await expect(activity.getByRole('button',{name:'ARTEX investigation: Running',exact:true})).toBeVisible();
+  await expect(activity.getByRole('button',{name:'Agentic investigation: Running',exact:true})).toBeVisible();
   await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveCount(0);
   await expect(activity.locator('[data-check=public_analysis]')).toContainText('Anonymous + signed-in');
   await activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true}).click();
@@ -935,7 +959,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
     review.steps[0].progress.progress.phase=phase;
     await page.getByRole('button',{name:'Refresh report',exact:false}).click();
     await expect(activity.locator('.workflow-step')).toHaveCount(7);
-    await expect(activity.getByRole('button',{name:'ARTEX investigation: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Agentic investigation: Recorded',exact:true})).toBeVisible();
     await expect(activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true})).toBeVisible();
   }
   // A new review cannot inherit observed mode from the previously opened run.
@@ -975,10 +999,25 @@ test('scanner handoff labels distinguish no inputs from executed checks', () => 
     output_truncated: false, evidence_ids: [],
     output_excerpt: JSON.stringify({ phase: 'engine_discoveries', state: 'inapplicable', reason: 'no_new_recorded_get_inputs' }),
   };
-  expect(workflowToolName(tool.tool, tool)).toBe('Web scanner · discovered inputs');
+  expect(workflowToolName(tool.tool, tool)).toBe('ZAP · discovered inputs');
   expect(toolOutcome(tool)).toBe('No new inputs');
   expect(toolOutcome({ ...tool, failure: 'incomplete' })).toBe('Incomplete');
   expect(toolOutcome({ ...tool, evidence_ids: [1] })).toBe('Ran');
   expect(toolOutcome({ ...tool, output_truncated: true })).toBe('Ran');
   expect(toolOutcome({ ...tool, output_excerpt: '<script>target text</script>' })).toBe('Ran');
+});
+
+test('ZAP names its recorded handoff and preserves an inapplicable scan in both report views',async({page},info)=>{
+  await setup(page,false,false,true);
+  const review=await page.evaluate(async reviewId=>(await fetch(`/api/reviews/${reviewId}`)).json(),id);
+  review.steps[0].result.tool_runs=[{...result.tool_runs![0],tool:'zap',arguments:['scoped','--engine-discoveries'],output_truncated:false,evidence_ids:[],output_excerpt:JSON.stringify({phase:'engine_discoveries',state:'inapplicable',reason:'no_new_recorded_get_inputs'})}];
+  await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await expect(page.getByRole('row').filter({hasText:'ZAP · discovered inputs'})).toContainText('No new inputs');
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByText('Tools run (1)',{exact:true}).click();
+  await expect(page.locator('.tool-evidence .request-evidence')).toContainText('ZAP · discovered inputs');
+  await expect(page.locator('.tool-evidence .request-evidence')).toContainText('No new inputs');
+  await page.locator('.tool-evidence').screenshot({path:info.outputPath('zap-handoff.png')});
 });

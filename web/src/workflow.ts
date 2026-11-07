@@ -5,7 +5,7 @@ export const checkDefinitions: { id: WorkflowCheckId; title: string; tool: strin
   { id: 'public_mapping', title: 'Map routes', tool: 'Patchriot crawl', description: 'Map reachable public pages, links and forms within the approved origin.' },
   { id: 'public_signatures', title: 'Known signatures', tool: 'Nuclei', description: 'Run the curated signature checks against public responses. Matches are leads to investigate.' },
   { id: 'public_fingerprints', title: 'Web fingerprints', tool: 'ARES-engine', description: 'Compare public technology and content fingerprints with missing-path controls.' },
-  { id: 'public_analysis', title: 'Deeper public checks', tool: 'ARTEX_public-engine', description: 'Investigate the public attack surface within the saved scope and remaining limits.' },
+  { id: 'public_analysis', title: 'Deeper public checks', tool: 'Agentic security checks', description: 'Investigate the public attack surface within the saved scope and remaining limits.' },
   { id: 'authentication', title: 'Verify access', tool: 'Relay access proof', description: 'Establish the permitted account or disposable-wallet access and record an anonymous comparison.' },
   { id: 'authenticated_checks', title: 'Signed-in checks', tool: 'Signed-in investigation', description: 'Inspect signed-in resources under the saved permission, in addition to public checks. Recorded means requests were made with verified access; the evidence shows what was actually tested.' },
   { id: 'evidence_review', title: 'Review & report', tool: 'Agent assessment', description: 'Review claims against evidence, retain uncertainty and produce this role’s assessment.' },
@@ -30,11 +30,11 @@ export function workflowRecordLines(workflow: LiveWorkflow | undefined): string[
 }
 
 export function workflowToolName(tool: string, record?: LiveToolRun) {
-  if (record && combinedEngineAccess(record)) return 'ARTEX-engine';
-  if (tool === 'zap' && record?.arguments.includes('--engine-discoveries')) return 'Web scanner · discovered inputs';
-  const names: Record<string, string> = { 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'Web security scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
+  if (record && combinedEngineAccess(record)) return 'Agentic security checks';
+  if (tool === 'zap' && record?.arguments.includes('--engine-discoveries')) return 'ZAP · discovered inputs';
+  const names: Record<string, string> = { 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'ZAP web scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
   if (names[tool]) return names[tool];
-  return tool === 'artex-engine' ? 'ARTEX_public-engine' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
+  return tool === 'artex-engine' ? 'Agentic security checks' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
 }
 export function combinedEngineAccess(tool: LiveToolRun): { anonymous: number; authenticated: number } | undefined {
   if (tool.tool !== 'artex-engine') return undefined;
