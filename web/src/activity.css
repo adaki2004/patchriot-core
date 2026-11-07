@@ -216,3 +216,17 @@
 @container(max-width:1000px) { .architecture-scroll-hint { display: block; color: var(--muted); font-size: 12px; margin-top: 8px; } }
 
 @media(max-width:700px) { .workspace-dashboard .workspace-art { opacity: .32; width: 72%; right: -15%; }.contributor-machine { display: grid; grid-template-columns: 36px minmax(0,1fr); }.contributor-machine > span { grid-column: 2; margin-left: 0; } }
+
+/* Combined ARTEX has one stage, with signed-in coverage available inside it. */
+.workflow-diagram[data-combined=true] { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.workflow-diagram[data-combined=true] .workflow-public > * { grid-column: 1 / span 4; }
+.workflow-diagram[data-combined=true] .workflow-public ol { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.workflow-diagram[data-combined=true] .workflow-access > * { grid-column: 5 / span 2; }
+.textmode-ui .workflow-diagram[data-combined=true] .workflow-step > button { height: auto; }
+.textmode-ui .workflow-step > .workflow-coverage { display: block; min-height: 0; height: auto; padding: 7px 4px; margin-top: 7px; border: 1px solid #405b7d; border-radius: 5px; background: #182b43; font-size: 10px; line-height: 1.4; }
+.workflow-coverage small { display: block; color: #a9c7ef; margin-top: 3px; }
+.textmode-ui .workflow-step > .workflow-coverage[aria-pressed=true] { border-color: #a4c7fb; }
+@container(max-width:760px) {
+  .workflow-diagram[data-combined=true] .workflow-public ol { grid-template-columns: 1fr; }
+  .textmode-ui .workflow-step > .workflow-coverage { width: calc(100% - 70px); margin: 0 0 12px 70px; text-align: left; padding: 8px 10px; font-size: 12px; }
+}

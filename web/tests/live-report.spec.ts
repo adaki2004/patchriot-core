@@ -668,7 +668,7 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
-  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints',grey?'Deeper checks':'Deeper public checks']);
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Deeper public checks']);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(1);
   await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
   if(grey) {
@@ -740,7 +740,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
   await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
-  await activity.getByRole('button',{name:'Deeper checks: Incomplete',exact:true}).click();
+  await activity.getByRole('button',{name:'Deeper public checks: Incomplete',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Reached this tool’s request limit.');
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('6s');
   await expect(activity).toContainText('ARTEX_public-engine');
@@ -818,14 +818,68 @@ test('combined engine receipt identifies both access modes without inventing usa
   await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await activity.getByRole('button',{name:'Scout Report received'}).click();
-  await activity.getByRole('button',{name:'Deeper checks: Recorded',exact:true}).click();
+  await activity.getByRole('button',{name:'ARTEX investigation: Recorded',exact:true}).click();
   const selected=activity.getByRole('region',{name:'Selected workflow step'});
   await expect(selected).toContainText('One engine run used combined anonymous and authenticated mode.');
   await expect(selected).toContainText('1 anonymous and 1 authenticated requests.');
   await expect(activity).toContainText('ARTEX-engine');
   await expect(activity).not.toContainText('ARTEX_public-engine');
+  await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  await activity.getByRole('button',{name:'Signed-in coverage: Recorded',exact:true}).click();
+  await expect(selected).toContainText('Signed-in coverage');
+  await expect(selected).toContainText('4');
   await activity.screenshot({path:info.outputPath('combined-engine.png')});
   await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
   await page.getByText('Inference usage & cost',{exact:true}).click();
   await expect(page.locator('.inference-usage')).toContainText('Provider usage and response costs were not recorded.');
+  for(const receipt of [{receipt_schema:1,access_mode:'anonymous',anonymous_evidence_count:1,authenticated_evidence_count:0},{receipt_schema:1}]) {
+    review.steps[0].result.tool_runs[0].output_excerpt=JSON.stringify(receipt);
+    await page.getByRole('button',{name:'Refresh report',exact:false}).click();
+    await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+    await activity.getByRole('button',{name:'Scout Report received'}).click();
+    await expect(activity.locator('.workflow-step')).toHaveCount(8);
+    await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Signed-in checks: Recorded',exact:true})).toBeVisible();
+    await expect(activity.locator('.workflow-coverage')).toHaveCount(0);
+  }
+});
+
+test('live combined ARTEX follows access verification and keeps signed-in coverage inside the stage', async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',route=>route.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(true);
+  workflow.checks[4].state='running';
+  const received=Math.floor(Date.now()/1000);
+  const review={id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],authentication:'session',browser_login:{}},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:received,progress:{phase:'scoped_tools',http_requests:71,inference_calls:8,completed_tools:4,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  expect(await activity.locator('.workflow-step').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-check')))).toEqual([...publicWorkflowIds.slice(0,4),'authentication','public_analysis','evidence_review']);
+  await expect(activity.getByRole('button',{name:'ARTEX investigation: Running',exact:true})).toBeVisible();
+  await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveCount(0);
+  await expect(activity.locator('[data-check=public_analysis]')).toContainText('Anonymous + signed-in');
+  await activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('any later agent investigation');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('4');
+  for(const width of info.project.name==='desktop'?[1280,1920,1024,760]:[390]) {
+    await page.setViewportSize({width,height:1000});
+    await expect(activity.locator('.workflow-edges > path')).toHaveCount(6);
+    await expect.poll(()=>activity.evaluate(root=>{
+      const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;
+      const bounds=svg.getBoundingClientRect();
+      return [...svg.querySelectorAll<SVGPathElement>('path[data-from]')].every(path=>{
+        const from=root.querySelector(`[data-check="${path.dataset.from}"] .workflow-node`)!.getBoundingClientRect();
+        const to=root.querySelector(`[data-check="${path.dataset.to}"] .workflow-node`)!.getBoundingClientRect();
+        const first=path.getPointAtLength(0),last=path.getPointAtLength(path.getTotalLength());
+        const distance=(point:DOMPoint,rect:DOMRect)=>Math.hypot(bounds.x+point.x-rect.x-rect.width/2,bounds.y+point.y-rect.y-rect.height/2);
+        const ordered=root.getBoundingClientRect().width>760?Math.abs(from.y-to.y)<2&&to.x>from.x:Math.abs(from.x-to.x)<2&&to.y>from.y;
+        return ordered&&Math.abs(distance(first,from)-from.width/2)<2&&Math.abs(distance(last,to)-to.width/2)<2&&Math.abs(path.getTotalLength()-Math.hypot(last.x-first.x,last.y-first.y))<1;
+      });
+    })).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await activity.screenshot({path:info.outputPath(`combined-live-${width}.png`)});
+  }
 });
