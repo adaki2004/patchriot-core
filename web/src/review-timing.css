@@ -1,0 +1,7 @@
+.review-timing { margin-block: 20px; padding-block: 16px; border-block: 1px solid rgba(160, 180, 210, .18); }
+.review-timing > strong { color: #e4edf5; font-size: 13px; }
+.review-timing ul { margin: 12px 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.review-timing li { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; line-height: 1.5; }
+.review-timing li > span:first-child { min-width: 60px; color: #b7c7da; }
+.review-timing li > span:last-child { flex: 1; min-width: 180px; color: #f0f4f8; }
+.review-timing small { display: block; max-width: 65ch; line-height: 1.6; }

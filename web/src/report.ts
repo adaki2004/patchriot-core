@@ -1,5 +1,5 @@
 import type { ReviewPolicy, ThirdReview } from './Pentests';
-import type { LiveFinding, LiveResult, LiveRole, LiveStep } from './LiveReport';
+import type { AccountSlot, HttpRecord, LiveFinding, LiveResult, LiveRole, LiveStep } from './LiveReport';
 
 export const reportRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export const roleDuties = { investigator: 'Find leads and record what the website returned.', reproducer: 'Repeat the checks and challenge the initial findings.', challenger: 'Review the evidence, impact and proposed fixes.' };
@@ -11,7 +11,7 @@ export const roleMethods = {
 } as const;
 export const severities = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export const supportLabels: Record<string, string> = { observed: 'Observed', reproduced: 'Reproduction reported', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
-export type ReportInput = { tools?: string[]; browser_login?: boolean; review_policy?: ReviewPolicy; third_review?: ThirdReview; id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session' | 'wallet'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
+export type ReportInput = { account_policy?: { allow_password_changes: boolean }; tools?: string[]; browser_login?: boolean; review_policy?: ReviewPolicy; third_review?: ThirdReview; id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session' | 'wallet'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
 export type FindingContribution = { id: string; role: LiveRole; finding: LiveFinding; result: LiveResult; complete: boolean };
 export type ReportFinding = FindingContribution & { contributions: FindingContribution[]; disputed: boolean; variedRequests: boolean };
 
@@ -52,10 +52,18 @@ export function roleOutcome(step: LiveStep): { label: string; detail: string } {
   return step.evidence_complete ? { label: 'Assessment received', detail: 'Findings and request evidence are available. The agent’s conclusions still need review.' } : { label: 'Report received · coverage limits', detail: 'The agent returned its assessment. Some requested checks or access could not be verified; read those limits alongside the findings.' };
 }
 
+export function accountLabel(account: AccountSlot): string {
+  return account === 'testing' ? 'Account 1 (testing)' : 'Account 2 (reference)';
+}
+export function evidenceAccessLabel(evidence: HttpRecord): string {
+  if (evidence.account) return `${accountLabel(evidence.account)} · ${evidence.authenticated ? 'Signed-in' : 'Anonymous'}`;
+  return evidence.authenticated ? 'Test account' : 'Anonymous';
+}
+
 /** First cited request, with access kept visible inside a grouped observation. */
 export function findingRequest(claim: FindingContribution): string {
   const evidence = claim.result.evidence.find(e => e.id === claim.finding.evidence_ids[0]);
-  return evidence ? `${evidence.authenticated === true ? 'Test account' : 'Anonymous'} · ${evidence.method} ${evidence.url}` : 'Request evidence unavailable';
+  return evidence ? `${evidenceAccessLabel(evidence)} · ${evidence.method} ${evidence.url}` : 'Request evidence unavailable';
 }
 
 /** Group matching labels on one origin for reading, not to infer a shared root
@@ -94,7 +102,7 @@ export function reportFindings(input: ReportInput): ReportFinding[] {
     const support = new Set(group.contributions.map(c => ['observed', 'reproduced'].includes(c.finding.support) ? 'positive' : c.finding.support));
     const requests = new Set(group.contributions.map(c => {
       const e = c.result.evidence.find(e => e.id === c.finding.evidence_ids[0]);
-      return e ? JSON.stringify([e.method, e.url, e.request_body_sha256 ?? null, e.authenticated === true]) : c.id;
+      return e ? JSON.stringify([e.method, e.url, e.request_body_sha256 ?? null, e.authenticated === true, e.account ?? null]) : c.id;
     }));
     return { ...group, role: highest.role, finding: highest.finding, result: highest.result,
       complete: group.contributions.every(c => c.complete),
@@ -104,9 +112,10 @@ export function reportFindings(input: ReportInput): ReportFinding[] {
 }
 
 export function expectedReports(input: Pick<ReportInput, 'review_policy' | 'third_review'>) {
-  return input.review_policy === 'investigate_verify_v1' && !input.third_review?.reasons.length ? 2 : 3;
+  return input.review_policy === 'investigate_validate_v1' || input.review_policy === 'investigate_verify_v1' && !input.third_review?.reasons.length ? 2 : 3;
 }
 export function reviewMethod(input: Pick<ReportInput, 'review_policy' | 'third_review'>) {
+  if (input.review_policy === 'investigate_validate_v1') return 'Two agents: a full scoped investigation, followed by targeted validation of its findings. No automatic third agent. Unresolved claims and coverage gaps remain visible.';
   if (input.review_policy !== 'investigate_verify_v1') return 'This saved request uses three required agents.';
   const decision = input.third_review;
   if (!decision) return 'Two required agents: investigation and verification. A third review may follow for serious findings, disagreement or incomplete evidence.';
@@ -135,6 +144,15 @@ export function reportSummary(input: ReportInput) {
 
 export function toolOutcome(run: NonNullable<LiveResult['tool_runs']>[number]) {
   if (run.failure || run.exit_code !== 0) return 'Incomplete';
+  if (['schemathesis', 'ffuf', 'zap'].includes(run.tool) && !run.output_truncated) {
+    try {
+      const receipt = JSON.parse(run.output_excerpt);
+      if (run.tool === 'zap' && receipt.phase === 'engine_discoveries'
+        && receipt.state === 'inapplicable' && receipt.reason === 'no_new_recorded_get_inputs'
+        && run.evidence_ids.length === 0) return 'No new inputs';
+      if (Array.isArray(receipt.contexts) && receipt.contexts.length > 0 && receipt.contexts.every((context: { result?: { state?: string } }) => context.result?.state === 'inapplicable')) return 'Not applicable';
+    } catch { /* Preserve older or unstructured tool receipts. */ }
+  }
   return 'Ran'; // A successful exit is neither full coverage nor proof of safety.
 }
 
@@ -149,9 +167,17 @@ export const reportLimits = 'An automated assessment within the approved scope. 
 
 export type CoverageCheck = { id: string; origin: string; title: string; status: string; summary: string; evidence_ids: number[] };
 export function coverageChecks(result: LiveResult | null): CoverageCheck[] {
-  return (result?.tool_runs ?? []).filter(t => t.tool === 'patchriot-baseline' && !t.output_truncated).flatMap(t => {
+  return (result?.tool_runs ?? []).filter(t => ['patchriot-baseline', 'patchriot-coverage'].includes(t.tool) && !t.output_truncated).flatMap(t => {
     try {
       const data = JSON.parse(t.output_excerpt);
+      if (t.tool === 'patchriot-coverage' && data.version === 1 && Array.isArray(data.units) && data.units.length <= 40) {
+        return data.units.filter((unit: Record<string, unknown> & { evidence_ids?: number[] }) => unit && ['id', 'url', 'method', 'account', 'class', 'state', 'reason'].every(key => typeof unit[key] === 'string') && Array.isArray(unit.evidence_ids) && unit.evidence_ids.every(id => t.evidence_ids.includes(id) && result!.evidence.some(e => e.id === id)))
+          .map((unit: { id: string; url: string; method: string; account: string; class: string; state: string; reason: string; evidence_ids: number[] }) => ({
+            id: unit.id, origin: unit.url, title: `${unit.method} · ${unit.account} · ${unit.class.replaceAll('_', ' ')}`,
+            status: ({ tested: 'completed', blocked: 'inconclusive', deferred: 'skipped', inapplicable: 'unsupported' } as Record<string, string>)[unit.state] ?? 'inconclusive',
+            summary: unit.reason, evidence_ids: unit.evidence_ids,
+          }));
+      }
       if (data.profile !== 'web-checks-v1' || !Array.isArray(data.checks) || data.checks.length > 40) return [];
       return data.checks.filter((c: CoverageCheck) => c && ['id', 'origin', 'title', 'summary'].every(k => typeof c[k as keyof CoverageCheck] === 'string' && String(c[k as keyof CoverageCheck]).length <= 2000) && ['completed', 'finding', 'inconclusive', 'skipped', 'unsupported'].includes(c.status) && Array.isArray(c.evidence_ids) && c.evidence_ids.every(id => t.evidence_ids.includes(id) && result!.evidence.some(e => e.id === id)));
     } catch { return []; }

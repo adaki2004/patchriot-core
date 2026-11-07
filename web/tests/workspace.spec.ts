@@ -65,7 +65,7 @@ test('dashboard keeps decisions and active work ahead of finished reports', asyn
   await expect(work.getByRole('heading', { name: 'Work in progress.' })).toBeVisible();
   await expect(work.locator('.audit-state .status-chip')).toHaveText(['Needs attention', 'Awaiting payment', 'Incomplete', 'Agents working', 'Report ready']);
   await expect(page.getByLabel('Workspace summary')).toHaveText('3Need attention0Queued1Running1Reports ready');
-  expect((await work.boundingBox())!.y).toBeLessThan((await page.getByLabel('Workspace summary').boundingBox())!.y);
+  expect((await page.getByLabel('Workspace summary').boundingBox())!.y).toBeLessThan((await work.boundingBox())!.y);
   await work.locator('.audit-title').first().click();
   await expect(page).toHaveURL(/#\/reviews\/needs-review$/);
 });

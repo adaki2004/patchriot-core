@@ -1,9 +1,10 @@
-import { coverageChecks, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
+import { toolCoverageDetail, workflowToolName } from '../src/workflow';
+import { toolOutcome, coverageChecks, findingRequest, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
 import { PDFDocument, PDFName } from 'pdf-lib';
-import type { LiveResult } from '../src/LiveReport';
+import type { LiveResult, LiveWorkflow } from '../src/LiveReport';
 
 const id = '00000000-0000-4000-8000-000000000003';
 const fixExample = 'Disable the debug route in production.\n\n```html\n<script>window.fixExecuted=true</script>\n<!-- ' + 'untrusted-example-'.repeat(60) + ' -->\n```\n\nIllustrative only; verify the route returns 404. <img src=x onerror="window.fixExecuted=true">' + '\n\n```nginx\nlocation = /debug {\n    return 404;\n}\n```\n\n```json\n{"debug":true}\n```';
@@ -20,6 +21,9 @@ test('two completed reports are complete only for the resolved conditional polic
   expect(reportSummary(report).partial).toBe(false);
   expect(reportSummary(report).description).toContain('2 of 2 agent reports');
   expect(reportSummary({...report,third_review:undefined}).partial).toBe(true);
+  const fixed = reportSummary({...report,review_policy:'investigate_validate_v1',third_review:undefined});
+  expect(fixed.partial).toBe(false);
+  expect(fixed.description).toContain('2 of 2 agent reports');
   const stopped = reportSummary({...report, state:'needs_review', steps:[report.steps[0],{role:'reproducer',state:'failed',result:null}]});
   expect(stopped.headline).toBe('Run ended · some checks missing');
   expect(stopped.description).toContain('Nothing is still running. Recon did not finish');
@@ -51,20 +55,20 @@ test('finished reports keep coverage limits separate from missing login or inter
   expect(stopExplanation('near_signature_invalid')).toContain('verification could not be completed');
 });
 
-async function setup(page: import('@playwright/test').Page, failed = false, stopped = false, finished = false, browser?: 'verified' | 'gap') {
+async function setup(page: import('@playwright/test').Page, failed = false, stopped: boolean | 'cancelled' = false, finished = false, browser?: 'verified' | 'gap') {
   await emptyDashboard(page);
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role: 'member' }, csrf_token: 'test-csrf' } }));
   await page.route('**/api/fleet', r => r.fulfill({ json: {} }));
   await page.route('**/api/review-codes', r => r.fulfill({ json: [] }));
   await page.route('**/api/devices', r => r.fulfill({ json: [] }));
-  const review = { id, mode: 'pentest_agent', state: stopped ? 'failed' : (failed || finished) ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
+  const review = { id, mode: 'pentest_agent', state: stopped === 'cancelled' ? 'cancelled' : stopped ? 'failed' : (failed || finished) ? 'needs_review' : 'running', created_at: 1793640000, deadline_at: 1793643000, evidence_source: 'operator_reported_live_http', pentest: { pentest_id: id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'], objective: 'Owned fixture' }, scope_sha256: 'a'.repeat(64), reviewers: [], provider: 'fixture-provider' }, steps: ['investigator', 'reproducer', 'challenger'].map((role, i) => ({ role, state: i === 0 ? 'completed' : i === 1 ? 'leased' : 'waiting', attempts: i === 2 ? 0 : 1, device_id: `device-${i}`, operator_id: 'same-operator', compute_group: 'same-host', fixture_matches: null, progress: i === 1 ? { received_at: 1793640020, progress: { phase: 'scoped_tools', http_requests: 8, inference_calls: 0, completed_tools: 2 } } : null, evidence_complete: !failed && i === 0, result: i === 0 ? failed ? { ...result, assessment: null, execution: { ...result.execution, state: 'failed', failure_reason: 'provider_budget_reached' } } : result : null })) };
   if (browser) {
     Object.assign(review.pentest.scope, { authentication: 'session', browser_login: {} });
     review.steps[0].evidence_complete = browser === 'verified';
     review.steps[0].result = { ...result, ...(browser === 'verified' ? { browser_access: { authenticated_id: 1, anonymous_id: 2, check: { kind: 'protected_resource' as const } } } : {}), evidence: result.evidence.map((e, i) => ({...e, url:'https://owned.example/account', status:i ? 401 : 200, authenticated:!i, body_excerpt:i ? 'Sign in required' : '{"account":"fixture"}'})) };
   }
   await mockExport(page, review);
-  if (stopped) review.steps = review.steps.map((step, i) => ({ ...step, state: i ? 'cancelled' : 'failed', result: null, progress: null }));
+  if (stopped) review.steps = review.steps.map((step, i) => ({ ...step, state: stopped === 'cancelled' || i ? 'cancelled' : 'failed', result: null, progress: null }));
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.goto(`/#/reviews/${id}`);
 }
@@ -86,6 +90,54 @@ for (const mode of ['verified', 'gap'] as const) test(`browser access ${mode} is
   const body = await readFile((await (await readable).path())!, 'utf8');
   expect(body).toContain(expected);
   expect(body).toContain('Signed-in access was not verified.'); // unfinished roles
+});
+
+test('account slots identify different request conditions within grouped findings', () => {
+  const report: ReportInput = {id,state:'completed',created_at:1793640000,origins:['https://owned.example'],steps:(['investigator','reproducer'] as const).map((role,index)=>({role,state:'completed',evidence_complete:true,result:{...result,assessment:{...result.assessment!,findings:[result.assessment!.findings[0]]},evidence:result.evidence.map(entry=>({...entry,authenticated:true,account:index===0?'testing' as const:'reference' as const}))}}))};
+  const [finding]=reportFindings(report);
+  expect(finding.variedRequests).toBe(true);
+  expect(findingRequest(finding.contributions[0])).toContain('Account 1 (testing) · Signed-in');
+  expect(findingRequest(finding.contributions[1])).toContain('Account 2 (reference) · Signed-in');
+});
+
+test('paired account proofs and evidence remain labelled in the report and exports', async ({page},info)=>{
+  await setup(page,false,false,true,'verified');
+  const review=await page.evaluate(async reviewId=>(await fetch(`/api/reviews/${reviewId}`)).json(),id);
+  const scout=review.steps[0].result;
+  scout.account_access=[
+    {account:'testing',proof:{authenticated_id:1,anonymous_id:2,check:{kind:'protected_resource'}}},
+    {account:'reference',proof:{authenticated_id:3,anonymous_id:4,check:{kind:'protected_resource'}}},
+  ];
+  scout.evidence=[
+    {...scout.evidence[0],account:'testing'},scout.evidence[1],
+    {...scout.evidence[0],id:3,account:'reference'}, {...scout.evidence[1],id:4},
+  ];
+  scout.execution.http_requests=4;
+  scout.assessment.findings[0].evidence_ids=[1,2,3,4];
+  await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
+  await mockExport(page,review);
+  await page.reload();
+  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await expect(page.getByText('Account 1 (testing) signed-in access verified:',{exact:false})).toBeVisible();
+  await expect(page.getByText('Account 2 (reference) signed-in access verified:',{exact:false})).toBeVisible();
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByText('Request evidence (4)',{exact:true}).click();
+  await expect(page.locator('.request-evidence').filter({hasText:'HTTP #1'})).toContainText('Account 1 (testing)');
+  await expect(page.locator('.request-evidence').filter({hasText:'HTTP #3'})).toContainText('Account 2 (reference)');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.locator('.live-assessment').screenshot({path:info.outputPath('paired-evidence.png')});
+  const pdfDownload=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  const pdf=await pdfDownload;
+  await pdf.saveAs(info.outputPath('paired-evidence.pdf'));
+  expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(1);
+  await page.getByText('Other downloads & test details',{exact:true}).click();
+  const readable=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report'}).click();
+  const markdown=await readFile((await(await readable).path())!,'utf8');
+  expect(markdown).toContain('Account 1 (testing) signed-in access verified:');
+  expect(markdown).toContain('Account 2 (reference) signed-in access verified:');
+  expect(markdown).toContain('Evidence #3 and #4.');
 });
 
 async function mockExport(page: import('@playwright/test').Page, review: unknown) {
@@ -185,12 +237,13 @@ test('a compact report preserves the author, uncertainty and request references'
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }) => {
+test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }, info) => {
   await setup(page, false, false, true);
   const pdfDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download vulnerability report' }).click();
   const pdfFile = await pdfDownload;
   expect(pdfFile.suggestedFilename()).toBe(`patchriot-${id}-report.pdf`);
+  await pdfFile.saveAs(info.outputPath('workflow-legacy.pdf'));
   const pdf = await PDFDocument.load(await readFile((await pdfFile.path())!));
   expect(pdf.getTitle()).toBe('Patchriot vulnerability report');
   expect(pdf.getPageCount()).toBeGreaterThanOrEqual(8);
@@ -209,6 +262,8 @@ test('PDF, original report and endpoint downloads keep their distinct purposes',
   const md = await readFile((await (await report).path())!, 'utf8');
   expect(md).toContain('https://owned.example');
   expect(md).toContain('investigator#1');
+  expect(md).toContain('Structured checklist not recorded for this role.');
+  expect(md).not.toContain('Headers & config (Patchriot baseline):');
   expect(md).toContain('Recommended fix (not tested)');
   expect(md).toContain('```html\n<script>window.fixExecuted=true</script>');
   expect(md).toContain('&lt;img src=x');
@@ -365,12 +420,12 @@ test('requested discovery without a receipt is unconfirmed and summary waits sta
   await page.getByText('Latest activity', {exact:true}).click();
   await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
   await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
-  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
+  await expect(page.getByText('ARTEX_public-engine was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
   recovered = true;
   await page.reload();
   await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
-  await expect(page.getByText('ARTEX was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
-  await expect(page.getByRole('row').filter({hasText:'artex-engine'})).toContainText('Recon');
+  await expect(page.getByText('ARTEX_public-engine was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
+  await expect(page.getByRole('row').filter({hasText:'ARTEX_public-engine'})).toContainText('Recon');
 });
 
 test('stopped tests retain a report without fake motion or example actions', async ({ page }) => {
@@ -570,7 +625,7 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   const body=await readFile((await file.path())!,'utf8');
   expect(body).toContain('deepseek-v4-1-flash-1017-uncensored');
   expect(body).toContain('4 completed replies from 4 attempts; 1 NEAR attempts.');
-  expect(body).toContain('not NEAR TEE execution');
+  expect(body).toContain('relay-verified TEE protection applies to NEAR replies');
 });
 
 test('NEAR recovery reports the actual backup and retains Venice primary attempts in exports', async ({page}) => {
@@ -595,4 +650,335 @@ test('NEAR recovery reports the actual backup and retains Venice primary attempt
   expect(body).toContain('NEAR AI fallback: '+secondary);
   expect(body).toContain('3 completed replies from 3 attempts; 2 Venice attempts.');
   expect(body).toContain('earlier Venice attempts were a separate API route');
+});
+
+test('historical activity keeps unknown checklist states and retained tool evidence', async ({page}, info) => {
+  await setup(page);
+  const activity = page.getByRole('region', {name:'Recorded assessment activity'});
+  await expect(activity.getByRole('button', {name:'Recon Working'})).toHaveAttribute('aria-pressed', 'true');
+  await expect(activity.getByText('Awaiting a fresh update', {exact:true})).toBeVisible();
+  await expect(activity.getByText('Structured checklist not recorded for this role.', {exact:false})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(6);
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
+  await expect(activity.getByText('Full tool transcripts appear when the agent returns its evidence.')).toBeVisible();
+  await expect(activity).not.toContainText('nuclei');
+  await activity.getByRole('button',{name:'Scout Report received'}).click();
+  await expect(activity.getByText('Saved execution', {exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-status=recorded]')).toHaveCount(0);
+  await activity.getByText('Recorded tools · 1', {exact:true}).click();
+  await expect(activity.getByText('nuclei', {exact:true})).toBeVisible();
+  await expect(activity).toContainText('2s · 2 request references');
+  await expect(activity).not.toContainText('http://127.0.0.1');
+  await activity.getByRole('button',{name:'Verifier Waiting'}).click();
+  await expect(activity).toContainText('No activity snapshot received yet.');
+  await expect(activity.locator('.activity-runtime dd')).toHaveText(['—','—','—','—']);
+  await activity.getByRole('button',{name:'Recon Working'}).click();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('assessment-activity.png'),fullPage:true});
+});
+
+for (const stopped of [false, true, 'cancelled'] as const) test(`ended assessment keeps recorded activity inspectable: stopped=${stopped}`, async ({page}) => {
+  await setup(page,false,stopped,!stopped);
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity).toBeVisible();
+  await expect(activity.locator('[data-live=true]')).toHaveCount(0);
+  if(stopped) {
+    await expect(activity.getByText(stopped === 'cancelled' ? 'Execution cancelled' : 'Execution stopped',{exact:true})).toBeVisible();
+    await expect(activity).not.toContainText('Waiting for an agent');
+  } else {
+    await activity.getByRole('button',{name:'Scout Report received'}).click();
+    await activity.getByText('Recorded tools · 1',{exact:true}).click();
+    await expect(activity.getByText('nuclei',{exact:true})).toBeVisible();
+  }
+});
+
+const publicWorkflowIds = ['public_baseline','public_mapping','public_signatures','public_fingerprints','public_analysis'] as const;
+function structuredWorkflow(grey: boolean, state: 'running' | 'recorded' = 'running'): LiveWorkflow {
+  return {version:1,checks:[
+    ...publicWorkflowIds.map((id,index)=>({id,state:'recorded' as const,evidence_count:10+index})),
+    {id:'authentication',state:grey?'recorded':'not_applicable',evidence_count:grey?2:0},
+    {id:'authenticated_checks',state:grey?state:'not_applicable',evidence_count:grey?4:0},
+    {id:'evidence_review',state:'pending',evidence_count:0},
+  ]};
+}
+
+for(const grey of [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}`, async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(grey);
+  if(!grey) workflow.checks[4].state='running';
+  const received=Math.floor(Date.now()/1000);
+  const review={id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic workflow fixture',...(grey?{authentication:'session',browser_login:{}}:{})},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:received,progress:{phase:'investigating',http_requests:71,inference_calls:8,completed_tools:5,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Deeper public checks']);
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(1);
+  await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
+  if(grey) {
+    await expect(activity.getByRole('list',{name:'Additional authenticated workflow'}).locator('strong')).toHaveText(['Verify access','Signed-in checks']);
+    await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveAttribute('aria-pressed','true');
+  } else await expect(activity.getByRole('list',{name:'Additional authenticated workflow'})).toHaveCount(0);
+  await activity.getByRole('button',{name:'Known signatures: Recorded',exact:true}).click();
+  const details=activity.getByRole('region',{name:'Selected workflow step'});
+  await expect(details).toContainText('curated signature checks');
+  await expect(details.getByText('12',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await expect(activity).toContainText('Recorded = finished work saved.');
+  for(const width of info.project.name==='desktop' ? [1280,1920,1024,760] : [390]) {
+    await page.setViewportSize({width,height:1000});
+    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe(grey?7:5);
+    await expect.poll(async()=>activity.evaluate(root=>{
+      const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;const origin=svg.getBoundingClientRect();
+      return [...svg.querySelectorAll<SVGPathElement>('path[data-from]')].every(path=>{
+        const a=root.querySelector<HTMLElement>(`[data-check="${path.dataset.from}"] .workflow-node`)!.getBoundingClientRect();
+        const b=root.querySelector<HTMLElement>(`[data-check="${path.dataset.to}"] .workflow-node`)!.getBoundingClientRect();
+        const first=path.getPointAtLength(0),last=path.getPointAtLength(path.getTotalLength());
+        const distance=(p:DOMPoint,r:DOMRect)=>Math.hypot(origin.x+p.x-r.x-r.width/2,origin.y+p.y-r.y-r.height/2);
+        const otherNodes=[...root.querySelectorAll<HTMLElement>('[data-check]')].filter(node=>![path.dataset.from,path.dataset.to].includes(node.dataset.check)).map(node=>node.querySelector('.workflow-node')!.getBoundingClientRect());
+        const avoidsNodes=Array.from({length:40},(_,i)=>path.getPointAtLength(path.getTotalLength()*(i+1)/41)).every(point=>otherNodes.every(rect=>distance(point,rect)>rect.width/2+1));
+        const directLength = Math.hypot(last.x - first.x, last.y - first.y);
+        const directEdge = Math.abs(path.getTotalLength() - directLength) < 1;
+        const horizontal = root.getBoundingClientRect().width > 760;
+        const orderedSequence = horizontal
+          ? Math.abs(a.y - b.y) < 2 && b.x > a.x
+          : Math.abs(a.x - b.x) < 2 && b.y > a.y;
+        return directEdge && orderedSequence && avoidsNodes && Math.abs(distance(first,a)-a.width/2)<2 && Math.abs(distance(last,b)-b.width/2)<2;
+      });
+    })).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await activity.screenshot({path:info.outputPath(`workflow-${grey?'grey':'black'}-${width}.png`)});
+  }
+
+});
+
+test('structured graph keeps incomplete, reused, missing and stale states distinct', async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(true);
+  workflow.checks[0]={...workflow.checks[0],state:'reused',source_role:'investigator'};
+  workflow.checks[1]={...workflow.checks[1],state:'incomplete',evidence_count:3};
+  workflow.checks[4]={...workflow.checks[4],state:'incomplete'};
+  workflow.checks=workflow.checks.filter(check=>check.id!=='public_signatures');
+  const now=Math.floor(Date.now()/1000);
+  let finished=false;
+  const response=()=>({id,mode:'pentest_agent',state:finished?'needs_review':'running',created_at:now-300,deadline_at:now+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],authentication:'session'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'reproducer',state:finished?'failed':'leased',evidence_complete:false,result:finished?{...result,workflow,tool_runs:[...result.tool_runs!,{...result.tool_runs![0],tool:'artex-engine',duration_ms:5500,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'target_request_budget',coverage_complete:false})}],assessment:{...result.assessment!,limitations:['The route map remained incomplete; signed-in investigation did not finish.']},execution:{...result.execution,state:'failed',failure_reason:'attempt_timeout'}}:null,progress:{received_at:now-200,progress:{phase:'investigating',http_requests:33,inference_calls:4,completed_tools:3,workflow}}}]});
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:response()}));
+  await page.goto(`/#/reviews/${id}`);
+  let activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.getByText('Awaiting a fresh update',{exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
+  await expect(activity.getByRole('button',{name:'Signed-in checks: Last reported running',exact:true})).toBeVisible();
+  await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('not a fresh execution');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
+  await activity.getByRole('button',{name:'Map routes: Incomplete',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('explicit coverage gap');
+  await expect(activity.getByRole('button',{name:'Known signatures: Not recorded',exact:true})).toBeVisible();
+  finished=true;await page.getByRole('button',{name:'Refresh report',exact:false}).click();
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.getByRole('button',{name:'Map routes: Incomplete',exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
+  await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
+  await activity.getByRole('button',{name:'Deeper public checks: Incomplete',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Reached this tool’s request limit.');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('6s');
+  await expect(activity).toContainText('ARTEX_public-engine');
+  await activity.screenshot({path:info.outputPath('workflow-partial.png')});
+  await mockExport(page,response());
+  const pdfDownload=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  const pdf=await pdfDownload;
+  await pdf.saveAs(info.outputPath('workflow-partial.pdf'));
+  expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(5);
+  await page.getByText('Other downloads & test details',{exact:true}).click();
+  const readable=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report'}).click();
+  const download=await readable;
+  await download.saveAs(info.outputPath('workflow-partial.md'));
+  const markdown=await readFile((await download.path())!,'utf8');
+  expect(markdown).toContain('Headers & config (Patchriot baseline): Reused evidence');
+  expect(markdown).toContain('Source: Scout');
+  expect(markdown).toContain('Map routes (Patchriot crawl): Incomplete · 3 evidence records');
+  expect(markdown).toContain('It does not mean complete coverage or a finding-free website.');
+  expect(markdown).toContain('Known signatures (Nuclei): Not recorded (no checklist entry)');
+});
+
+test('partial engine explanations require known structured receipt metadata',()=>{
+  const tool={...result.tool_runs![0],tool:'artex-engine'};
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'target_request_budget',coverage_complete:false})})).toContain('request limit');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'interrupted',coverage_complete:false})})).toContain('interrupted');
+  for(const output_excerpt of ['<script>bad()</script>','{"stop_reason":"target_request_budget"}',JSON.stringify({receipt_schema:1,stop_reason:'unknown_reason',coverage_complete:false}),JSON.stringify({receipt_schema:1,stop_reason:'time_budget',coverage_complete:true})]) expect(toolCoverageDetail({...tool,output_excerpt})).toBeUndefined();
+});
+
+test('provider observations keep partial USD, DIEM and cache coverage distinct', async ({page}, info) => {
+  await setup(page, false, false, true);
+  const review = await page.evaluate(async reviewId => (await fetch(`/api/reviews/${reviewId}`)).json(), id);
+  review.steps[0].result.execution = {
+    ...result.execution,
+    cost_upper_microusd: 1800000,
+    inference_usage: [
+      {provider:'venice',model:'fixture-primary',responses:3,token_usage_responses:2,cache_usage_responses:1,prompt_tokens:1200,completion_tokens:80,cached_prompt_tokens:300,usd_cost_responses:2,diem_cost_responses:1,provider_reported_usd:0.0123,provider_reported_diem:0.5},
+      {provider:'near',model:'fixture-backup',responses:1,token_usage_responses:0,cache_usage_responses:0,prompt_tokens:0,completion_tokens:0,cached_prompt_tokens:0,usd_cost_responses:0,diem_cost_responses:0,provider_reported_usd:0,provider_reported_diem:0},
+    ],
+  };
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await page.getByText('Inference usage & cost',{exact:true}).first().click();
+  const usage = page.locator('.inference-usage[open]').first();
+  const venice = usage.getByRole('region',{name:'venice usage'});
+  await expect(venice).toContainText('0.0123 USD');
+  await expect(venice).toContainText('0.5 DIEM');
+  await expect(venice).toContainText('2 of 3 responses');
+  await expect(venice).toContainText('1 of 3 responses');
+  await expect(venice).toContainText('1,200 / 80');
+  const near = usage.getByRole('region',{name:'near usage'});
+  await expect(near.locator('dd').filter({hasText:'Not reported'})).toHaveCount(4);
+  await expect(near).not.toContainText('0 USD');
+  await expect(near).not.toContainText('0 DIEM');
+  await expect(usage).toContainText('Conservative uncached upper estimate');
+  await expect(usage).toContainText('1.8 USD');
+  await expect(usage).not.toContainText('1.8123');
+  await usage.screenshot({path:info.outputPath('inference-observations.png')});
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByText('Inference usage & cost',{exact:true}).click();
+  await expect(page.getByRole('region',{name:'venice usage'})).toContainText('0.0123 USD');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('combined engine receipt identifies both access modes without inventing usage', async ({page}, info) => {
+  await setup(page, false, false, true);
+  const review = await page.evaluate(async reviewId => (await fetch(`/api/reviews/${reviewId}`)).json(), id);
+  review.pentest.scope.authentication='session';
+  const workflow=structuredWorkflow(true,'recorded');
+  review.steps[0].result={...result,workflow,tool_runs:[{...result.tool_runs![0],tool:'artex-engine',output_excerpt:JSON.stringify({receipt_schema:1,access_mode:'anonymous_and_authenticated',anonymous_evidence_count:1,authenticated_evidence_count:1})}]};
+  await page.route(`**/api/reviews/${id}`, route=>route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await activity.getByRole('button',{name:'Scout Report received'}).click();
+  await activity.getByRole('button',{name:'ARTEX investigation: Recorded',exact:true}).click();
+  const selected=activity.getByRole('region',{name:'Selected workflow step'});
+  await expect(selected).toContainText('One engine run used combined anonymous and authenticated mode.');
+  await expect(selected).toContainText('1 anonymous and 1 authenticated requests.');
+  await expect(activity).toContainText('ARTEX-engine');
+  await expect(activity).not.toContainText('ARTEX_public-engine');
+  await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  await activity.getByRole('button',{name:'Signed-in coverage: Recorded',exact:true}).click();
+  await expect(selected).toContainText('Signed-in coverage');
+  await expect(selected).toContainText('4');
+  await activity.screenshot({path:info.outputPath('combined-engine.png')});
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByText('Inference usage & cost',{exact:true}).click();
+  await expect(page.locator('.inference-usage')).toContainText('Provider usage and response costs were not recorded.');
+  for(const receipt of [{receipt_schema:1,access_mode:'anonymous',anonymous_evidence_count:1,authenticated_evidence_count:0},{receipt_schema:1}]) {
+    review.steps[0].result.tool_runs[0].output_excerpt=JSON.stringify(receipt);
+    await page.getByRole('button',{name:'Refresh report',exact:false}).click();
+    await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+    await activity.getByRole('button',{name:'Scout Report received'}).click();
+    await expect(activity.locator('.workflow-step')).toHaveCount(8);
+    await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Signed-in checks: Recorded',exact:true})).toBeVisible();
+    await expect(activity.locator('.workflow-coverage')).toHaveCount(0);
+  }
+});
+
+test('live combined ARTEX follows access verification and keeps signed-in coverage inside the stage', async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',route=>route.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(true);
+  workflow.checks[4].state='running';
+  const received=Math.floor(Date.now()/1000);
+  const review={id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],authentication:'session',browser_login:{}},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:received,progress:{phase:'scoped_tools',http_requests:71,inference_calls:8,completed_tools:4,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  expect(await activity.locator('.workflow-step').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-check')))).toEqual([...publicWorkflowIds.slice(0,4),'authentication','public_analysis','evidence_review']);
+  await expect(activity.getByRole('button',{name:'ARTEX investigation: Running',exact:true})).toBeVisible();
+  await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveCount(0);
+  await expect(activity.locator('[data-check=public_analysis]')).toContainText('Anonymous + signed-in');
+  await activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('any later agent investigation');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('4');
+  for(const width of info.project.name==='desktop'?[1280,1920,1024,760]:[390]) {
+    await page.setViewportSize({width,height:1000});
+    await expect(activity.locator('.workflow-edges > path')).toHaveCount(6);
+    await expect.poll(()=>activity.evaluate(root=>{
+      const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;
+      const bounds=svg.getBoundingClientRect();
+      return [...svg.querySelectorAll<SVGPathElement>('path[data-from]')].every(path=>{
+        const from=root.querySelector(`[data-check="${path.dataset.from}"] .workflow-node`)!.getBoundingClientRect();
+        const to=root.querySelector(`[data-check="${path.dataset.to}"] .workflow-node`)!.getBoundingClientRect();
+        const first=path.getPointAtLength(0),last=path.getPointAtLength(path.getTotalLength());
+        const distance=(point:DOMPoint,rect:DOMRect)=>Math.hypot(bounds.x+point.x-rect.x-rect.width/2,bounds.y+point.y-rect.y-rect.height/2);
+        const ordered=root.getBoundingClientRect().width>760?Math.abs(from.y-to.y)<2&&to.x>from.x:Math.abs(from.x-to.x)<2&&to.y>from.y;
+        return ordered&&Math.abs(distance(first,from)-from.width/2)<2&&Math.abs(distance(last,to)-to.width/2)<2&&Math.abs(path.getTotalLength()-Math.hypot(last.x-first.x,last.y-first.y))<1;
+      });
+    })).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await activity.screenshot({path:info.outputPath(`combined-live-${width}.png`)});
+  }
+  workflow.checks[4].state='recorded';
+  for(const phase of ['investigating','finishing']) {
+    review.steps[0].progress.progress.phase=phase;
+    await page.getByRole('button',{name:'Refresh report',exact:false}).click();
+    await expect(activity.locator('.workflow-step')).toHaveCount(7);
+    await expect(activity.getByRole('button',{name:'ARTEX investigation: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true})).toBeVisible();
+  }
+  // A new review cannot inherit observed mode from the previously opened run.
+  const historicalId='00000000-0000-4000-8000-000000000004';
+  await page.route(`**/api/reviews/${historicalId}`,route=>route.fulfill({json:{...review,id:historicalId}}));
+  await page.goto(`/#/reviews/${historicalId}`);
+  await expect(activity.locator('.workflow-step')).toHaveCount(8);
+  await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+  // Paired scope identifies the combined plan even when first opened after ARTEX.
+  Object.assign(review.pentest.scope,{account_policy:{allow_password_changes:false}});
+  workflow.checks[6].state='incomplete';
+  await page.goto(`/#/reviews/${id}`);
+  await page.reload();
+  await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  await activity.getByRole('button',{name:'Signed-in coverage: Incomplete',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('explicit coverage gap');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('4');
+  await activity.screenshot({path:info.outputPath('combined-late-paired.png')});
+});
+
+
+test('coverage ledger retains account context and ignores malformed or uncited entries', () => {
+  const unit = { id: 'a'.repeat(64), url: 'https://owned.example/debug', method: 'GET', account: 'testing', class: 'http_observation', state: 'tested', reason: 'Recorded comparison', evidence_ids: [1] };
+  const ledger = { ...result.tool_runs![0], tool: 'patchriot-coverage', output_truncated: false,
+    output_excerpt: JSON.stringify({ version: 1, units: [null, unit, { ...unit, evidence_ids: [999] }, { ...unit, class: null }] }) };
+  const checks = coverageChecks({ ...result, tool_runs: [ledger] });
+  expect(checks).toHaveLength(1);
+  expect(checks[0].title).toContain('testing');
+  expect(checks[0].status).toBe('completed');
+  expect(checks[0].evidence_ids).toEqual([1]);
+});
+
+
+test('scanner handoff labels distinguish no inputs from executed checks', () => {
+  const tool = {
+    ...result.tool_runs![0], tool: 'zap', arguments: ['scoped', '--engine-discoveries'],
+    output_truncated: false, evidence_ids: [],
+    output_excerpt: JSON.stringify({ phase: 'engine_discoveries', state: 'inapplicable', reason: 'no_new_recorded_get_inputs' }),
+  };
+  expect(workflowToolName(tool.tool, tool)).toBe('Web scanner · discovered inputs');
+  expect(toolOutcome(tool)).toBe('No new inputs');
+  expect(toolOutcome({ ...tool, failure: 'incomplete' })).toBe('Incomplete');
+  expect(toolOutcome({ ...tool, evidence_ids: [1] })).toBe('Ran');
+  expect(toolOutcome({ ...tool, output_truncated: true })).toBe('Ran');
+  expect(toolOutcome({ ...tool, output_excerpt: '<script>target text</script>' })).toBe('Ran');
 });

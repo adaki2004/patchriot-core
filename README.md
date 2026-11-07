@@ -14,10 +14,7 @@ flowchart LR
     V --> C[Confirm team + coupon or credit]
     C --> S[Scout investigates]
     S --> R[Recon verifies]
-    R --> T{Further review?}
-    T -->|Yes| X[Verifier challenges]
-    T -->|No| P[Private report]
-    X --> P
+    R --> P[Private report]
 ```
 
 | Choose | You provide | You get |
@@ -26,7 +23,9 @@ flowchart LR
 | **Grey box** | The same, plus a dedicated test account, API token or permission to use an empty test wallet | Public checks plus verified signed-in access where supported; unsupported or inconclusive checks are clearly marked |
 | **White box** | Source + a deployment | Roadmap; not part of current onboarding |
 
-Scout maps the application. Recon checks leads with fresh requests. A reserved third agent reviews serious claims, disagreements or incomplete evidence. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
+Scout runs the full scoped investigation and hands its findings and evidence to Recon. Recon validates those claims with fresh controls. New requests use these two agents, with no automatic third role. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
+
+Reports also retain scoped scanner receipts and an evidence-indexed coverage ledger with account context and unresolved areas.
 
 Download **PDF, Markdown, evidence JSON or observed endpoints**. A finished report can have coverage limits; missing sign-in access and interrupted agents are shown separately. Your first export starts a fixed 12-hour report deletion timer; repeated downloads do not extend it. Existing snapshot and source-text reports remain accessible.
 
@@ -39,16 +38,9 @@ Deployments can select NEAR AI or Venice DeepSeek as primary and optionally use 
 
 ## The three parts
 
-```mermaid
-flowchart LR
-    B[Browser] --> C[Core: accounts, checkout, reports]
-    C --> I[NEAR Intents]
-    C --> D[Dispatcher: permission + queue]
-    D --> R[Relay + isolated Hermes on Kali]
-    R <-->|Approved inference route| N[NEAR AI Private TEE or Venice]
-    R -->|Evidence| D
-    D --> C
-```
+![Patchriot architecture: vertically stacked contributor agents 1, 2 through N, with approved NEAR AI or Venice inference and private evidence returning through the dispatcher.](web/src/assets/assessment-architecture.svg)
+
+The numbered agents are inference contributors, not fixed review roles. Each approved instance runs Kali Linux, Hermes and a scoped relay with access to its approved model route. Patchriot operates these agents today; public contributor access is coming soon. Review roles are assigned separately and run sequentially; agents may share an operator or machine. This same diagram appears on the website and in the architecture guide.
 
 | Repository | Role |
 | --- | --- |
@@ -86,7 +78,7 @@ Use the hosted product to request a test. The sections below are for running a s
 
 Deploy dispatcher’s authenticated `GET /internal/pentests/:id` first, then core with migration `0018_account_credits.sql`. Keep the payment worker running with the same database and dispatcher settings. No agent runtime change is required for credit payments. Existing invoices, coupons, reports and operator withdrawals retain their interfaces.
 
-**Account → Add credit** offers $2, $5, $10, $25, $50, $100 or a custom $2–$1,000 amount. The existing payment policy fixes the treasury, accepted inputs and destination. Credit is enabled only for the exact Base USDC representation used by earnings, with six decimals. NEAR Intents quotes the input including conversion costs; wallet gas is separate. Only a matching, settled receipt adds the chosen number of cents, once. A top-up never emits a work-funding event.
+**Account → Add credit** offers $2, $3, $5 or a custom $2–$5 amount during the pilot. The server caps each new top-up at $5; repeat top-ups remain available within the existing request limits. Saved deposits retain their original terms and can still be resumed and settled. This cap is separate from assessment prices and agent inference allowances. The existing payment policy fixes the treasury, accepted inputs and destination. Credit is enabled only for the exact Base USDC representation used by earnings, with six decimals. NEAR Intents quotes the input including conversion costs; wallet gas is separate. Only a matching, settled receipt adds the chosen number of cents, once. A top-up never emits a work-funding event.
 
 A black-box test costs **$1.99**; a test with saved authentication costs **$4.99**. Core derives this from the dispatcher’s saved scope, not the browser. White box is listed at $9.99 as a roadmap product and cannot be purchased. Coupons start their normal assessment without touching credit. Separate sign-in identities retain separate balances.
 
@@ -255,7 +247,7 @@ The browser uses `/api/sources`, `/:id/decision`, `/:id/delete`, `/:id/evidence`
 
 Choose **Request an audit → Black-box website test**. The setup has three steps: **Your website → Verify ownership → Confirm & start**. Enter the HTTPS URL, then add the supplied DNS TXT record. Adapted discovery tooling is included by default. Verification opens checkout without another staff approval; an admin viewing someone else’s request does not pay for it. **Saved requests** contains unfinished setups; progress and reports appear under **Audits**. Use the **Free-test coupon** field if staff supplied one.
 
-Confirm the three named devices, their operators and the **inference providers shown for that team**. Scout and Recon run in sequence; the reserved Verifier joins when the escalation checks require it. Open the private report to inspect findings and recorded requests, download it or cancel unfinished work. Recommended fixes can include code examples; these remain untested suggestions displayed as inert text.
+Confirm the two named devices, their operators and the **inference providers shown for that team**. Scout and Recon run in sequence: investigation, then targeted validation. Open the private report to inspect findings and recorded requests, download it or cancel unfinished work. Recommended fixes can include code examples; these remain untested suggestions displayed as inert text.
 
 This mode makes real **GET, HEAD and OPTIONS** requests by default. Agents inspect scripts, discover same-origin routes and investigate leads. Optional **web_active_v2** adds JSON or URL-encoded POST requests up to 16 KiB, with explicit permission to change disposable test data. Existing scopes keep their original permissions. No load tests or fund movement. The relay checks each destination, rejects private IPs, records the responses and keeps the provider key outside the agent container. Reports can disagree. A completed report is not a security certificate.
 
@@ -516,6 +508,16 @@ Choose **Grey box**, select username/password, a bearer token, HTTP Basic or EVM
 
 **How login works:** the agent opens the approved website in isolated Chromium, finds its sign-in and follows the website's own frontend. A private helper fills supplied credentials. For wallet login, the website sees an injected test wallet; the agent reviews each readable login challenge before the relay signs it. The same browser retains the resulting session for approved testing. Some dapps only connect an address and never request a signature; that permits public account views but does not prove private access. Requests still pass through the relay's exact-origin, public-DNS, lease and request limits. External identity providers are not added to scope. If the app needs a separate CDN or public API, the requester can list up to eight exact HTTPS hosts under **Optional sign-in hints → Page dependencies**. The browser may read those hosts without account cookies, tokens or referrers. They cannot become login or test targets; changing the list changes the saved permission and consent hash.
 
+**Two supplied accounts (adapter 20):** browser session setup can include a testing account and a protected reference account. Both are preserved by default. An explicit permission allows one narrowly recognized self-service password-change attempt on the testing account after both distinct identities are verified. The reference account stays available for cross-account controls and later validation. Password recovery and other account-setting changes remain outside this permission. The relay enforces these rules, keeps the browser profiles separate, and records each signed-in request's account. Deploy matching protocol, dispatcher migration 32 and capable runners before enabling paired requests.
+
+**Structured public-first workflow (adapter 19):** black-box and grey-box work share anonymous baseline, mapping, curated signatures and fingerprints. Black-box ARTEX stays anonymous. Grey-box verifies access before one combined ARTEX investigation with separate anonymous and authenticated contexts under a shared budget. Public discovery is reused; private checks add coverage rather than another whole scan. Receipts distinguish both contexts and preserve unavailable coverage. Independent validation follows material leads. Identical findings and a fixed duration are not guaranteed.
+
+Execution receipts retain optional provider-reported costs and token/cache usage separately from the conservative uncached spending estimate. USD and DIEM remain separate, missing responses are counted, and these observations are not settled invoices.
+
+The activity graph progresses from simple checks to deeper investigation, with selectable tool details, evidence counts and earlier-role sources. Reports and Markdown/PDF exports retain recorded, incomplete and reused stages. “Recorded” establishes observed work, not safety or full coverage; signed-in requests do not prove every authorization, session or input-validation test was performed. Old reports without this checklist show that it was not recorded. New terminal statuses are derived from retained receipts and anonymous HTTP evidence; reuse is checked against the dispatcher's saved earlier reports. A completed engine receipt can retain individual response-capture or transport gaps. The checklist keeps those records available for review and requires successful anonymous evidence. Missing records or an incomplete engine receipt keep the stage incomplete. A verified login cannot complete missing public work.
+
+Deploy matching core, dispatcher/gateway and relay binaries before enabling the adapter 16 image. Old readers reject the new optional workflow field; old reports continue to round-trip without it. This source update has local fixture/browser validation, not a new live-model benchmark.
+
 **Proof of access:** the relay compares the same GET resource with and without the account. It records success only when authenticated access returns 2xx and the anonymous request returns 401/403, or when a JSON account response matches the supplied username/test wallet and the anonymous response does not. A signature, cookie, changed screen or HTTP 200 alone is insufficient. The report, Markdown and PDF show the evidence references or a clear coverage gap. Verification establishes access to that resource, not every private page. Browser-mode redirects and HTML-only identity changes are not currently sufficient proof.
 
 **Limits:** one five-minute login window permits at most eight same-origin POST steps and four signatures per role. These are steps in one login, not password guesses. Supplied credentials must work, and the target must admit a fresh wallet without funding, holdings or prior membership. Transactions, typed-data/permit signing, external SSO, MFA, CAPTCHA, Solana target wallets, WalletConnect-only flows and account registration requiring additional permission remain unsupported. Browser login supports bounded readable personal-sign messages and SIWE; an agent's assessment of a custom message cannot guarantee its legal or application-level meaning. Never fund these test wallets or give them valuable permissions.
@@ -544,9 +546,9 @@ The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/D
 <details>
 <summary>Conditional live review</summary>
 
-New live checkout uses `investigate_verify_v1`: Scout investigates and Recon verifies. A third, pre-consented Verifier runs for high/critical findings, disagreement, an unchecked claim or incomplete evidence. The dispatcher records its reasons before scheduling the third role. It compares exact claim titles and cited requests conservatively; it does not infer that similarly worded claims are the same. Discovery tools run once; later agents use fresh scoped requests. An incomplete earlier stage remains incomplete even if a later report arrives.
+New live checkout uses `investigate_validate_v1`: one full scoped investigation followed by one targeted validator. The second agent receives the first report and evidence, uses fresh controls for its claims and does not repeat broad discovery. There is no automatic third agent. Coverage gaps and disputed claims remain visible. Saved `investigate_verify_v1` requests retain conditional escalation; legacy requests retain three required roles.
 
-Checkout names all three available devices so escalation never sends private material to a new operator. The third execution is included in the displayed service price. Report progress, exports and the ledger count only required roles. Clients that omit `review_policy`, saved orders, snapshots and source reviews retain three roles. Deploy the updated dispatcher/gateway before core; core requires migration 0014. No relay capability or automatic retry is added by this policy.
+Checkout binds the two named devices and their providers. Existing orders retain their original team and policy. Deploy the compatible protocol and dispatcher/gateway (including migration 0031 for explicitly configured longer runs), core, then the matching relay and adapter 18. Operators must configure the longer allowance on both dispatcher and relay; defaults and saved deadlines remain unchanged.
 
 ### Inference recovery
 
@@ -556,7 +558,7 @@ An eligible temporary failure can use one backup completion, then keep that role
 
 Deployment: update core, dispatcher/gateway and relay before changing routing. Set `PATCHRIOT_INFERENCE_PRIMARY_MODEL` and optionally `PATCHRIOT_INFERENCE_SECONDARY_MODEL` in the dispatcher’s private environment. Each selected relay needs the matching primary model and optional `secondary_model` / `secondary_key_file`. Only approved devices declaring that primary model are offered for new requests. Keep old devices available for previously approved work; changing a device’s primary model needs a fresh identity and approval. Leave both new settings unset to retain legacy selection. Do not combine them with `PATCHRIOT_VENICE_FALLBACK_ENABLED=true`. See the relay README for configuration and rates. No new migration is needed.
 
-The relay also checks buffered responses for the repetition pattern that stops Hermes. With prior backup consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.
+The relay checks buffered responses for repetitive output before delivery to the agent. Each route permits one fresh generation after a detected loop, consuming another call allowance and retaining the failed attempt’s spending reservation. If recovery still fails, prior backup consent permits the configured secondary route. Repeated engine failure preserves partial evidence and records the coverage gap for review. Provider response observations cover received, accepted completions. Charges for rejected or interrupted generations remain uncertain until billing reconciliation.
 
 </details>
 

@@ -111,7 +111,7 @@ test('members can see agent software versions, tools and report counts without h
   await page.route('**/api/agents', route => route.fulfill({ json: [{ id: '00000000-0000-4000-8000-000000000002', reported_os: 'linux', runtime: 'hermes', runtime_version: 'runner-v3', declared_model: 'local-model', state: 'online', last_seen_at: 1793692800, system: { os_name: 'Kali GNU/Linux', os_version: '2026.3', architecture: 'x86_64', relay_version: '0.0.1' }, live_tests: true, live_tools: ['artex_engine_v1'], reports_received: 12, compute_group: 'private-host', operator_name: 'private-operator' }] }));
   await page.goto('/#/agents');
   await expect(page.getByText('Kali GNU/Linux 2026.3', { exact: true })).toBeVisible();
-  await expect(page.getByText('ARTEX + standard checks', { exact: true })).toBeVisible();
+  await expect(page.getByText('ARTEX_public-engine + standard checks', { exact: true })).toBeVisible();
   await expect(page.getByText('runner-v3', { exact: true })).toBeVisible();
   await expect(page.getByText('0.0.1', { exact: true })).toBeVisible();
   await expect(page.locator('.agent-entry')).toContainText('Reports received12');
@@ -593,4 +593,19 @@ test('agent reports preserve missing evidence and render model prose as inert te
   await report.getByText('Execution details', { exact: true }).first().click();
   await expect(report.getByText(`sha256:${'b'.repeat(64)}`, { exact: true }).first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('workspace shows real runner facts and a qualified NEAR integration', async ({page}, info) => {
+  await setup(page,true);
+  await page.route('**/api/agents',r=>r.fulfill({json:[{id:'fixture-agent',runtime:'hermes',runtime_version:'fixture-runtime-15',declared_model:'fixture-model',state:'online',last_seen_at:1793640020,reports_received:17,system:{os_name:'Kali',os_version:'2026',architecture:'x86_64',relay_version:'fixture-relay'}}]}));
+  await page.goto('/');
+  const network=page.locator('.network-work');
+  await expect(network).toContainText('fixture-runtime-15');
+  await expect(network).toContainText('Heartbeat');
+  await expect(network).toContainText('17');
+  await expect(network.getByRole('img',{name:'NEAR AI',exact:true})).toBeVisible();
+  await expect(network).toContainText('Your checkout and report identify the providers used.');
+  await expect(page.locator('.workspace-art')).toHaveCSS('object-fit','contain');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('workspace-runtime.png'),fullPage:true});
 });

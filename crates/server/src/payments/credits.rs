@@ -22,6 +22,8 @@ pub(crate) use topups::{create_topup, topup_quote};
 const ATOMS_PER_CENT: i64 = 10_000;
 const BLACK_CENTS: i64 = 199;
 const GREY_CENTS: i64 = 499;
+const MINIMUM_TOPUP_CENTS: i64 = 200;
+const MAXIMUM_TOPUP_CENTS: i64 = 500;
 
 fn service(state: &AppState) -> Result<&access::CheckoutService, ApiError> {
     match &state.review_access {
@@ -94,7 +96,7 @@ pub(crate) async fn summary(
         .map_err(payment_error)?;
     Ok(Json(
         json!({"available_cents":available(&state.pool,account).await?,"history":history,"topups":topups,"purchases":purchases,
-        "topup_offer":offer,"minimum_topup_cents":200,"maximum_topup_cents":100000,
+        "topup_offer":offer,"minimum_topup_cents":MINIMUM_TOPUP_CENTS,"maximum_topup_cents":MAXIMUM_TOPUP_CENTS,
         "prices":{"black":BLACK_CENTS,"grey":GREY_CENTS,"white":999},"white_available":false}),
     ))
 }

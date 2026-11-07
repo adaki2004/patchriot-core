@@ -74,7 +74,7 @@ impl Network {
                     assert!(body.get("snapshot_sha256").is_none());
                     reply["scenario"]=json!("live_http_v1"); reply["mode"]=json!("pentest_agent");
                     let old=reply.as_object_mut().unwrap().remove("website").unwrap();
-                    reply["pentest"]=json!({"pentest_id":site,"scope_sha256":body["scope_sha256"],"provider":"abliteration.ai", "reviewers":old["reviewers"], "scope":{"origins":["https://example.com"],"objective":"Owned fixture","methods":["GET","HEAD","OPTIONS"]}});
+                    reply["pentest"]=json!({"pentest_id":site,"scope_sha256":body["scope_sha256"],"provider":"abliteration.ai", "review_policy":body.get("review_policy").cloned().unwrap_or(json!("legacy_three")), "reviewers":old["reviewers"], "scope":{"origins":["https://example.com"],"objective":"Owned fixture","methods":["GET","HEAD","OPTIONS"]}});
                 }
                 if lost.swap(false,Ordering::SeqCst) { return (StatusCode::SERVICE_UNAVAILABLE,Json(json!({"error":"reply_lost_after_creation"}))); }
                 if wrong.load(Ordering::SeqCst) { reply[if source {"source"} else {"website"}]["snapshot_sha256"]=json!("b".repeat(64)); }
@@ -621,6 +621,65 @@ async fn live_coupon_waits_for_scope_consent_and_recovers_a_lost_reply_without_a
         .await
         .unwrap();
     assert_eq!(count, 0);
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn two_agent_coupon_preserves_team_consent_and_replays_without_an_extra_run() {
+    let network = Network::for_kind(false, true).await;
+    let test = TestApp::with_access(&network.origin, ReviewAccess::Coupons).await;
+    let issued = issue(&test.pool, "Two agent fixture").await.unwrap();
+    let (cookie, session) = test.login("member").await;
+    let h = headers(&cookie, &session);
+    let path = format!("/api/pentests/{}/review-code", Uuid::new_v4());
+    let body = json!({"code":issued.code,"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":&network.live_devices[..2],"accepts_operator_access":true,"accepts_provider_access":true,"review_policy":"investigate_validate_v1"}});
+    for devices in [
+        network.live_devices.clone(),
+        vec![network.live_devices[0], network.live_devices[0]],
+        vec![network.live_devices[0]],
+    ] {
+        let mut bad = body.clone();
+        bad["consent"]["device_ids"] = json!(devices);
+        assert_eq!(
+            test.request("POST", &path, bad, &h).await.0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert!(network.calls.lock().unwrap().is_empty());
+    let reserved: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM review_codes WHERE reserved_at IS NOT NULL")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap();
+    assert_eq!(reserved, 0);
+    network.lose_reply.store(true, Ordering::SeqCst);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &h).await.0,
+        StatusCode::SERVICE_UNAVAILABLE
+    );
+    let started = test.request("POST", &path, body.clone(), &h).await;
+    assert_eq!(started.0, StatusCode::OK, "{}", started.2);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &h).await.2,
+        started.2
+    );
+    assert_eq!(network.reviews.lock().unwrap().len(), 1);
+    let calls = network.calls.lock().unwrap().clone();
+    assert_eq!(
+        calls.len(),
+        2,
+        "lost reply retries the same idempotent request"
+    );
+    assert_eq!(calls[0].2, calls[1].2);
+    assert_eq!(calls[0].2["device_ids"], body["consent"]["device_ids"]);
+    assert_eq!(calls[0].2["review_policy"], "investigate_validate_v1");
+    let saved: Value =
+        sqlx::query_scalar("SELECT consent FROM review_codes WHERE reserved_at IS NOT NULL")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap();
+    assert_eq!(saved["device_ids"], body["consent"]["device_ids"]);
+    assert_eq!(saved["review_policy"], "investigate_validate_v1");
     test.finish().await;
 }
 

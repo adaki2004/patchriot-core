@@ -36,6 +36,7 @@ import { Sources } from './Sources';
 import { Earnings } from './Earnings';
 import { EnterpriseContact, ContactInbox } from './Contact';
 import './form-polish.css';
+import './activity.css';
 
 function Mark() {
   return <img className="brand-mark" src="/brand/white-hat.png" alt="" width="44" height="44" />;
@@ -209,6 +210,10 @@ function App() {
   const auditView = ['audits', 'sites', 'pentests', 'sources', 'reviews', 'request'].includes(view);
   const publicPage = view === 'home' || (view === 'overview' && ['', '#/', '#/overview'].includes(window.location.hash)) ? 'home' : view === 'docs' ? 'docs' : view === 'incidents' ? 'events' : null;
   const analyticsPage = session && !account && !accessOpen && !initialCode && window.location.pathname === '/' ? publicPage : null;
+  // OAuth returns to overview before the session request resolves. Keep the
+  // handoff neutral until we know whether to resume a draft or open the app.
+  const openingWorkspace = (!session && !sessionError && (view === 'overview' || resumeWebsiteDraft.current))
+    || (Boolean(account) && resumeWebsiteDraft.current);
   return <>
     <a className="skip" href="#main" onClick={event => { event.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
     <header className="site-header">
@@ -240,8 +245,9 @@ function App() {
       {notice && <Notice>{notice}<button className="inline" onClick={() => setNotice('')}>Dismiss</button></Notice>}
       {privateView && !account && <section className="private-entry"><div><p className="eyebrow">PRIVATE WORKSPACE</p><h1>{session ? 'Sign in to continue.' : 'Checking your session…'}</h1><p>A saved link does not share its contents. Use the account that owns this work.</p></div>{session && !accessOpen && access}</section>}
       {adminView && account && !isAdmin && <section className="panel empty"><h1 className="page-title">Administrator access required.</h1><p>This account cannot open the admin desk.</p></section>}
-      {(view === 'home' || (view === 'overview' && !account)) && <Landing fleet={fleet.data} error={fleet.error} onRetry={fleet.refresh} signedIn={Boolean(account)} onAccess={openAccess} onApp={() => setView('overview')} onRequest={requestWork} onDocs={() => navigate('docs', 'start')} />}
-      {view === 'overview' && account && <><Dashboard csrf={session?.csrf_token ?? ''} key={account.id} name={account.display_name} fleet={fleet.data} onOpen={navigate} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}</>}
+      {openingWorkspace && !privateView && <section className="private-entry" role="status"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>Opening your workspace…</h1></div></section>}
+      {!openingWorkspace && (view === 'home' || (view === 'overview' && !account)) && <Landing fleet={fleet.data} error={fleet.error} onRetry={fleet.refresh} signedIn={Boolean(account)} onAccess={openAccess} onApp={() => setView('overview')} onRequest={requestWork} onDocs={() => navigate('docs', 'start')} />}
+      {!openingWorkspace && view === 'overview' && account && <><Dashboard csrf={session?.csrf_token ?? ''} key={account.id} name={account.display_name} fleet={fleet.data} onOpen={navigate} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}</>}
       {view === 'audits' && account && <Audits key={account.id} onOpen={navigate} />}
       {view === 'audit-desk' && isAdmin && <Audits key={`admin:${account.id}`} admin csrf={session?.csrf_token ?? undefined} onOpen={navigate} />}
       {['sites', 'sources', 'reviews'].includes(view) && account && <div className="audit-breadcrumb"><button className="text-button" onClick={() => setView('audits')}>← Your audits</button><span>{view === 'sites' ? 'Website snapshots' : view === 'sources' ? 'Source uploads' : 'Reports'}</span></div>}

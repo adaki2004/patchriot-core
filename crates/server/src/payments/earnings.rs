@@ -51,7 +51,12 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
         (None, None, Some(c)) => (&c.reviewers, &c.scope_sha256),
         _ => return Err("earning_context_mismatch"),
     };
-    if people.len() != 3 {
+    if people.len()
+        != view
+            .pentest
+            .as_ref()
+            .map_or(3, |c| c.review_policy.team_size())
+    {
         return Err("earning_team_mismatch");
     }
     let total = amount - amount / 10;
@@ -183,7 +188,8 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
         return Err("earning_duplicate_device");
     }
     if let Some(context) = &view.pentest
-        && !context.review_policy.is_legacy()
+        && context.review_policy
+            == patchriot_protocol::pentests::LiveReviewPolicy::InvestigateVerifyV1
         && !view.retention.as_ref().is_some_and(|r| r.content_deleted)
     {
         let result = |role| {

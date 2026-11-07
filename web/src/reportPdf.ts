@@ -1,6 +1,7 @@
+import { workflowRecordLines, workflowCaveat, workflowAbsent } from './workflow';
 import { reportBlocks } from './reportFormatting';
 import { fallbackDescription, browserAccessDescription } from './LiveReport';
-import { coverageChecks, checkLabels, findingRequest } from './report';
+import { coverageChecks, checkLabels, evidenceAccessLabel, findingRequest } from './report';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { reportSummary, reviewMethod, reportRoles, roleMethods, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
@@ -148,7 +149,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.ensure(200);
     p.heading(`${reportRoles[s.role]} — ${roleOutcome(s).label}`);
     p.paragraph(roleOutcome(s).detail);
-    if (input.browser_login) p.paragraph(browserAccessDescription(s.result), 10, blue);
+    if (input.browser_login || s.result?.browser_access || s.result?.account_access?.length) p.paragraph(browserAccessDescription(s.result), 10, blue);
     if (!s.result) continue;
     p.paragraph(`${s.result.evidence.length} recorded requests · ${s.result.execution.inference_calls} model calls · ${Math.round(s.result.execution.duration_ms / 1000)} seconds`, 9, muted);
     if (s.result.execution.fallback) p.paragraph(fallbackDescription(s.result.execution.fallback), 9, muted);
@@ -182,7 +183,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
       for (const id of c.finding.evidence_ids) {
         const e = c.result.evidence.find(e => e.id === id);
         if (!e) { p.paragraph(`${reportRoles[c.role]} #${id}: missing from the recorded evidence.`); continue; }
-        p.paragraph(`${reportRoles[c.role]} #${id} · ${e.authenticated === true ? 'Test account' : 'Anonymous'} · ${e.method} · HTTP ${e.status ?? 'no response'}`, 10, blue);
+        p.paragraph(`${reportRoles[c.role]} #${id} · ${evidenceAccessLabel(e)} · ${e.method} · HTTP ${e.status ?? 'no response'}`, 10, blue);
         p.paragraph(e.url, 9);
         if (e.body_sha256) p.paragraph(`Response fingerprint: ${e.body_sha256}`, 8, muted);
       }
@@ -191,8 +192,14 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   });
 
   p.begin('05 / Coverage & limitations');
+  p.paragraph(workflowCaveat, 9, muted);
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);
+    const workflow = s.result ? s.result.workflow : s.progress?.progress.workflow;
+    if (workflow?.version === 1) {
+      p.paragraph('Structured checklist', 10, blue);
+      for (const line of workflowRecordLines(workflow)) p.paragraph(line, 9);
+    } else p.paragraph(workflowAbsent, 9, muted);
     for (const c of coverageChecks(s.result)) { p.paragraph(`${c.title} — ${checkLabels[c.status]}`, 10, blue); p.paragraph(c.summary, 9); p.paragraph(`${c.origin} · Requests: ${c.evidence_ids.join(', ') || 'none'}`, 8, muted); }
     const limits = s.result?.assessment?.limitations;
     if (limits?.length) limits.forEach((limit, i) => p.paragraph(`${i + 1}. ${limit}`));

@@ -150,13 +150,13 @@ async fn reserve(
                 || consent.allows_venice_fallback
                 || consent.fallback_model.is_some()))
         || !consent.accepts_operator_access
-        || consent.device_ids.len() != 3
+        || consent.device_ids.len() != consent.review_policy.team_size()
         || consent
             .device_ids
             .iter()
             .collect::<std::collections::HashSet<_>>()
             .len()
-            != 3
+            != consent.review_policy.team_size()
         || consent.snapshot_sha256.len() != 64
         || !consent
             .snapshot_sha256

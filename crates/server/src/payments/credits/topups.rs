@@ -45,7 +45,7 @@ pub(crate) async fn create_topup(
 ) -> Result<Json<Value>, ApiError> {
     let account = auth::require_write(&headers, &state).await?.id;
     let service = service(&state)?;
-    if input.request_id.is_nil() || !(200..=100000).contains(&input.amount_cents) {
+    if input.request_id.is_nil() {
         return Err(ApiError::bad("invalid_topup_amount"));
     }
     let mut tx = state.pool.begin().await?;
@@ -66,6 +66,11 @@ pub(crate) async fn create_topup(
         }
         saved.id
     } else {
+        // Apply the pilot cap to new commitments. Existing deposits keep their
+        // exact terms and remain recoverable through idempotent retries.
+        if !(MINIMUM_TOPUP_CENTS..=MAXIMUM_TOPUP_CENTS).contains(&input.amount_cents) {
+            return Err(ApiError::bad("invalid_topup_amount"));
+        }
         if input.offer_id != service.policy.id().map_err(payment_error)? {
             return Err(ApiError::new(
                 StatusCode::CONFLICT,

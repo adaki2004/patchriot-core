@@ -103,7 +103,7 @@ pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, Che
         || terms.consent.request_id.is_nil()
         || terms.consent.request_id != terms.payment.request_id
         || !terms.consent.accepts_operator_access
-        || terms.consent.device_ids.len() != 3
+        || terms.consent.device_ids.len() != terms.consent.review_policy.team_size()
         || terms.consent.device_ids.iter().any(Uuid::is_nil)
         || terms
             .consent
@@ -111,7 +111,7 @@ pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, Che
             .iter()
             .collect::<std::collections::HashSet<_>>()
             .len()
-            != 3
+            != terms.consent.review_policy.team_size()
         || terms.consent.snapshot_sha256.len() != 64
         || !terms
             .consent
