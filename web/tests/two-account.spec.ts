@@ -113,7 +113,7 @@ test('two account permissions bind credentials to the updated scope and protect 
   expect(edits[0].scope.tools).toContain('active_web_v2');
   expect(edits[0].accepts_state_changes).toBe(true);
   await expect(page.getByLabel('Account 2 password', { exact: true })).toHaveValue('fixture-reference-password');
-  await expect(page.getByText('We will not request changes to its password or account settings. It helps compare access between accounts.')).toBeVisible();
+  await expect(page.getByText('Account 2 provides read-only comparisons after login. The relay blocks other signed-in writes, including account settings.')).toBeVisible();
   await expect(page.getByText(/Password reset and recovery flows remain blocked/)).toBeVisible();
   await page.locator('.pentests-page').screenshot({ path: info.outputPath('two-account-permissions.png') });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
