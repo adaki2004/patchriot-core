@@ -930,4 +930,28 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await activity.screenshot({path:info.outputPath(`combined-live-${width}.png`)});
   }
+  workflow.checks[4].state='recorded';
+  for(const phase of ['investigating','finishing']) {
+    review.steps[0].progress.progress.phase=phase;
+    await page.getByRole('button',{name:'Refresh report',exact:false}).click();
+    await expect(activity.locator('.workflow-step')).toHaveCount(7);
+    await expect(activity.getByRole('button',{name:'ARTEX investigation: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true})).toBeVisible();
+  }
+  // A new review cannot inherit observed mode from the previously opened run.
+  const historicalId='00000000-0000-4000-8000-000000000004';
+  await page.route(`**/api/reviews/${historicalId}`,route=>route.fulfill({json:{...review,id:historicalId}}));
+  await page.goto(`/#/reviews/${historicalId}`);
+  await expect(activity.locator('.workflow-step')).toHaveCount(8);
+  await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+  // Paired scope identifies the combined plan even when first opened after ARTEX.
+  Object.assign(review.pentest.scope,{account_policy:{allow_password_changes:false}});
+  workflow.checks[6].state='incomplete';
+  await page.goto(`/#/reviews/${id}`);
+  await page.reload();
+  await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  await activity.getByRole('button',{name:'Signed-in coverage: Incomplete',exact:true}).click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('explicit coverage gap');
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('4');
+  await activity.screenshot({path:info.outputPath('combined-late-paired.png')});
 });

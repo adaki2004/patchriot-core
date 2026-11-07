@@ -11,7 +11,7 @@ export const roleMethods = {
 } as const;
 export const severities = ['critical', 'high', 'medium', 'low', 'info'] as const;
 export const supportLabels: Record<string, string> = { observed: 'Observed', reproduced: 'Reproduction reported', not_reproduced: 'Not reproduced', needs_review: 'Unconfirmed' };
-export type ReportInput = { tools?: string[]; browser_login?: boolean; review_policy?: ReviewPolicy; third_review?: ThirdReview; id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session' | 'wallet'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
+export type ReportInput = { account_policy?: { allow_password_changes: boolean }; tools?: string[]; browser_login?: boolean; review_policy?: ReviewPolicy; third_review?: ThirdReview; id: string; state: string; created_at: number; origins: string[]; steps: LiveStep[]; methods?: string[]; profile?: string; authentication?: 'basic' | 'bearer' | 'session' | 'wallet'; auth_check_path?: string; scope_sha256?: string; team?: { device_id: string; operator_id: string; compute_group?: string | null }[] };
 export type FindingContribution = { id: string; role: LiveRole; finding: LiveFinding; result: LiveResult; complete: boolean };
 export type ReportFinding = FindingContribution & { contributions: FindingContribution[]; disputed: boolean; variedRequests: boolean };
 

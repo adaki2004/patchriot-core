@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { checkDefinitions, toolCoverageDetail, workflowToolName, combinedEngineAccess } from './workflow';
 import { WorkflowGraph } from './WorkflowGraph';
 import type { WorkflowNode } from './WorkflowGraph';
@@ -25,16 +25,27 @@ function workflowNodes(workflow: LiveWorkflow | undefined, tools: LiveToolRun[],
       tool: 'Anonymous + signed-in',
       description: combined
         ? `One engine run used combined anonymous and authenticated mode. Retained evidence includes ${combined.anonymous} anonymous and ${combined.authenticated} authenticated requests.`
-        : 'The runner reports one combined investigation after access verification. The completion receipt will identify retained anonymous and signed-in evidence.',
+        : 'This workflow plans one ARTEX investigation after access verification. The completion receipt identifies retained anonymous and signed-in evidence.',
     } : {};
     return { ...definition, ...presentation, measured_duration_ms:records.length ? records.reduce((total,tool)=>total+tool.duration_ms,0) : undefined, status: check?.state ?? 'not_recorded', detail: receiptDetail ?? (check ? stateDetails[check.state] : undefined), evidence_count: check?.evidence_count, source_role: check?.source_role ? roles[check.source_role] : undefined };
   });
 }
 
+function reportsCombinedInvestigation(step: LiveStep): boolean {
+  const progress = step.progress?.progress;
+  const state = (id: string) => progress?.workflow?.checks.find(check => check.id === id)?.state;
+  return !step.result && progress?.phase === 'scoped_tools' && state('public_analysis') === 'running'
+    && state('authentication') === 'recorded' && state('authenticated_checks') === 'running';
+}
+
 /** Uses only accepted progress snapshots and retained result records; no estimated coverage. */
-export function AssessmentActivity({ steps, state, authenticatedScope = false }: { steps: LiveStep[]; state: string; authenticatedScope?: boolean }) {
+export function AssessmentActivity({ steps, state, authenticatedScope = false, pairedScope = false }: { steps: LiveStep[]; state: string; authenticatedScope?: boolean; pairedScope?: boolean }) {
   const [choice, setChoice] = useState<LiveRole | null>(null);
   const [now, setNow] = useState(Date.now);
+  const observedCombined = useRef(new Set<LiveRole>());
+  useEffect(() => {
+    for (const step of steps) if (reportsCombinedInvestigation(step)) observedCombined.current.add(step.role);
+  }, [steps]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 10_000);
     return () => window.clearInterval(timer);
@@ -47,10 +58,8 @@ export function AssessmentActivity({ steps, state, authenticatedScope = false }:
   const stale = !!progress && now - progress.received_at * 1000 > 90_000;
   const tools = selected.result?.tool_runs ?? [];
   const workflow = selected.result ? selected.result.workflow : progress?.progress.workflow;
-  const checkState = (id: string) => workflow?.checks.find(check => check.id === id)?.state;
-  const combinedInvestigation = authenticatedScope && (tools.some(tool => !!combinedEngineAccess(tool)) ||
-    !selected.result && progress?.progress.phase === 'scoped_tools' && checkState('public_analysis') === 'running' &&
-    checkState('authentication') === 'recorded' && checkState('authenticated_checks') === 'running');
+  const combinedInvestigation = authenticatedScope && (pairedScope || tools.some(tool => !!combinedEngineAccess(tool)) ||
+    !selected.result && (reportsCombinedInvestigation(selected) || observedCombined.current.has(selected.role)));
   const nodes = workflowNodes(workflow, tools, combinedInvestigation);
   const coverage = combinedInvestigation ? { ...nodes[6], title: 'Signed-in coverage', description: 'Signed-in request evidence from ARTEX and any later agent investigation. Recorded means requests were retained with verified access. Inspect the evidence to see which resources and controls were checked.' } : undefined;
   return <section className="assessment-activity" aria-label="Recorded assessment activity">
