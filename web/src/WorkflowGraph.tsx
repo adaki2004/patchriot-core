@@ -82,12 +82,12 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, recorded, 
     </li>;
   }
   return <div className="workflow-map" data-recorded={recorded}>
-    <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>Public first. Deeper with access.</h4><p>Public checks run first; approved access adds the signed-in checks. Select a step for its evidence.</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
+    <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>{accessNodes.length ? 'Public and signed-in investigation.' : 'Public first. Deeper with access.'}</h4><p>{accessNodes.length ? 'Follow the retained checks and access evidence. A combined engine receipt identifies both access modes.' : 'Public checks lead into evidence review. Select a step for its evidence.'}</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
     {!recorded && <p className="workflow-history" role="status">Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.</p>}
     <div ref={ref} className="workflow-diagram" data-authenticated={accessNodes.length > 0}>
       <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}</svg>
       <div className="workflow-lane workflow-public">
-        <div className="workflow-lane-label"><strong>Public checks</strong><small>Shared by black-box and grey-box tests</small></div>
+        <div className="workflow-lane-label"><strong>{accessNodes.length ? 'Baseline & deeper checks' : 'Public checks'}</strong><small>{accessNodes.length ? 'Public baseline with scoped engine access' : 'Shared public baseline'}</small></div>
         <ol aria-label="Public assessment workflow">{publicNodes.map((node, index) => nodeButton(node, index, index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol>
       </div>
       {accessNodes.length > 0 && <div className="workflow-lane workflow-access">

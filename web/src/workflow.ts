@@ -29,9 +29,23 @@ export function workflowRecordLines(workflow: LiveWorkflow | undefined): string[
   });
 }
 
-export function workflowToolName(tool: string) {
+export function workflowToolName(tool: string, record?: LiveToolRun) {
+  if (record && combinedEngineAccess(record)) return 'ARTEX-engine';
   return tool === 'artex-engine' ? 'ARTEX_public-engine' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
 }
+export function combinedEngineAccess(tool: LiveToolRun): { anonymous: number; authenticated: number } | undefined {
+  if (tool.tool !== 'artex-engine') return undefined;
+  try {
+    const receipt = JSON.parse(tool.output_excerpt);
+    const counts = [receipt.anonymous_evidence_count, receipt.authenticated_evidence_count];
+    if (receipt.receipt_schema === 1 && receipt.access_mode === 'anonymous_and_authenticated'
+      && counts.every(count => Number.isSafeInteger(count) && count >= 0)) {
+      return { anonymous: counts[0], authenticated: counts[1] };
+    }
+  } catch { /* Older or shortened receipts can omit structured access metadata. */ }
+  return undefined;
+}
+
 /** Display known receipt metadata only; target/model text never becomes an execution diagnosis. */
 export function toolCoverageDetail(tool: LiveToolRun): string | undefined {
   if (tool.tool !== 'artex-engine') return undefined;
@@ -45,6 +59,7 @@ export function toolCoverageDetail(tool: LiveToolRun): string | undefined {
       no_target_progress: 'Stopped after no further target progress. Deeper public coverage remains incomplete.',
       interrupted: 'The engine was interrupted before a finished receipt. Deeper public coverage remains incomplete.',
     };
-    return reasons[receipt.stop_reason];
+    const reason = reasons[receipt.stop_reason];
+    return combinedEngineAccess(tool) ? reason?.replace('Deeper public coverage', 'Combined public and signed-in coverage') : reason;
   } catch { return undefined; }
 }

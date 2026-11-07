@@ -667,8 +667,8 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
-  await expect(activity.getByText('Public first. Deeper with access.',{exact:true})).toBeVisible();
-  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Deeper public checks']);
+  await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints',grey?'Deeper checks':'Deeper public checks']);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(1);
   await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
   if(grey) {
@@ -740,7 +740,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
   await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
-  await activity.getByRole('button',{name:'Deeper public checks: Incomplete',exact:true}).click();
+  await activity.getByRole('button',{name:'Deeper checks: Incomplete',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Reached this tool’s request limit.');
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('6s');
   await expect(activity).toContainText('ARTEX_public-engine');
@@ -769,4 +769,63 @@ test('partial engine explanations require known structured receipt metadata',()=
   expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'target_request_budget',coverage_complete:false})})).toContain('request limit');
   expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'interrupted',coverage_complete:false})})).toContain('interrupted');
   for(const output_excerpt of ['<script>bad()</script>','{"stop_reason":"target_request_budget"}',JSON.stringify({receipt_schema:1,stop_reason:'unknown_reason',coverage_complete:false}),JSON.stringify({receipt_schema:1,stop_reason:'time_budget',coverage_complete:true})]) expect(toolCoverageDetail({...tool,output_excerpt})).toBeUndefined();
+});
+
+test('provider observations keep partial USD, DIEM and cache coverage distinct', async ({page}, info) => {
+  await setup(page, false, false, true);
+  const review = await page.evaluate(async reviewId => (await fetch(`/api/reviews/${reviewId}`)).json(), id);
+  review.steps[0].result.execution = {
+    ...result.execution,
+    cost_upper_microusd: 1800000,
+    inference_usage: [
+      {provider:'venice',model:'fixture-primary',responses:3,token_usage_responses:2,cache_usage_responses:1,prompt_tokens:1200,completion_tokens:80,cached_prompt_tokens:300,usd_cost_responses:2,diem_cost_responses:1,provider_reported_usd:0.0123,provider_reported_diem:0.5},
+      {provider:'near',model:'fixture-backup',responses:1,token_usage_responses:0,cache_usage_responses:0,prompt_tokens:0,completion_tokens:0,cached_prompt_tokens:0,usd_cost_responses:0,diem_cost_responses:0,provider_reported_usd:0,provider_reported_diem:0},
+    ],
+  };
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await page.getByText('Inference usage & cost',{exact:true}).first().click();
+  const usage = page.locator('.inference-usage[open]').first();
+  const venice = usage.getByRole('region',{name:'venice usage'});
+  await expect(venice).toContainText('0.0123 USD');
+  await expect(venice).toContainText('0.5 DIEM');
+  await expect(venice).toContainText('2 of 3 responses');
+  await expect(venice).toContainText('1 of 3 responses');
+  await expect(venice).toContainText('1,200 / 80');
+  const near = usage.getByRole('region',{name:'near usage'});
+  await expect(near.locator('dd').filter({hasText:'Not reported'})).toHaveCount(4);
+  await expect(near).not.toContainText('0 USD');
+  await expect(near).not.toContainText('0 DIEM');
+  await expect(usage).toContainText('Conservative uncached upper estimate');
+  await expect(usage).toContainText('1.8 USD');
+  await expect(usage).not.toContainText('1.8123');
+  await usage.screenshot({path:info.outputPath('inference-observations.png')});
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByText('Inference usage & cost',{exact:true}).click();
+  await expect(page.getByRole('region',{name:'venice usage'})).toContainText('0.0123 USD');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('combined engine receipt identifies both access modes without inventing usage', async ({page}, info) => {
+  await setup(page, false, false, true);
+  const review = await page.evaluate(async reviewId => (await fetch(`/api/reviews/${reviewId}`)).json(), id);
+  review.pentest.scope.authentication='session';
+  const workflow=structuredWorkflow(true,'recorded');
+  review.steps[0].result={...result,workflow,tool_runs:[{...result.tool_runs![0],tool:'artex-engine',output_excerpt:JSON.stringify({receipt_schema:1,access_mode:'anonymous_and_authenticated',anonymous_evidence_count:1,authenticated_evidence_count:1})}]};
+  await page.route(`**/api/reviews/${id}`, route=>route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  await activity.getByRole('button',{name:'Scout Report received'}).click();
+  await activity.getByRole('button',{name:'Deeper checks: Recorded',exact:true}).click();
+  const selected=activity.getByRole('region',{name:'Selected workflow step'});
+  await expect(selected).toContainText('One engine run used combined anonymous and authenticated mode.');
+  await expect(selected).toContainText('1 anonymous and 1 authenticated requests.');
+  await expect(activity).toContainText('ARTEX-engine');
+  await expect(activity).not.toContainText('ARTEX_public-engine');
+  await activity.screenshot({path:info.outputPath('combined-engine.png')});
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByText('Inference usage & cost',{exact:true}).click();
+  await expect(page.locator('.inference-usage')).toContainText('Provider usage and response costs were not recorded.');
 });
