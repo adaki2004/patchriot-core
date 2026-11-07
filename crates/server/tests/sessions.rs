@@ -1578,11 +1578,11 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
             "{path}: {bytes} bytes"
         );
     }
-    let payload = Arc::new(Mutex::new(Value::Null));
+    let payload = Arc::new(Mutex::new(axum::body::Bytes::from_static(b"null")));
     let reply = payload.clone();
     let downstream = Router::new().fallback(get(move || {
         let value = reply.lock().unwrap().clone();
-        async move { Json(value) }
+        async move { ([("content-type", "application/json")], value) }
     }));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
@@ -1591,18 +1591,24 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
     let (cookie, _) = test.login("admin").await;
     let mut observations = Vec::new();
     for (path, expected) in &lists {
-        *payload.lock().unwrap() = expected.clone();
+        *payload.lock().unwrap() = serde_json::to_vec(expected).unwrap().into();
         let denied = test.request("GET", path, Value::Null, &[]).await;
         let accepted = test
             .request("GET", path, Value::Null, &[("cookie", &cookie)])
             .await;
-        *payload.lock().unwrap() = json!("x".repeat(512 * 1024));
+        *payload.lock().unwrap() = serde_json::to_vec(&json!("x".repeat(512 * 1024)))
+            .unwrap()
+            .into();
         let oversized = test
             .request("GET", path, Value::Null, &[("cookie", &cookie)])
             .await;
         observations.push((path, expected, denied, accepted, oversized));
     }
-    *payload.lock().unwrap() = json!("x".repeat(patchriot_protocol::pentests::MAX_REVIEW_BYTES));
+    *payload.lock().unwrap() = serde_json::to_vec(&json!(
+        "x".repeat(patchriot_protocol::pentests::MAX_REVIEW_BYTES)
+    ))
+    .unwrap()
+    .into();
     let detail = test
         .request(
             "GET",
@@ -1643,10 +1649,12 @@ async fn large_private_report_survives_detail_export_and_cancellation() {
     let expected = serde_json::to_value(expected).unwrap();
     let length = serde_json::to_vec(&expected).unwrap().len();
     assert!(length > 3 * MAX_RESULT_BYTES - 16384 && length < MAX_REVIEW_BYTES);
-    let reply = expected.clone();
+    // Encode the fixture before the network deadline starts. This test checks
+    // the gateway byte limit, independent of debug-build fixture serialization.
+    let reply = axum::body::Bytes::from(serde_json::to_vec(&expected).unwrap());
     let downstream = Router::new().fallback(move || {
         let value = reply.clone();
-        async move { Json(value) }
+        async move { ([("content-type", "application/json")], value) }
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
