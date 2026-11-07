@@ -7,11 +7,13 @@ import { prettyJson, fencedText, reportMarkdownText } from './reportFormatting';
 import { useRef, useState } from 'react';
 import { nearModel } from './inference';
 import './assessment.css';
-import { assessmentFinished, expectedReports, reviewMethod, findingRequest, reportFindings, roleOutcome, stopExplanation, type ReportInput } from './report';
+import { accountLabel, assessmentFinished, expectedReports, reviewMethod, findingRequest, reportFindings, roleOutcome, stopExplanation, type ReportInput } from './report';
 
 export const liveRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export type LiveRole = keyof typeof liveRoles;
-export type HttpRecord = { id: number; method: string; url: string; status: number | null; request_headers?: Record<string, string>; headers: Record<string, string>; body_excerpt: string; body_sha256?: string | null; observed_at?: number; authenticated?: boolean; login?: boolean; request_body_excerpt?: string; request_body_sha256?: string; truncated: boolean; error: string | null };
+export type AccountSlot = 'testing' | 'reference';
+export type BrowserAccessProof = { authenticated_id: number; anonymous_id: number; check: { kind: 'protected_resource' | 'account_identity'; json_pointer?: string } };
+export type HttpRecord = { account?: AccountSlot; id: number; method: string; url: string; status: number | null; request_headers?: Record<string, string>; headers: Record<string, string>; body_excerpt: string; body_sha256?: string | null; observed_at?: number; authenticated?: boolean; login?: boolean; request_body_excerpt?: string; request_body_sha256?: string; truncated: boolean; error: string | null };
 export type LiveFinding = { title: string; severity: string; support: string; explanation: string; reproduction: string; suggested_action: string; evidence_ids: number[] };
 export type LiveToolRun = { tool: string; version: string; arguments: string[]; started_at: number; duration_ms: number; exit_code: number | null; failure: string | null; evidence_ids: number[]; output_sha256: string; output_excerpt: string; output_truncated: boolean };
 export type FallbackReceipt = { model: string; reason: string; primary_attempts: number; fallback_attempts: number; fallback_completed: number };
@@ -22,8 +24,12 @@ export function fallbackDescription(receipt: FallbackReceipt) {
 export type WorkflowCheckId = 'public_baseline' | 'public_mapping' | 'public_signatures' | 'public_fingerprints' | 'public_analysis' | 'authentication' | 'authenticated_checks' | 'evidence_review';
 export type WorkflowCheckState = 'pending' | 'running' | 'recorded' | 'incomplete' | 'reused' | 'not_applicable';
 export type LiveWorkflow = { version: 1; checks: { id: WorkflowCheckId; state: WorkflowCheckState; evidence_count: number; source_role?: LiveRole }[] };
-export type LiveResult = { workflow?: LiveWorkflow; browser_access?: { authenticated_id: number; anonymous_id: number; check: { kind: 'protected_resource' | 'account_identity'; json_pointer?: string } }; kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; inference_usage?: InferenceUsageObservation[]; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
-export function browserAccessDescription(result: LiveResult | null) { const proof = result?.browser_access; return proof ? `Signed-in access verified: ${proof.check.kind === 'account_identity' ? 'the account response matched the supplied identity and differed from the anonymous response' : 'the protected resource was accessible with the account and refused anonymously'}. Evidence #${proof.authenticated_id} and #${proof.anonymous_id}. This establishes access to that resource, not coverage of every private page.` : 'Signed-in access was not verified. Public checks and saved findings may still be useful; authenticated coverage remains a gap.'; }
+export type LiveResult = { workflow?: LiveWorkflow; browser_access?: BrowserAccessProof; account_access?: { account: AccountSlot; proof: BrowserAccessProof }[]; kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; inference_usage?: InferenceUsageObservation[]; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
+export function browserAccessDescription(result: LiveResult | null) {
+  const describe = (proof: BrowserAccessProof, label = 'Signed-in access') => `${label} verified: ${proof.check.kind === 'account_identity' ? 'the account response matched the supplied identity and differed from the anonymous response' : 'the protected resource was accessible with the account and refused anonymously'}. Evidence #${proof.authenticated_id} and #${proof.anonymous_id}. This establishes access to that resource, not coverage of every private page.`;
+  if (result?.account_access?.length) return result.account_access.map(({ account, proof }) => describe(proof, `${accountLabel(account)} signed-in access`)).join('\n\n');
+  return result?.browser_access ? describe(result.browser_access) : 'Signed-in access was not verified. Public checks and saved findings may still be useful; authenticated coverage remains a gap.';
+}
 export type LiveActivity = { received_at: number; progress: { workflow?: LiveWorkflow; phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number; model_request?: { purpose: 'discovery' | 'investigation' | 'summary'; elapsed_seconds: number } } };
 export type LiveStep = { role: LiveRole; state: string; result: LiveResult | null; evidence_complete?: boolean | null; progress?: LiveActivity | null };
 export type LiveTiming = { role_limit_seconds: number; started_at: number | null; active_role_deadline_at: number | null; requests_ahead: number };
@@ -81,7 +87,7 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
   for (const s of steps) {
     const outcome = roleOutcome(s);
     lines.push(`## ${liveRoles[s.role]}`, outcome.label, outcome.detail);
-    if (policy.browser_login || s.result?.browser_access) lines.push('### Sign-in verification', browserAccessDescription(s.result));
+    if (policy.browser_login || s.result?.browser_access || s.result?.account_access?.length) lines.push('### Sign-in verification', browserAccessDescription(s.result));
     const workflow = s.result ? s.result.workflow : s.progress?.progress.workflow;
     lines.push('### Structured checklist', workflow?.version === 1 ? workflowCaveat : workflowAbsent);
     for (const line of workflowRecordLines(workflow)) lines.push(`- ${line}`);
@@ -153,7 +159,7 @@ export function LiveReportDownloads({ id, steps, loadReport, disabled }: { id: s
 }
 
 function RequestEvidence({ entry }: { entry: HttpRecord }) {
-  return <article className="request-evidence"><div className="section-heading"><strong>HTTP #{entry.id}</strong><span className="pill">{entry.method} · {entry.status ?? 'No response'}</span></div><p className="evidence-url">{entry.url}</p>{entry.login && <p className="fine">Relay-managed login. Passwords, tokens, cookies and login response content are withheld.</p>}{entry.authenticated && <p className="fine">The relay sent the supplied test account with this request.</p>}
+  return <article className="request-evidence"><div className="section-heading"><strong>HTTP #{entry.id}</strong><span className="pill">{entry.method} · {entry.status ?? 'No response'}</span></div><p className="evidence-url">{entry.url}</p>{entry.login && <p className="fine">Relay-managed login. Passwords, tokens, cookies and login response content are withheld.</p>}{entry.account && !entry.authenticated && <p className="fine">{accountLabel(entry.account)} · {entry.login ? 'Login request' : 'Account context'}</p>}{entry.authenticated && <p className="fine">The relay sent {entry.account ? accountLabel(entry.account) : 'the supplied test account'} with this request.</p>}
     {entry.error && <p className="notice">Request did not complete: {entry.error.replaceAll('_', ' ')}.</p>}
     {entry.observed_at && <p className="fine">Recorded {new Date(entry.observed_at * 1000).toLocaleString()}</p>}
     <details><summary>Request and response headers</summary><h5>Request</h5><pre>{JSON.stringify(entry.request_headers ?? {}, null, 2)}</pre><h5>Recorded response headers</h5><pre>{JSON.stringify(entry.headers, null, 2)}</pre></details>
@@ -179,7 +185,7 @@ export function LiveEvidence({ result, complete, technicalOnly = false, browserL
       {result.execution.failure_reason && <p>{stopExplanation(result.execution.failure_reason)}</p>}
       <details><summary>What does this status mean?</summary><p>“Received” means the server accepted a structured report and recorded requests. It does not mean the findings are correct. Missing evidence, interrupted execution or unconfirmed cleanup keep a role marked for review.</p></details>
     </div>
-    {(browserLogin || result.browser_access) && <p className="notice">{browserAccessDescription(result)}</p>}
+    {(browserLogin || result.browser_access || result.account_access?.length) && <p className="notice" style={{whiteSpace: 'pre-line'}}>{browserAccessDescription(result)}</p>}
     {result.execution.fallback && <p className="notice" role="status">{fallbackDescription(result.execution.fallback)}</p>}
     <dl className="role-metrics"><div><dt>Requests recorded</dt><dd>{result.execution.http_requests}</dd></div><div><dt>Model calls</dt><dd>{result.execution.inference_calls}</dd></div><div><dt>Run time</dt><dd>{Math.round(result.execution.duration_ms / 1000)}s</dd></div></dl>
     <InferenceUsage execution={result.execution} />

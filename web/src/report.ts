@@ -1,5 +1,5 @@
 import type { ReviewPolicy, ThirdReview } from './Pentests';
-import type { LiveFinding, LiveResult, LiveRole, LiveStep } from './LiveReport';
+import type { AccountSlot, HttpRecord, LiveFinding, LiveResult, LiveRole, LiveStep } from './LiveReport';
 
 export const reportRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' } as const;
 export const roleDuties = { investigator: 'Find leads and record what the website returned.', reproducer: 'Repeat the checks and challenge the initial findings.', challenger: 'Review the evidence, impact and proposed fixes.' };
@@ -52,10 +52,18 @@ export function roleOutcome(step: LiveStep): { label: string; detail: string } {
   return step.evidence_complete ? { label: 'Assessment received', detail: 'Findings and request evidence are available. The agent’s conclusions still need review.' } : { label: 'Report received · coverage limits', detail: 'The agent returned its assessment. Some requested checks or access could not be verified; read those limits alongside the findings.' };
 }
 
+export function accountLabel(account: AccountSlot): string {
+  return account === 'testing' ? 'Account 1 (testing)' : 'Account 2 (reference)';
+}
+export function evidenceAccessLabel(evidence: HttpRecord): string {
+  if (evidence.account) return `${accountLabel(evidence.account)} · ${evidence.authenticated ? 'Signed-in' : 'Anonymous'}`;
+  return evidence.authenticated ? 'Test account' : 'Anonymous';
+}
+
 /** First cited request, with access kept visible inside a grouped observation. */
 export function findingRequest(claim: FindingContribution): string {
   const evidence = claim.result.evidence.find(e => e.id === claim.finding.evidence_ids[0]);
-  return evidence ? `${evidence.authenticated === true ? 'Test account' : 'Anonymous'} · ${evidence.method} ${evidence.url}` : 'Request evidence unavailable';
+  return evidence ? `${evidenceAccessLabel(evidence)} · ${evidence.method} ${evidence.url}` : 'Request evidence unavailable';
 }
 
 /** Group matching labels on one origin for reading, not to infer a shared root
@@ -94,7 +102,7 @@ export function reportFindings(input: ReportInput): ReportFinding[] {
     const support = new Set(group.contributions.map(c => ['observed', 'reproduced'].includes(c.finding.support) ? 'positive' : c.finding.support));
     const requests = new Set(group.contributions.map(c => {
       const e = c.result.evidence.find(e => e.id === c.finding.evidence_ids[0]);
-      return e ? JSON.stringify([e.method, e.url, e.request_body_sha256 ?? null, e.authenticated === true]) : c.id;
+      return e ? JSON.stringify([e.method, e.url, e.request_body_sha256 ?? null, e.authenticated === true, e.account ?? null]) : c.id;
     }));
     return { ...group, role: highest.role, finding: highest.finding, result: highest.result,
       complete: group.contributions.every(c => c.complete),

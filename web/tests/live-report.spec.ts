@@ -1,5 +1,5 @@
 import { toolCoverageDetail } from '../src/workflow';
-import { coverageChecks, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
+import { coverageChecks, findingRequest, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
@@ -90,6 +90,54 @@ for (const mode of ['verified', 'gap'] as const) test(`browser access ${mode} is
   const body = await readFile((await (await readable).path())!, 'utf8');
   expect(body).toContain(expected);
   expect(body).toContain('Signed-in access was not verified.'); // unfinished roles
+});
+
+test('account slots identify different request conditions within grouped findings', () => {
+  const report: ReportInput = {id,state:'completed',created_at:1793640000,origins:['https://owned.example'],steps:(['investigator','reproducer'] as const).map((role,index)=>({role,state:'completed',evidence_complete:true,result:{...result,assessment:{...result.assessment!,findings:[result.assessment!.findings[0]]},evidence:result.evidence.map(entry=>({...entry,authenticated:true,account:index===0?'testing' as const:'reference' as const}))}}))};
+  const [finding]=reportFindings(report);
+  expect(finding.variedRequests).toBe(true);
+  expect(findingRequest(finding.contributions[0])).toContain('Account 1 (testing) · Signed-in');
+  expect(findingRequest(finding.contributions[1])).toContain('Account 2 (reference) · Signed-in');
+});
+
+test('paired account proofs and evidence remain labelled in the report and exports', async ({page},info)=>{
+  await setup(page,false,false,true,'verified');
+  const review=await page.evaluate(async reviewId=>(await fetch(`/api/reviews/${reviewId}`)).json(),id);
+  const scout=review.steps[0].result;
+  scout.account_access=[
+    {account:'testing',proof:{authenticated_id:1,anonymous_id:2,check:{kind:'protected_resource'}}},
+    {account:'reference',proof:{authenticated_id:3,anonymous_id:4,check:{kind:'protected_resource'}}},
+  ];
+  scout.evidence=[
+    {...scout.evidence[0],account:'testing'},scout.evidence[1],
+    {...scout.evidence[0],id:3,account:'reference'}, {...scout.evidence[1],id:4},
+  ];
+  scout.execution.http_requests=4;
+  scout.assessment.findings[0].evidence_ids=[1,2,3,4];
+  await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
+  await mockExport(page,review);
+  await page.reload();
+  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await expect(page.getByText('Account 1 (testing) signed-in access verified:',{exact:false})).toBeVisible();
+  await expect(page.getByText('Account 2 (reference) signed-in access verified:',{exact:false})).toBeVisible();
+  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByText('Request evidence (4)',{exact:true}).click();
+  await expect(page.locator('.request-evidence').filter({hasText:'HTTP #1'})).toContainText('Account 1 (testing)');
+  await expect(page.locator('.request-evidence').filter({hasText:'HTTP #3'})).toContainText('Account 2 (reference)');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.locator('.live-assessment').screenshot({path:info.outputPath('paired-evidence.png')});
+  const pdfDownload=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  const pdf=await pdfDownload;
+  await pdf.saveAs(info.outputPath('paired-evidence.pdf'));
+  expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(1);
+  await page.getByText('Other downloads & test details',{exact:true}).click();
+  const readable=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Download readable report'}).click();
+  const markdown=await readFile((await(await readable).path())!,'utf8');
+  expect(markdown).toContain('Account 1 (testing) signed-in access verified:');
+  expect(markdown).toContain('Account 2 (reference) signed-in access verified:');
+  expect(markdown).toContain('Evidence #3 and #4.');
 });
 
 async function mockExport(page: import('@playwright/test').Page, review: unknown) {
