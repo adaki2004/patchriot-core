@@ -955,3 +955,15 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('4');
   await activity.screenshot({path:info.outputPath('combined-late-paired.png')});
 });
+
+
+test('coverage ledger retains account context and ignores malformed or uncited entries', () => {
+  const unit = { id: 'a'.repeat(64), url: 'https://owned.example/debug', method: 'GET', account: 'testing', class: 'http_observation', state: 'tested', reason: 'Recorded comparison', evidence_ids: [1] };
+  const ledger = { ...result.tool_runs![0], tool: 'patchriot-coverage', output_truncated: false,
+    output_excerpt: JSON.stringify({ version: 1, units: [null, unit, { ...unit, evidence_ids: [999] }, { ...unit, class: null }] }) };
+  const checks = coverageChecks({ ...result, tool_runs: [ledger] });
+  expect(checks).toHaveLength(1);
+  expect(checks[0].title).toContain('testing');
+  expect(checks[0].status).toBe('completed');
+  expect(checks[0].evidence_ids).toEqual([1]);
+});

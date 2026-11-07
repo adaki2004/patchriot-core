@@ -144,6 +144,12 @@ export function reportSummary(input: ReportInput) {
 
 export function toolOutcome(run: NonNullable<LiveResult['tool_runs']>[number]) {
   if (run.failure || run.exit_code !== 0) return 'Incomplete';
+  if (['schemathesis', 'ffuf'].includes(run.tool) && !run.output_truncated) {
+    try {
+      const receipt = JSON.parse(run.output_excerpt);
+      if (Array.isArray(receipt.contexts) && receipt.contexts.length > 0 && receipt.contexts.every((context: { result?: { state?: string } }) => context.result?.state === 'inapplicable')) return 'Not applicable';
+    } catch { /* Preserve older or unstructured tool receipts. */ }
+  }
   return 'Ran'; // A successful exit is neither full coverage nor proof of safety.
 }
 
@@ -162,7 +168,7 @@ export function coverageChecks(result: LiveResult | null): CoverageCheck[] {
     try {
       const data = JSON.parse(t.output_excerpt);
       if (t.tool === 'patchriot-coverage' && data.version === 1 && Array.isArray(data.units) && data.units.length <= 40) {
-        return data.units.filter((unit: { evidence_ids?: number[] }) => Array.isArray(unit.evidence_ids) && unit.evidence_ids.every(id => t.evidence_ids.includes(id) && result!.evidence.some(e => e.id === id)))
+        return data.units.filter((unit: Record<string, unknown> & { evidence_ids?: number[] }) => unit && ['id', 'url', 'method', 'account', 'class', 'state', 'reason'].every(key => typeof unit[key] === 'string') && Array.isArray(unit.evidence_ids) && unit.evidence_ids.every(id => t.evidence_ids.includes(id) && result!.evidence.some(e => e.id === id)))
           .map((unit: { id: string; url: string; method: string; account: string; class: string; state: string; reason: string; evidence_ids: number[] }) => ({
             id: unit.id, origin: unit.url, title: `${unit.method} · ${unit.account} · ${unit.class.replaceAll('_', ' ')}`,
             status: ({ tested: 'completed', blocked: 'inconclusive', deferred: 'skipped', inapplicable: 'unsupported' } as Record<string, string>)[unit.state] ?? 'inconclusive',
