@@ -556,7 +556,7 @@ An eligible temporary failure can use one backup completion, then keep that role
 
 Deployment: update core, dispatcher/gateway and relay before changing routing. Set `PATCHRIOT_INFERENCE_PRIMARY_MODEL` and optionally `PATCHRIOT_INFERENCE_SECONDARY_MODEL` in the dispatcher’s private environment. Each selected relay needs the matching primary model and optional `secondary_model` / `secondary_key_file`. Only approved devices declaring that primary model are offered for new requests. Keep old devices available for previously approved work; changing a device’s primary model needs a fresh identity and approval. Leave both new settings unset to retain legacy selection. Do not combine them with `PATCHRIOT_VENICE_FALLBACK_ENABLED=true`. See the relay README for configuration and rates. No new migration is needed.
 
-The relay also checks buffered responses for the repetition pattern that stops Hermes. With prior backup consent, a detected loop uses the same recovery route and logical-call allowance before any response reaches the agent. The receipt records `provider_repetition`; it never silently reruns the website tests or changes saved assessments.
+The relay checks buffered responses for repetitive output before delivery to the agent. Each route permits one fresh generation after a detected loop, consuming another call allowance and retaining the failed attempt’s spending reservation. If recovery still fails, prior backup consent permits the configured secondary route. Repeated engine failure preserves partial evidence and records the coverage gap for review. Provider response observations cover received, accepted completions. Charges for rejected or interrupted generations remain uncertain until billing reconciliation.
 
 </details>
 
