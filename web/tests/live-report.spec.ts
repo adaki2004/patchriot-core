@@ -1,5 +1,5 @@
-import { toolCoverageDetail } from '../src/workflow';
-import { coverageChecks, findingRequest, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
+import { toolCoverageDetail, workflowToolName } from '../src/workflow';
+import { toolOutcome, coverageChecks, findingRequest, reportFindings, reportSummary, roleOutcome, stopExplanation, type ReportInput } from '../src/report';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { emptyDashboard } from './helpers';
@@ -966,4 +966,19 @@ test('coverage ledger retains account context and ignores malformed or uncited e
   expect(checks[0].title).toContain('testing');
   expect(checks[0].status).toBe('completed');
   expect(checks[0].evidence_ids).toEqual([1]);
+});
+
+
+test('scanner handoff labels distinguish no inputs from executed checks', () => {
+  const tool = {
+    ...result.tool_runs![0], tool: 'zap', arguments: ['scoped', '--engine-discoveries'],
+    output_truncated: false, evidence_ids: [],
+    output_excerpt: JSON.stringify({ phase: 'engine_discoveries', state: 'inapplicable', reason: 'no_new_recorded_get_inputs' }),
+  };
+  expect(workflowToolName(tool.tool, tool)).toBe('Web scanner · discovered inputs');
+  expect(toolOutcome(tool)).toBe('No new inputs');
+  expect(toolOutcome({ ...tool, failure: 'incomplete' })).toBe('Incomplete');
+  expect(toolOutcome({ ...tool, evidence_ids: [1] })).toBe('Ran');
+  expect(toolOutcome({ ...tool, output_truncated: true })).toBe('Ran');
+  expect(toolOutcome({ ...tool, output_excerpt: '<script>target text</script>' })).toBe('Ran');
 });

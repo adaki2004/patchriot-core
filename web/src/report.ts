@@ -144,9 +144,12 @@ export function reportSummary(input: ReportInput) {
 
 export function toolOutcome(run: NonNullable<LiveResult['tool_runs']>[number]) {
   if (run.failure || run.exit_code !== 0) return 'Incomplete';
-  if (['schemathesis', 'ffuf'].includes(run.tool) && !run.output_truncated) {
+  if (['schemathesis', 'ffuf', 'zap'].includes(run.tool) && !run.output_truncated) {
     try {
       const receipt = JSON.parse(run.output_excerpt);
+      if (run.tool === 'zap' && receipt.phase === 'engine_discoveries'
+        && receipt.state === 'inapplicable' && receipt.reason === 'no_new_recorded_get_inputs'
+        && run.evidence_ids.length === 0) return 'No new inputs';
       if (Array.isArray(receipt.contexts) && receipt.contexts.length > 0 && receipt.contexts.every((context: { result?: { state?: string } }) => context.result?.state === 'inapplicable')) return 'Not applicable';
     } catch { /* Preserve older or unstructured tool receipts. */ }
   }

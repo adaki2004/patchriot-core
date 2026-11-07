@@ -31,6 +31,7 @@ export function workflowRecordLines(workflow: LiveWorkflow | undefined): string[
 
 export function workflowToolName(tool: string, record?: LiveToolRun) {
   if (record && combinedEngineAccess(record)) return 'ARTEX-engine';
+  if (tool === 'zap' && record?.arguments.includes('--engine-discoveries')) return 'Web scanner · discovered inputs';
   const names: Record<string, string> = { 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'Web security scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
   if (names[tool]) return names[tool];
   return tool === 'artex-engine' ? 'ARTEX_public-engine' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
