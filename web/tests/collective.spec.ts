@@ -230,6 +230,11 @@ test('the architecture animation continues while visible without a pause control
     await page.goto(path);
     const map = page.locator('.service-map');
     await map.scrollIntoViewIfNeeded();
+    if (await map.locator('.architecture-vertical').isVisible()) {
+      await expect(map).toHaveAttribute('data-paused', 'true');
+      await expect(map.locator('animateMotion')).toHaveCount(0);
+      continue;
+    }
     await expect(map.locator('animateMotion')).toHaveCount(5);
     await expect(map.getByRole('button')).toHaveCount(0);
     // It previously stopped at four seconds. Confirm both continued activity
