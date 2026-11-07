@@ -26,6 +26,7 @@ export function stopExplanation(reason?: string): string {
     case 'timed_out': case 'timeout': return 'The allowed testing time ended before this work finished.';
     case 'provider_unavailable': case 'provider_rejected_request': case 'provider_stream_interrupted': return 'The AI provider did not complete a request. The agent could not finish this stage.';
     case 'provider_authentication_failed': return 'The AI provider rejected the configured account access. Staff must check it before another assessment can run.';
+    case 'provider_payment_required': return 'The AI provider requires available credit or a higher spending limit. Staff must restore provider access before retrying; saved website evidence remains available.';
     case 'provider_repetition': return 'The model repeated itself instead of producing a usable answer. No repeated output was executed. The saved website evidence is still available.';
     case 'provider_rate_limited': return 'The AI provider limited a request. This stage stopped before completing; saved website evidence remains available.';
     case 'provider_context_limit': return 'The request exceeded the AI provider’s input limit. This stage could not finish.';
