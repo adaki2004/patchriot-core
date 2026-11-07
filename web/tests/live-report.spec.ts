@@ -1021,3 +1021,27 @@ test('ZAP names its recorded handoff and preserves an inapplicable scan in both 
   await expect(page.locator('.tool-evidence .request-evidence')).toContainText('No new inputs');
   await page.locator('.tool-evidence').screenshot({path:info.outputPath('zap-handoff.png')});
 });
+
+
+test('coverage limitations and recorded URLs wrap within the report on narrow screens', async ({page},info)=>{
+  await page.setViewportSize({width:390,height:844});
+  await setup(page,false,false,true);
+  const review=await page.evaluate(async reviewId=>(await fetch(`/api/reviews/${reviewId}`)).json(),id);
+  const longIdentifier='scope_reference_'+'a'.repeat(100);
+  const longUrl='https://owned.example/observed/'+'b'.repeat(120);
+  review.steps[0].result.assessment.limitations=[`The following resource remains untested: ${longIdentifier}`];
+  review.steps[0].result.tool_runs=[{...result.tool_runs![0],tool:'patchriot-coverage',output_truncated:false,output_excerpt:JSON.stringify({version:1,units:[{id:'c'.repeat(64),url:longUrl,method:'GET',account:'anonymous',class:'http_observation',state:'deferred',reason:'No further requests were made.',evidence_ids:[1]}]})}];
+  await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  const limits=page.locator('.report-limitations');
+  await expect(limits).toContainText(longIdentifier);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.locator('.report-checks summary').click();
+  await expect(page.locator('.report-checks')).toContainText(longUrl);
+  for(const selector of ['.report-limitations','.report-checks']) {
+    expect(await page.locator(selector).evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true);
+  }
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.locator('.report-tab-content').screenshot({path:info.outputPath('wrapped-coverage.png')});
+});
