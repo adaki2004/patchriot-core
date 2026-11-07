@@ -693,7 +693,13 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
         const distance=(p:DOMPoint,r:DOMRect)=>Math.hypot(origin.x+p.x-r.x-r.width/2,origin.y+p.y-r.y-r.height/2);
         const otherNodes=[...root.querySelectorAll<HTMLElement>('[data-check]')].filter(node=>![path.dataset.from,path.dataset.to].includes(node.dataset.check)).map(node=>node.querySelector('.workflow-node')!.getBoundingClientRect());
         const avoidsNodes=Array.from({length:40},(_,i)=>path.getPointAtLength(path.getTotalLength()*(i+1)/41)).every(point=>otherNodes.every(rect=>distance(point,rect)>rect.width/2+1));
-        return avoidsNodes && Math.abs(distance(first,a)-a.width/2)<2 && Math.abs(distance(last,b)-b.width/2)<2;
+        const directLength = Math.hypot(last.x - first.x, last.y - first.y);
+        const directEdge = Math.abs(path.getTotalLength() - directLength) < 1;
+        const horizontal = root.getBoundingClientRect().width > 760;
+        const orderedSequence = horizontal
+          ? Math.abs(a.y - b.y) < 2 && b.x > a.x
+          : Math.abs(a.x - b.x) < 2 && b.y > a.y;
+        return directEdge && orderedSequence && avoidsNodes && Math.abs(distance(first,a)-a.width/2)<2 && Math.abs(distance(last,b)-b.width/2)<2;
       });
     })).toBe(true);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

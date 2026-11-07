@@ -15,40 +15,52 @@ export type WorkflowNode = {
   measured_duration_ms?: number;
   source_role?: string;
 };
-/** Anchor every edge to rendered node bounds, including row changes and responsive layouts. */
+type WorkflowEdge = { from: string; to: string; path: string };
+type WorkflowDrawing = { width: number; height: number; edges: WorkflowEdge[] };
+
+/** Keep consecutive steps connected when the graph changes between a row and a column. */
 function useWorkflowEdges(key: string) {
   const ref = useRef<HTMLDivElement>(null);
-  const [drawing, setDrawing] = useState<{width:number;height:number;edges:{from:string;to:string;path:string}[]}>({width:0,height:0,edges:[]});
+  const [drawing, setDrawing] = useState<WorkflowDrawing>({ width: 0, height: 0, edges: [] });
+
   useLayoutEffect(() => {
-    const root=ref.current;
+    const root = ref.current;
     if (!root) return;
-    const update=()=>{
-      const bounds=root.getBoundingClientRect();
-      const nodes=[...root.querySelectorAll<HTMLElement>('.workflow-node')].map(node=>{
-        const rect=node.getBoundingClientRect();
-        return {id:node.closest<HTMLElement>('[data-check]')!.dataset.check!,row:node.closest('.workflow-lower')?'lower':'public',x:rect.left-bounds.left+rect.width/2,y:rect.top-bounds.top+rect.height/2,r:rect.width/2};
+
+    const update = () => {
+      const bounds = root.getBoundingClientRect();
+      const nodes = [...root.querySelectorAll<HTMLElement>('.workflow-node')].map(node => {
+        const rect = node.getBoundingClientRect();
+        return {
+          id: node.closest<HTMLElement>('[data-check]')!.dataset.check!,
+          x: rect.left - bounds.left + rect.width / 2,
+          y: rect.top - bounds.top + rect.height / 2,
+          radius: rect.width / 2,
+        };
       });
-      const edges=nodes.slice(1).map((b,i)=>{
-        const a=nodes[i]; let path:string;
-        if(Math.abs(a.y-b.y)<2) path=`M${a.x+a.r} ${a.y}H${b.x-b.r}`;
-        else if(Math.abs(a.x-b.x)<2) path=`M${a.x} ${a.y+a.r}V${b.y-b.r}`;
-        else if(a.row===b.row) path=`M${a.x+a.r} ${a.y}H${(a.x+b.x)/2}V${b.y}H${b.x-b.r}`;
-        else if(nodes.length===6) path=`M${a.x+a.r} ${a.y}H${bounds.width-3}V${b.y}H${b.x+b.r}`;
-        else {
-          const lower=root.querySelector('.workflow-lower')!.getBoundingClientRect();
-          const turn=lower.top-bounds.top-14;
-          path=`M${a.x+a.r} ${a.y}H${bounds.width-3}V${turn}H3V${b.y}H${b.x-b.r}`;
-        }
-        return {from:a.id,to:b.id,path};
+      const edges = nodes.slice(1).map((next, index) => {
+        const previous = nodes[index];
+        const horizontal = Math.abs(previous.y - next.y) < 2;
+        const path = horizontal
+          ? `M${previous.x + previous.radius} ${previous.y}L${next.x - next.radius} ${next.y}`
+          : `M${previous.x} ${previous.y + previous.radius}L${next.x} ${next.y - next.radius}`;
+        return { from: previous.id, to: next.id, path };
       });
-      setDrawing({width:bounds.width,height:bounds.height,edges});
+      setDrawing({ width: bounds.width, height: bounds.height, edges });
     };
-    const observer=new ResizeObserver(update);observer.observe(root);
-    root.querySelectorAll('.workflow-node').forEach(node=>observer.observe(node));
-    window.addEventListener('resize',update);update();
-    return ()=>{observer.disconnect();window.removeEventListener('resize',update);};
-  },[key]);
-  return {ref,drawing};
+
+    const observer = new ResizeObserver(update);
+    observer.observe(root);
+    root.querySelectorAll('.workflow-node').forEach(node => observer.observe(node));
+    window.addEventListener('resize', update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [key]);
+
+  return { ref, drawing };
 }
 
 /** A fixed workflow graph with accessible node controls, never a simulated event feed. */
@@ -72,13 +84,20 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, recorded, 
   return <div className="workflow-map" data-recorded={recorded}>
     <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>Public first. Deeper with access.</h4><p>Public checks run first; approved access adds the signed-in checks. Select a step for its evidence.</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
     {!recorded && <p className="workflow-history" role="status">Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.</p>}
-    <div ref={ref} className="workflow-diagram">
+    <div ref={ref} className="workflow-diagram" data-authenticated={accessNodes.length > 0}>
       <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}</svg>
-    <div className="workflow-lane workflow-public"><div className="workflow-lane-label"><span>01</span><strong>Public checks</strong><small>Shared by black-box and grey-box tests</small></div><ol aria-label="Public assessment workflow">{publicNodes.map((node,index) => nodeButton(node,index,index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol></div>
-    <div className="workflow-lower" data-authenticated={accessNodes.length > 0}>
-      {accessNodes.length > 0 ? <div className="workflow-lane workflow-access"><div className="workflow-lane-label"><span>+</span><strong>Behind the login</strong><small>Additional grey-box checks</small></div><ol aria-label="Additional authenticated workflow">{accessNodes.map((node,index) => nodeButton(node,index + publicNodes.length,'lock'))}</ol></div> : <div className="workflow-public-only"><UIIcon name="shield" /><p><strong>Public scope</strong>Black-box checks continue to evidence review.</p></div>}
-      <div className="workflow-lane workflow-output"><div className="workflow-lane-label"><span>→</span><strong>Evidence review</strong><small>Keep findings and gaps visible</small></div><ol aria-label="Report workflow">{nodeButton(reportNode,publicNodes.length + accessNodes.length,'file')}</ol></div>
-    </div>
+      <div className="workflow-lane workflow-public">
+        <div className="workflow-lane-label"><strong>Public checks</strong><small>Shared by black-box and grey-box tests</small></div>
+        <ol aria-label="Public assessment workflow">{publicNodes.map((node, index) => nodeButton(node, index, index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol>
+      </div>
+      {accessNodes.length > 0 && <div className="workflow-lane workflow-access">
+        <div className="workflow-lane-label"><strong>Behind the login</strong><small>Additional grey-box checks</small></div>
+        <ol aria-label="Additional authenticated workflow">{accessNodes.map((node, index) => nodeButton(node, index + publicNodes.length, 'lock'))}</ol>
+      </div>}
+      <div className="workflow-lane workflow-output">
+        <div className="workflow-lane-label"><strong>Evidence review</strong></div>
+        <ol aria-label="Report workflow">{nodeButton(reportNode, publicNodes.length + accessNodes.length, 'file')}</ol>
+      </div>
     </div>
     <p className="workflow-status-help"><strong>Recorded = finished work saved.</strong> These checks run once, often quickly; they are not continuous monitoring. Running marks the current step. Reused evidence comes from an earlier agent.</p>
     <section className="workflow-inspector" aria-label="Selected workflow step">
