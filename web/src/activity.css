@@ -142,9 +142,9 @@
 .workflow-inspector dt { color: #92aacc; font-size: 11px; }
 .workflow-inspector dd { font: 500 17px/1.5 var(--body-font); color: #dceaff; margin: 5px 0 0; overflow-wrap: anywhere; }
 /* Tool evidence hangs from the stages it supports; it is not another route. */
-.workflow-tool-cluster { position: relative; grid-row: 3; min-width: 0; margin: 6px 8px 18px; padding-top: 13px; border-top: 1px dashed #49617d; }
-.workflow-tool-cluster::before { content: ''; position: absolute; left: 50%; top: -19px; height: 18px; border-left: 1px dashed #49617d; }
-.textmode-ui .workflow-tool-cluster h5 { margin: 0 0 6px; color: #8fa9c9; font: 500 11px/1.5 var(--body-font); }
+.workflow-tool-cluster { position: relative; grid-row: 3; min-width: 0; margin: 24px 8px 18px; padding-top: 13px; }
+
+.textmode-ui .workflow-tool-cluster h5 { margin: 0 0 6px; text-align: center; color: #8fa9c9; font: 500 11px/1.5 var(--body-font); }
 .workflow-tool-cluster ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px 18px; }
 .workflow-tool-cluster[data-cluster=baseline] ul { grid-template-columns: repeat(auto-fit,minmax(165px,1fr)); }
 .workflow-tool-cluster li { min-width: 0; }
@@ -289,8 +289,25 @@
   .workflow-diagram .workflow-lane, .workflow-diagram .workflow-lane > ol { display: contents; }
   .workflow-diagram .workflow-lane-label { margin: 18px 0 10px 70px; }
   .workflow-diagram .workflow-public .workflow-lane-label { margin-top: 0; }
-  .workflow-tool-cluster { margin: 2px 0 20px 70px; padding: 8px 0 0 12px; border-top: 0; border-left: 1px dashed #49617d; }
-  .workflow-tool-cluster::before { left: -45px; top: 0; width: 44px; height: 0; border-left: 0; border-top: 1px dashed #49617d; }
-  .workflow-tool-cluster[data-cluster=coverage]::after { content: ''; position: absolute; left: -45px; bottom: 100%; height: 28px; border-left: 1px dashed #49617d; }
+  .workflow-tool-cluster { margin: 2px 0 20px 70px; padding: 8px 0 0 12px; border: 0; }
+  .textmode-ui .workflow-tool-cluster h5 { text-align: left; }
   .workflow-tool-cluster[data-cluster=baseline] ul { grid-template-columns: 1fr; }
 }
+
+/* Decorative orbital drift; never represents assessment activity. */
+.workspace-dashboard .workspace-art { animation: workspace-orbit-drift 18s ease-in-out infinite; transform-origin: 65% 50%; }
+@keyframes workspace-orbit-drift {
+  0%, 100% { transform: translateY(3px); }
+  50% { transform: translateY(-3px); }
+}
+@media(prefers-reduced-motion:reduce) { .workspace-dashboard .workspace-art { animation: none; transform: none; } }
+
+.workflow-edges .workflow-evidence-edges path { stroke: #89a8cb; stroke-width: 1.4; stroke-dasharray: 4 3; stroke-linecap: round; }
+.workflow-evidence-edges circle { fill: #8ba9ca; stroke: #101b29; stroke-width: 1; }
+.workflow-edges .workflow-evidence-edges [data-related=true] path { stroke: #bdd9fa; stroke-width: 1.5; }
+.workflow-evidence-edges [data-related=true] circle { fill: #d5e8ff; }
+.workflow-step[data-related=true] .workflow-node { outline: 1px solid #bdd9fa; outline-offset: 5px; }
+.textmode-ui .workflow-tool-cluster[data-related=true] h5 { color: #d5e8ff; }
+
+.textmode-ui .workflow-tool-cluster [data-tool-check=tool-zap-discoveries] button { gap: 5px; }
+.workflow-tool-cluster [data-tool-check=tool-zap-discoveries] .tool-record-name { white-space: nowrap; }

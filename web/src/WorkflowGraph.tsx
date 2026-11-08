@@ -17,12 +17,13 @@ export type WorkflowNode = {
   state_label?: string;
 };
 type WorkflowEdge = { from: string; to: string; path: string };
-type WorkflowDrawing = { width: number; height: number; edges: WorkflowEdge[] };
+type WorkflowBranch = { group: string; path: string; anchors: {x: number; y: number}[] };
+type WorkflowDrawing = { width: number; height: number; edges: WorkflowEdge[]; branches: WorkflowBranch[] };
 
 /** Keep consecutive steps connected when the graph changes between a row and a column. */
 function useWorkflowEdges(key: string) {
   const ref = useRef<HTMLDivElement>(null);
-  const [drawing, setDrawing] = useState<WorkflowDrawing>({ width: 0, height: 0, edges: [] });
+  const [drawing, setDrawing] = useState<WorkflowDrawing>({ width: 0, height: 0, edges: [], branches: [] });
 
   useLayoutEffect(() => {
     const root = ref.current;
@@ -47,12 +48,37 @@ function useWorkflowEdges(key: string) {
           : `M${previous.x} ${previous.y + previous.radius}L${next.x} ${next.y - next.radius}`;
         return { from: previous.id, to: next.id, path };
       });
-      setDrawing({ width: bounds.width, height: bounds.height, edges });
+      const vertical = nodes.length > 1 && Math.abs(nodes[0].y - nodes[1].y) > 2;
+      const branches = [...root.querySelectorAll<HTMLElement>('[data-parents]')].flatMap(cluster => {
+        const parents = (cluster.dataset.parents ?? '').split(' ').map(id => nodes.find(node => node.id === id)).filter(node => node !== undefined);
+        if (!parents.length) return [];
+        const heading = cluster.querySelector('h5')!.getBoundingClientRect();
+        const target = {x: heading.left - bounds.left + heading.width / 2, y: heading.top - bounds.top - 5};
+        if (vertical) {
+          // The mobile shelf branches from its last related step on the continuous main spine.
+          const parent = parents[parents.length - 1];
+          const y = heading.top - bounds.top + heading.height / 2;
+          const end = heading.left - bounds.left - 8;
+          return [{group: cluster.dataset.cluster!, path: `M${parent.x} ${parent.y + parent.radius}V${y}H${end}`, anchors: [{x: parent.x, y: y}]}];
+        }
+        const anchors = parents.map(parent => {
+          const step = [...root.querySelectorAll<HTMLElement>('[data-check]')].find(el => el.dataset.check === parent.id)!;
+          const rect = step.getBoundingClientRect();
+          return {x: parent.x, y: rect.bottom - bounds.top};
+        });
+        const rail = target.y - 12;
+        const drops = anchors.map(point => `M${point.x} ${point.y}V${rail}`).join('');
+        const path = parents.length === 1
+          ? `M${anchors[0].x} ${anchors[0].y}V${target.y}`
+          : `${drops}M${anchors[0].x} ${rail}H${anchors[anchors.length - 1].x}M${target.x} ${rail}V${target.y}`;
+        return [{group: cluster.dataset.cluster!, path, anchors}];
+      });
+      setDrawing({ width: bounds.width, height: bounds.height, edges, branches });
     };
 
     const observer = new ResizeObserver(update);
     observer.observe(root);
-    root.querySelectorAll('.workflow-node').forEach(node => observer.observe(node));
+    root.querySelectorAll('.workflow-node, .workflow-step, .workflow-tool-cluster').forEach(node => observer.observe(node));
     window.addEventListener('resize', update);
     update();
     return () => {
@@ -73,11 +99,17 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   const {ref,drawing}=useWorkflowEdges(nodes.map(node=>node.id).join(','));
   const inspector = useRef<HTMLElement>(null);
   const [choice, setChoice] = useState<string | null>(null);
+  const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
   const selected = nodes.find(node => node.id === choice) ?? nodes.find(node => node.status === 'running') ?? nodes.find(node => node.status === 'incomplete') ?? nodes[0];
   const label = (node: WorkflowNode) => node.state_label ?? (node.status === 'running' && !live ? 'Last reported running' : statusText[node.status]);
   const route = [...publicNodes, ...accessNodes, reportNode];
   const investigationIndex = route.findIndex(node => node.id === 'public_analysis');
   const scopedTools = toolNodes.filter(node => !['tool-zap-discoveries', 'tool-patchriot-coverage'].includes(node.id));
+  const baselineIds = route.slice(0, investigationIndex > 0 ? investigationIndex : 4).map(node => node.id);
+  const parentIds: Record<string, string[]> = {baseline: baselineIds, 'follow-up': ['public_analysis'], coverage: [reportNode.id]};
+  const groupFor = (id: string) => id === 'tool-zap-discoveries' ? 'follow-up' : id === 'tool-patchriot-coverage' ? 'coverage' : scopedTools.some(node => node.id === id) ? 'baseline' : null;
+  const activeGroup = hoveredGroup ?? groupFor(selected.id);
+  const related = (id: string) => !!activeGroup && parentIds[activeGroup].includes(id);
   function inspectTool(id: string) {
     setChoice(id);
     if ((ref.current?.clientWidth ?? Infinity) <= 760) requestAnimationFrame(() => {
@@ -86,7 +118,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   }
   function toolCluster(title: string, records: WorkflowNode[], column: string, order: number, kind: string) {
     if (!records.length) return null;
-    return <section className="workflow-tool-cluster" data-cluster={kind} aria-label={title} style={{gridColumn: column, order}}>
+    return <section className="workflow-tool-cluster" data-cluster={kind} data-parents={parentIds[kind].join(' ')} data-related={activeGroup === kind} onPointerEnter={() => setHoveredGroup(kind)} onPointerLeave={() => setHoveredGroup(null)} onFocus={() => setHoveredGroup(kind)} onBlur={() => setHoveredGroup(null)} aria-label={title} style={{gridColumn: column, order}}>
       <h5>{title}</h5><ul>{records.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
         <button type="button" aria-pressed={selected.id === node.id} onClick={() => inspectTool(node.id)} aria-label={`${node.title}: ${label(node)}`}>
           <span className="tool-record-mark" aria-hidden="true">{node.status === 'incomplete' ? '!' : node.status === 'not_applicable' ? '–' : '✓'}</span>
@@ -96,7 +128,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
     </section>;
   }
   function nodeButton(node: WorkflowNode, index: number, icon: 'shield' | 'globe' | 'agent' | 'lock' | 'file') {
-    return <li key={node.id} data-check={node.id} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step" style={{order: (index + 1) * 10}}>
+    return <li key={node.id} data-check={node.id} data-related={related(node.id)} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step" style={{order: (index + 1) * 10}}>
       <button type="button" aria-pressed={selected.id === node.id} onClick={() => setChoice(node.id)} aria-label={`${node.title}: ${label(node)}`}>
         <span className="workflow-node"><UIIcon name={icon} /><span className="workflow-index">{String(index + 1).padStart(2, '0')}</span></span>
         <strong>{node.title}</strong><span className="workflow-tool">{node.tool}</span><span className="workflow-state">{label(node)}</span>
@@ -108,7 +140,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
     <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>{accessNodes.length ? 'Public and signed-in investigation.' : 'Public first. Deeper with access.'}</h4><p>{coverageNode ? 'Access is verified before one Agentic investigation. Open signed-in coverage for its request evidence and later agent checks.' : accessNodes.length ? 'Public investigation and signed-in checks follow the recorded workflow.' : 'Public checks lead into evidence review. Select a step for its evidence.'}</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
     {!recorded && <p className="workflow-history" role="status">Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.</p>}
     <div ref={ref} className="workflow-diagram" data-authenticated={accessNodes.length > 0} data-combined={!!coverageNode}>
-      <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}</svg>
+      <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}<g className="workflow-evidence-edges">{drawing.branches.map(branch => <g key={branch.group} data-branch={branch.group} data-related={activeGroup === branch.group}><path d={branch.path} />{branch.anchors.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="2.5" />)}</g>)}</g></svg>
       <div className="workflow-lane workflow-public">
         <div className="workflow-lane-label"><strong>{coverageNode ? 'Public baseline' : 'Public checks'}</strong><small>{coverageNode ? 'Four shared checks' : 'Shared public baseline'}</small></div>
         <ol aria-label="Public assessment workflow">{publicNodes.map((node, index) => nodeButton(node, index, index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol>
@@ -121,7 +153,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
         <div className="workflow-lane-label" style={{order: (route.length - 1) * 10 + 6}}><strong>Evidence review</strong></div>
         <ol aria-label="Report workflow">{nodeButton(reportNode, publicNodes.length + accessNodes.length, 'file')}</ol>
       </div>
-      {toolCluster('Scoped tools', scopedTools, '1 / span 4', 45, 'baseline')}
+      {toolCluster('Scoped tools', scopedTools, `1 / span ${baselineIds.length}`, baselineIds.length * 10 + 5, 'baseline')}
       {toolCluster('Discovery follow-up', toolNodes.filter(node => node.id === 'tool-zap-discoveries'), String(investigationIndex + 1), (investigationIndex + 1) * 10 + 5, 'follow-up')}
       {toolCluster('Coverage summary', toolNodes.filter(node => node.id === 'tool-patchriot-coverage'), '-2 / -1', route.length * 10 + 5, 'coverage')}
     </div>

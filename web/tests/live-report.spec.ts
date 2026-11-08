@@ -739,6 +739,28 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true}).click();
   const detail = activity.getByRole('region',{name:'Selected workflow step'});
   await expect(detail).toContainText('bounded scanner profile');
+  await expect(activity.locator('[data-check=public_baseline]')).toHaveAttribute('data-related','true');
+  await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','false');
+  await expect(activity.locator('[data-branch=baseline]')).toHaveAttribute('data-related','true');
+  const connections = await activity.locator('.workflow-diagram').evaluate(root => {
+    const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;
+    const origin=svg.getBoundingClientRect();
+    return [...root.querySelectorAll<SVGGElement>('[data-branch]')].map(group=>{
+      const kind=group.getAttribute('data-branch')!;
+      const cluster=root.querySelector<HTMLElement>(`[data-cluster="${kind}"]`)!;
+      const parentIds=cluster.dataset.parents!.split(' ');
+      const path=group.querySelector<SVGPathElement>('path')!;
+      const first=path.getPointAtLength(0);
+      const vertical=root.getBoundingClientRect().width<=760;
+      const parent=root.querySelector<HTMLElement>(`[data-check="${vertical?parentIds.at(-1):parentIds[0]}"]`)!;
+      const anchor=(vertical?parent.querySelector('.workflow-node')!:parent).getBoundingClientRect();
+      return {kind, gap:Math.abs(first.y+origin.y-anchor.bottom), length:path.getTotalLength(), path:path.getAttribute('d')};
+    });
+  });
+  expect(connections).toHaveLength(3);
+  for(const connection of connections) { expect(connection.gap).toBeLessThan(1.5); expect(connection.length).toBeGreaterThan(10); }
+  await info.attach('evidence-branch-geometry', {body:JSON.stringify(connections,null,2),contentType:'application/json'});
+
   await branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true}).click();
   await expect(detail).toContainText('Only approved origins and verified account contexts');
   await expect(detail).toContainText('No new inputs');
@@ -932,6 +954,7 @@ test('combined engine receipt identifies both access modes without inventing usa
   review.pentest.scope.authentication='session';
   const workflow=structuredWorkflow(true,'recorded');
   review.steps[0].result={...result,workflow,tool_runs:[{...result.tool_runs![0],tool:'artex-engine',output_excerpt:JSON.stringify({receipt_schema:1,access_mode:'anonymous_and_authenticated',anonymous_evidence_count:1,authenticated_evidence_count:1})}]};
+  review.steps[0].result.tool_runs.push({...result.tool_runs![0],tool:'patchriot-probes'});
   await page.route(`**/api/reviews/${id}`, route=>route.fulfill({json:review}));
   await page.reload();
   await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
@@ -944,6 +967,14 @@ test('combined engine receipt identifies both access modes without inventing usa
   await expect(activity).toContainText('Agentic security checks');
   await expect(activity).not.toContainText('ARTEX');
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  await expect(activity.locator('[data-cluster=baseline]')).toHaveAttribute('data-parents', 'public_baseline public_mapping public_signatures public_fingerprints authentication');
+  if (info.project.name==='mobile') {
+    const shelf=await activity.locator('[data-cluster=baseline]').boundingBox();
+    const access=await activity.locator('[data-check=authentication]').boundingBox();
+    const investigation=await activity.locator('[data-check=public_analysis]').boundingBox();
+    expect(shelf!.y).toBeGreaterThan(access!.y+access!.height);
+    expect(shelf!.y+shelf!.height).toBeLessThanOrEqual(investigation!.y);
+  }
   await activity.getByRole('button',{name:'Signed-in coverage: Recorded',exact:true}).click();
   await expect(selected).toContainText('Signed-in coverage');
   await expect(selected).toContainText('4');
