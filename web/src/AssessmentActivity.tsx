@@ -64,11 +64,12 @@ function supportingToolNodes(tools: LiveToolRun[]): WorkflowNode[] {
     const ran = outcomes.includes('Ran');
     const summaries = records.map(coverageSummary).filter(summary => summary !== undefined);
     const limits = [...new Set(summaries.flatMap(summary => summary.unverified))];
+    const limited = limits.length > 0 || outcomes.includes('Limits recorded');
     const summaryDetail = summaries.length === records.length ? summaries.map(summary =>
       `Showing ${summary.shown} of ${summary.shown + summary.omitted} grouped entries. Each groups a URL, HTTP method and account context, or an unverified check; several HTTP requests can support one entry. ${summary.omitted ? `${summary.omitted} entries are outside this display; the request evidence is still saved. ` : ''}${summary.unverified.length ? `Coverage is not established for: ${summary.unverified.join(', ')}.` : ''}`).join(' ') : undefined;
     return { id: `tool-${key}`, title: workflowToolName(records[0].tool, records[0]), tool: records[0].tool,
       description: descriptions[key] ?? 'Inspect the saved receipt for this supporting tool.',
-      status: incomplete || limits.length ? 'incomplete' : ran || summaries.length ? 'recorded' : 'not_applicable',
+      status: incomplete ? 'incomplete' : limited ? 'limited' : ran || summaries.length ? 'recorded' : 'not_applicable',
       state_label: stoppedScanner ? 'Stopped early' : incomplete ? 'Incomplete' : limits.length ? 'Limits recorded' : ran ? 'Recorded' : outcomes[0],
       detail: summaryDetail ?? (scannerDetail || undefined) ?? `${records.length} saved receipt${records.length === 1 ? '' : 's'}: ${outcomes.join(', ')}. ${incomplete ? 'A tool gap remains visible; inspect its receipt and the report’s limitations.' : 'Execution does not establish complete coverage or confirm a vulnerability.'}${records.some(record => record.output_truncated) ? 'Some retained tool output is shortened.' : ''}`,
       summary_counts: summaries.length === 1 && records.length === 1 ? {shown:summaries[0].shown,omitted:summaries[0].omitted} : undefined,

@@ -800,6 +800,8 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await page.reload();
   await activity.getByRole('button',{name:'Scout Needs review'}).click();
   await branch.getByRole('button',{name:'Evidence coverage: Limits recorded',exact:true}).click();
+  await expect(detail.locator('.workflow-inspector-state')).toHaveAttribute('data-status','limited');
+  await expect(detail.locator('.workflow-inspector-state > strong')).toHaveCSS('color','rgb(232, 195, 106)');
   await expect(detail).toContainText('44 entries are outside this display');
   await expect(detail).toContainText('Linked HTTP requests');
   await expect(detail).toContainText('Summary entries shown');
@@ -811,6 +813,8 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await page.reload();
   await activity.getByRole('button',{name:'Scout Needs review'}).click();
   await branch.getByRole('button',{name:'ZAP · discovered inputs: Stopped early',exact:true}).click();
+  await expect(detail.locator('.workflow-inspector-state')).toHaveAttribute('data-status','incomplete');
+  await expect(detail.locator('.workflow-inspector-state > strong')).toHaveCSS('color','rgb(246, 184, 164)');
   await expect(detail).toContainText('stopped early after 20 recorded requests');
   await expect(branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true})).toBeVisible();
   await activity.locator('.workflow-map').screenshot({path:info.outputPath('follow-up-warning.png')});

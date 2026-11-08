@@ -3,7 +3,7 @@ import { workflowStateLabels as statusText, workflowCaveat } from './workflow';
 import { UIIcon } from './UIIcon';
 
 /** View records are supplied only from the runner's typed checklist. */
-export type WorkflowNodeStatus = 'pending' | 'running' | 'recorded' | 'reused' | 'incomplete' | 'not_applicable' | 'not_recorded';
+export type WorkflowNodeStatus = 'pending' | 'running' | 'recorded' | 'reused' | 'limited' | 'incomplete' | 'not_applicable' | 'not_recorded';
 export type WorkflowNode = {
   id: string;
   title: string;
@@ -102,8 +102,8 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   const inspector = useRef<HTMLElement>(null);
   const [choice, setChoice] = useState<string | null>(null);
   const [hoveredGroup, setHoveredGroup] = useState<string | null>(null);
-  const selected = nodes.find(node => node.id === choice) ?? nodes.find(node => node.status === 'running') ?? nodes.find(node => node.status === 'incomplete') ?? nodes[0];
-  const label = (node: WorkflowNode) => node.state_label ?? (node.status === 'running' && !live ? 'Last reported running' : statusText[node.status]);
+  const selected = nodes.find(node => node.id === choice) ?? nodes.find(node => node.status === 'running') ?? nodes.find(node => node.status === 'incomplete') ?? nodes.find(node => node.status === 'limited') ?? nodes[0];
+  const label = (node: WorkflowNode) => node.state_label ?? (node.status === 'limited' ? 'Limits recorded' : node.status === 'running' && !live ? 'Last reported running' : statusText[node.status]);
   const route = [...publicNodes, ...accessNodes, reportNode];
   const investigationIndex = route.findIndex(node => node.id === 'public_analysis');
   const scopedTools = toolNodes.filter(node => !['tool-zap-discoveries', 'tool-patchriot-coverage'].includes(node.id));
@@ -123,7 +123,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
     return <section className="workflow-tool-cluster" data-cluster={kind} data-parents={parentIds[kind].join(' ')} data-related={activeGroup === kind} onPointerEnter={() => setHoveredGroup(kind)} onPointerLeave={() => setHoveredGroup(null)} onFocus={() => setHoveredGroup(kind)} onBlur={() => setHoveredGroup(null)} aria-label={title} style={{gridColumn: column, order}}>
       <div className="workflow-tool-tree"><h5><span className="workflow-cluster-root" aria-hidden="true" />{title}</h5><ul>{records.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
         <button type="button" aria-pressed={selected.id === node.id} onClick={() => inspectTool(node.id)} aria-label={`${node.title}: ${label(node)}`}>
-          <span className="tool-record-mark" aria-hidden="true">{node.status === 'incomplete' ? '!' : node.status === 'not_applicable' ? '–' : '✓'}</span>
+          <span className="tool-record-mark" aria-hidden="true">{['incomplete', 'limited'].includes(node.status) ? '!' : node.status === 'not_applicable' ? '–' : '✓'}</span>
           <span className="tool-record-name">{node.id === 'tool-zap-discoveries' ? 'ZAP follow-up' : node.title}<small>{label(node)}</small></span><span className="tool-record-open" aria-hidden="true">›</span>
         </button>
       </li>)}</ul></div>

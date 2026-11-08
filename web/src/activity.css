@@ -125,6 +125,8 @@
 .workflow-step[data-status=reused] .workflow-node { border-style: dashed; color: #b7cced; }
 .workflow-step[data-status=incomplete] .workflow-node { border-color: #efaa92; color: #f5c4b5; }
 .workflow-step[data-status=incomplete] .workflow-state { color: #f6b8a4; }
+.workflow-step[data-status=limited] .workflow-node { border-color: #e8c36a; color: #e8c36a; }
+.workflow-step[data-status=limited] .workflow-state { color: #e8c36a; }
 .workflow-step[data-status=running] .workflow-node { border-color: #ff9c87; color: #ffd3c8; box-shadow: inset 0 0 20px #ff9c8720; }
 .workflow-step[data-status=running] .workflow-state { color: #ffc0af; }
 .workflow-step[data-status=not_applicable] { opacity: .7; }
@@ -138,6 +140,7 @@
 .workflow-inspector p { font-size: 12px; line-height: 1.65; color: #a9bddb; margin: 0; }
 .workflow-inspector-state > strong { display: block; font: 500 13px/1.4 var(--body-font); color: #bcd8ff; margin-bottom: 10px; }
 .workflow-inspector-state[data-status=incomplete] > strong { color: #f6b8a4; }
+.workflow-inspector-state[data-status=limited] > strong { color: #e8c36a; }
 .workflow-inspector dl { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 16px 35px; border-top: 1px solid #3c5375; padding-top: 13px; margin: 0; }
 .workflow-inspector dt { color: #92aacc; font-size: 11px; }
 .workflow-inspector dd { font: 500 17px/1.5 var(--body-font); color: #dceaff; margin: 5px 0 0; overflow-wrap: anywhere; }
@@ -156,6 +159,7 @@
 .textmode-ui .workflow-tool-cluster button:hover, .textmode-ui .workflow-tool-cluster button[aria-pressed=true] { background: #a5c6ed0c; color: #edf4ff; }
 .textmode-ui .workflow-tool-cluster button:focus-visible { outline: 2px solid #b4d3f8; outline-offset: 2px; }
 .workflow-tool-cluster li[data-status=incomplete] .tool-record-mark, .workflow-tool-cluster li[data-status=incomplete] small { color: #f6b8a4; }
+.workflow-tool-cluster li[data-status=limited] .tool-record-mark, .workflow-tool-cluster li[data-status=limited] small { color: #e8c36a; }
 .workflow-tool-cluster li[data-status=not_applicable] .tool-record-mark { color: #7f91a9; }
 .workflow-footnote { color: #8da4c7; font-size: 11px; line-height: 1.65; margin: 14px 0 0; }
 @container(max-width:760px) {
