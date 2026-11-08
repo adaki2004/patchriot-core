@@ -141,6 +141,7 @@ fn matches(
         && terms.consent.allows_venice_fallback == input.consent.allows_venice_fallback
         && terms.consent.fallback_model == input.consent.fallback_model
         && terms.consent.review_policy == input.consent.review_policy
+        && terms.consent.use_worker_pool == input.consent.use_worker_pool
         && terms.payment.quote_request["originAsset"] == input.origin_asset
         && terms.payment.quote_request["refundTo"] == input.refund_address
         && terms

@@ -98,20 +98,16 @@ pub(super) fn admission(terms: &CheckoutTerms) -> Result<AdmitWebsiteReview, Che
         || (terms.pentest_id.is_none()
             && (!terms.consent.review_policy.is_legacy()
                 || terms.consent.allows_venice_fallback
-                || terms.consent.fallback_model.is_some()))
+                || terms.consent.fallback_model.is_some()
+                || terms.consent.use_worker_pool))
         || terms.payment.account_id.is_nil()
         || terms.consent.request_id.is_nil()
         || terms.consent.request_id != terms.payment.request_id
         || !terms.consent.accepts_operator_access
-        || terms.consent.device_ids.len() != terms.consent.review_policy.team_size()
-        || terms.consent.device_ids.iter().any(Uuid::is_nil)
-        || terms
+        || !terms
             .consent
-            .device_ids
-            .iter()
-            .collect::<std::collections::HashSet<_>>()
-            .len()
-            != terms.consent.review_policy.team_size()
+            .review_policy
+            .valid_devices(&terms.consent.device_ids, terms.consent.use_worker_pool)
         || terms.consent.snapshot_sha256.len() != 64
         || !terms
             .consent
