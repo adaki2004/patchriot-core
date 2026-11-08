@@ -23,7 +23,7 @@ function workflowNodes(workflow: LiveWorkflow | undefined, tools: LiveToolRun[],
     const combined = records.map(combinedEngineAccess).find(Boolean);
     const presentation = definition.id === 'public_analysis' && combinedInvestigation ? {
       title: 'Agentic investigation',
-      tool: 'Anonymous + signed-in',
+      tool: combined ? 'Anonymous + signed-in' : records.length ? 'Access coverage unverified' : 'Anonymous + signed-in',
       description: combined
         ? `One engine run used combined anonymous and authenticated mode. Retained evidence includes ${combined.anonymous} anonymous and ${combined.authenticated} authenticated requests.`
         : 'This workflow plans one Agentic investigation after access verification. The completion receipt identifies retained anonymous and signed-in evidence.',

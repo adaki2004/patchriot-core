@@ -55,12 +55,20 @@ export function toolCoverageDetail(tool: LiveToolRun): string | undefined {
   try {
     const receipt = JSON.parse(tool.output_excerpt);
     if (receipt.receipt_schema !== 1 || receipt.coverage_complete !== false) return undefined;
+    const gaps = Array.isArray(receipt.collection_errors) ? receipt.collection_errors : [];
+    if (gaps.includes('authenticated_context_unverified') || gaps.includes('account_context_unverified'))
+      return 'Signed-in access was not verified for every required account in this engine pass. Public checks are retained; authenticated coverage remains incomplete.';
+    if (gaps.includes('access_context_untested'))
+      return 'The engine did not retain requests for every required public and signed-in context. Combined coverage remains incomplete.';
     const reasons: Record<string, string> = {
       target_request_budget: 'Reached this tool’s request limit. Deeper public coverage remains incomplete.',
       time_budget: 'Reached this tool’s time limit. Deeper public coverage remains incomplete.',
       model_budget: 'Reached this tool’s model budget. Deeper public coverage remains incomplete.',
       no_target_progress: 'Stopped after no further target progress. Deeper public coverage remains incomplete.',
       interrupted: 'The engine was interrupted before a finished receipt. Deeper public coverage remains incomplete.',
+      provider_rate_limited: 'The model provider kept refusing requests after the available recovery attempts. Engine coverage remains incomplete.',
+      model_request_rejected: 'A model request was rejected before the engine finished. The retained reason does not identify the underlying rejection. Engine coverage remains incomplete.',
+      model_request_too_large: 'The engine’s model input exceeded the bridge size limit. Engine coverage remains incomplete.',
     };
     const reason = reasons[receipt.stop_reason];
     return combinedEngineAccess(tool) ? reason?.replace('Deeper public coverage', 'Combined public and signed-in coverage') : reason;

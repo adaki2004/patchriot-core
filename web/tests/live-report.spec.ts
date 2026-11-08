@@ -877,6 +877,9 @@ test('partial engine explanations require known structured receipt metadata',()=
   const tool={...result.tool_runs![0],tool:'artex-engine'};
   expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'target_request_budget',coverage_complete:false})})).toContain('request limit');
   expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'interrupted',coverage_complete:false})})).toContain('interrupted');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'done',coverage_complete:false,collection_errors:['authenticated_context_unverified']})})).toContain('Signed-in access was not verified');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'done',coverage_complete:false,collection_errors:['access_context_untested']})})).toContain('did not retain requests');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'model_request_rejected',coverage_complete:false})})).toContain('does not identify the underlying rejection');
   for(const output_excerpt of ['<script>bad()</script>','{"stop_reason":"target_request_budget"}',JSON.stringify({receipt_schema:1,stop_reason:'unknown_reason',coverage_complete:false}),JSON.stringify({receipt_schema:1,stop_reason:'time_budget',coverage_complete:true})]) expect(toolCoverageDetail({...tool,output_excerpt})).toBeUndefined();
 });
 
