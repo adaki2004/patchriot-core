@@ -122,7 +122,7 @@ test('one service diagram explains scope, agents and inference and respects redu
   await expect(page.locator('.service-map')).toContainText('Confirm access');
   const diagram=page.locator('.architecture-wide:visible, .architecture-vertical:visible');
   await expect(diagram).toHaveCount(1);
-  for(const name of ['Your web app','Dispatcher','Agent 1','Agent 2','Agent N','Your private report']) await expect(diagram).toContainText(name);
+  for(const name of ['Your web app','Core','Dispatcher','Agent 1','Agent 2','Agent N','Your private report']) await expect(diagram).toContainText(name);
   if(await page.locator('.architecture-vertical').isVisible()) {
     await expect(diagram.getByAltText('NEAR AI')).toBeVisible();
     await expect(diagram.getByAltText('Venice')).toBeVisible();

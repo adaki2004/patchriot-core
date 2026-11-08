@@ -129,6 +129,8 @@ test('architecture fits docs and mobile with readable vertical contributors', as
   const map=page.locator('.architecture-map');
   const diagram=map.locator('.architecture-vertical');
   await expect(diagram).toBeVisible();
+  await expect(diagram.locator('.architecture-core')).toContainText('Core');
+  await expect(diagram.locator('.architecture-core .architecture-dispatcher')).toContainText('Dispatcher');
   for(const name of ['Agent 1','Agent 2','Agent N']) await expect(diagram.getByText(name,{exact:true})).toBeVisible();
   await expect(diagram.getByAltText('NEAR AI')).toBeVisible();
   await expect(diagram.getByAltText('Venice')).toBeVisible();

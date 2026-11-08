@@ -84,8 +84,8 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
     <div className="architecture-wide" aria-label="Assessment architecture diagram" dangerouslySetInnerHTML={{ __html: drawing }} />
     <div className="architecture-vertical" role="group" aria-label="Assessment architecture diagram">
       <div className="architecture-box"><strong>Your web app</strong><span>Verified domain and approved scope</span></div>
-      <div className="architecture-link" aria-hidden="true">↓</div>
-      <div className="architecture-box architecture-dispatcher"><strong>Dispatcher</strong><span>Permission, scheduling and evidence</span><small>Core handles your account and checkout</small></div>
+      <div className="architecture-link" aria-hidden="true">↕</div>
+      <section className="architecture-core" aria-label="Patchriot Core"><h3>Core</h3><p>Your account · access · checkout</p><div className="architecture-box architecture-dispatcher"><strong>Dispatcher</strong><span>Permission, scheduling and evidence</span><small>Ready roles go to eligible free workers</small></div></section>
       <div className="architecture-link" aria-hidden="true">↓</div>
       <section className="architecture-contributors" aria-label="Inference contributors">
         <h3>Inference contributors</h3>
