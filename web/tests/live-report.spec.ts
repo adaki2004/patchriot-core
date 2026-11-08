@@ -594,16 +594,16 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   expect(md.match(/^### [SRV]-\d+$/gm)).toHaveLength(2);
 });
 
-test('queue waiting and active role deadlines are explained separately', async ({ page }) => {
+test('queue waiting and active role deadlines are explained separately', async ({ page }, info) => {
   await setup(page);
   const review = { ...repeatedReport(), mode: 'pentest_agent', state: 'queued', deadline_at: 1793726400,
     timing: { role_limit_seconds: 3600, started_at: null as number | null, active_role_deadline_at: null as number | null, requests_ahead: 2 },
     pentest: { scope: { origins: ['https://owned.example'], methods: ['GET'] }, reviewers: [] },
-    steps: (['investigator', 'reproducer', 'challenger'] as const).map(role => ({ role, state: 'queued', result: null })),
+    steps: (['investigator', 'reproducer', 'challenger'] as const).map(role => ({ role, state: 'queued', result: null as LiveResult | null })),
   };
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.reload();
-  await expect(page.getByText(/2 earlier tests share your selected agents/)).toBeVisible();
+  await expect(page.getByText(/2 other tests have earlier work on shared agents/)).toBeVisible();
   await expect(page.getByText(/Each agent gets up to 60 minutes after its own work starts/)).toBeVisible();
   await expect(page.getByText(/Run window ends/)).toHaveCount(0);
   await expect(page.getByText(/This agent’s time limit ends/)).toHaveCount(0);
@@ -612,9 +612,27 @@ test('queue waiting and active role deadlines are explained separately', async (
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Scout is on the case.' })).toBeVisible();
   await expect(page.getByText(/This agent’s time limit ends/)).toBeVisible();
-  await expect(page.getByText(/2 earlier tests share your selected agents/)).toHaveCount(0);
+  await expect(page.getByText(/2 other tests have earlier work on shared agents/)).toHaveCount(0);
   await page.getByText('Timing & permission', { exact: true }).click();
   await expect(page.getByText(/Work must stop if permission or test-account access expires/)).toBeVisible();
+  review.steps[0].state = 'completed'; review.steps[0].result = result;
+  review.timing.active_role_deadline_at = null;
+  await page.reload();
+  await expect(page.getByRole('heading', {name:'Scout report saved. Recon is queued.'})).toBeVisible();
+  await expect(page.getByText('WAITING TO START',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('WAITING FOR THE NEXT AGENT',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('Agent time guide')).not.toContainText('roughly');
+  if(info.project.name==='desktop') {
+    const art=page.locator('.assessment-orbit');
+    await expect(art).toBeVisible();
+    expect((await art.boundingBox())!.width).toBeGreaterThan(260);
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await expect(art.locator('img')).toHaveCSS('animation-name','workspace-orbit-drift');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await expect(art.locator('img')).toHaveCSS('animation-name','none');
+  }
+  await page.locator('.assessment-status').screenshot({path:info.outputPath('audit-waiting-review.png')});
+
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -768,6 +786,13 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await expect(detail).toContainText('A tool gap remains visible');
   await expect(detail.getByText('Recorded tool time')).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  tools[tools.length-1].output_excerpt=JSON.stringify({version:1,omitted_units:44,units:[{class:'session_lifecycle',state:'deferred'}]});
+  await page.reload();
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  await branch.getByRole('button',{name:'Evidence coverage: Limits recorded',exact:true}).click();
+  await expect(detail).toContainText('44 additional entries omitted');
+  await expect(detail).toContainText('Coverage is not established for: session lifecycle');
+  await expect(detail).toContainText('does not indicate a stalled or failed agent');
   await activity.locator('.workflow-map').screenshot({path:info.outputPath('supporting-tool-graph.png')});
   await activity.getByRole('button',{name:'Recon Working'}).click();
   await expect(branch).toHaveCount(0);
@@ -1150,4 +1175,17 @@ for (const scenario of ['discovery', 'investigating', 'finishing', 'stale', 'que
     if(scenario==='stale') await expect(node).toContainText('Last reported running');
   }
   await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-status','recorded');
+});
+
+
+test('coverage display omission does not hide scanner or execution failures', () => {
+  const run={...result.tool_runs![0],tool:'patchriot-coverage',exit_code:0,failure:'incomplete',output_truncated:false,
+    output_excerpt:JSON.stringify({version:1,omitted_units:44,units:[{class:'authorization',state:'deferred'}]})};
+  expect(toolOutcome(run)).toBe('Limits recorded');
+  expect(toolOutcome({...run,failure:null})).toBe('Limits recorded');
+  expect(toolOutcome({...run,failure:'time_budget'})).toBe('Incomplete');
+  expect(toolOutcome({...run,exit_code:1})).toBe('Incomplete');
+  expect(toolOutcome({...run,tool:'artex-engine'})).toBe('Incomplete');
+  expect(toolOutcome({...run,output_excerpt:'{}'})).toBe('Incomplete');
+  expect(toolOutcome({...run,output_truncated:true})).toBe('Incomplete');
 });

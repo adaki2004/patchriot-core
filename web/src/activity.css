@@ -25,10 +25,10 @@
 .checkout-paused { border-style: dashed; }
 .setup-saved-notice { line-height: 1.7; }
 .textmode-ui .live-review { padding: clamp(20px, 3vw, 38px); }
-.textmode-ui .live-review .assessment-status { grid-template-columns: minmax(0, 1fr) 180px; border: 0; border-left: 3px solid #ff8f7d; background: linear-gradient(90deg, #192333, #10151e); padding: 22px 26px; gap: 20px; }
+.textmode-ui .live-review .assessment-status { grid-template-columns: minmax(0, 1fr) minmax(260px, 38%); border: 0; border-left: 3px solid #ff8f7d; background: linear-gradient(90deg, #192333, #10151e); padding: 22px 26px; gap: 20px; }
 .textmode-ui .live-review .assessment-status h2 { font-size: clamp(25px, 2.6vw, 34px); }
-.live-review .assessment-orbit { height: 130px; }
-.live-review .assessment-orbit img { height: 130px; width: 195px; object-fit: contain; }
+.live-review .assessment-orbit { width: 100%; height: clamp(260px, 28vw, 440px); max-width: 620px; justify-self: center; isolation: auto; }
+.live-review .assessment-orbit img { width: 100%; height: 100%; object-fit: cover; mask-image: radial-gradient(ellipse at center, #000 28%, transparent 70%); }
 .role-deadline { display: block; margin-top: 5px; }
 .live-review .assessment-status details { margin-top: 12px; font-size: 12px; color: var(--muted); }
 .textmode-ui .live-review .live-stage-list li { border: 0; border-top: 2px solid #42516b; background: none; padding: 14px 8px; gap: 4px 10px; }
@@ -311,3 +311,6 @@
 
 .textmode-ui .workflow-tool-cluster [data-tool-check=tool-zap-discoveries] button { gap: 5px; }
 .workflow-tool-cluster [data-tool-check=tool-zap-discoveries] .tool-record-name { white-space: nowrap; }
+
+.live-review .assessment-status:is([data-active=true], [data-awaiting=true]) .assessment-orbit img { animation: workspace-orbit-drift 16s ease-in-out infinite; }
+@media(prefers-reduced-motion:reduce) { .live-review .assessment-status .assessment-orbit img { animation: none; } }

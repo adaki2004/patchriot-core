@@ -11,8 +11,6 @@ export function ReviewTiming({ steps, timing }: { steps: LiveStep[]; timing: Liv
     return () => window.clearInterval(timer);
   }, []);
   const minutes = (seconds: number) => Math.max(1, Math.ceil(seconds / 60));
-  const samples = steps.flatMap(step => step.result?.execution.state === 'completed' && step.result.execution.duration_ms > 0 ? [step.result.execution.duration_ms / 1000] : []);
-  const typical = samples.length ? Math.min(timing.role_limit_seconds, samples.reduce((sum, duration) => sum + duration, 0) / samples.length) : null;
   const active = steps.find(step => ['leased', 'running'].includes(step.state));
   const elapsed = active && timing.active_role_deadline_at ? Math.max(0, now - (timing.active_role_deadline_at - timing.role_limit_seconds)) : null;
   return <div className="review-timing" aria-label="Agent time guide">
@@ -23,10 +21,11 @@ export function ReviewTiming({ steps, timing }: { steps: LiveStep[]; timing: Liv
       let detail: string;
       if (duration != null) detail = `${minutes(duration / 1000)} min recorded`;
       else if (['failed', 'cancelled'].includes(step.state)) detail = 'Stopped';
-      else if (running && elapsed != null) detail = `${minutes(elapsed)} min elapsed · ${typical == null ? `up to ${Math.max(0, Math.ceil((timing.role_limit_seconds - elapsed) / 60))} min left in its allowance` : elapsed >= typical ? 'taking longer than the earlier-agent average' : `roughly ${minutes(typical - elapsed)} min more`}`;
-      else detail = typical == null ? `up to ${minutes(timing.role_limit_seconds)} min once started` : `roughly ${minutes(typical)} min once started`;
+      else if (running && elapsed != null) detail = `${minutes(elapsed)} min elapsed · up to ${Math.max(0, Math.ceil((timing.role_limit_seconds - elapsed) / 60))} min left in its allowance`;
+      else if (step.role !== 'investigator') detail = 'Focused evidence review · timing not yet measured';
+      else detail = `up to ${minutes(timing.role_limit_seconds)} min once started`;
       return <li key={step.role}><span>{liveRoles[step.role]}</span><span>{detail}</span></li>;
     })}</ul>
-    <small>{typical == null ? 'An estimate will appear after the first agent returns. Until then, these are configured time limits.' : `Rough estimates use ${samples.length} completed agent ${samples.length === 1 ? 'run' : 'runs'} in this test. Roles can take different amounts of time; queue waits are extra.`}</small>
+    <small>Recorded times are actual durations. Remaining allowances are limits, not estimates. Evidence review has a different workload from discovery; queue waits are extra.</small>
   </div>;
 }

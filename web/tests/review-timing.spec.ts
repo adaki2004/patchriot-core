@@ -5,6 +5,7 @@ for (const scenario of ['first', 'estimate', 'overrun', 'failed'] as const) test
   await emptyDashboard(page);
   const now = Math.floor(Date.now() / 1000);
   await page.clock.install({ time: now * 1000 });
+  await page.clock.setFixedTime(now * 1000);
   const id = '00000000-0000-4000-8000-000000000003';
   await page.route('**/api/session', route => route.fulfill({ json: { account: { id, display_name: 'Owner', role: 'member' }, csrf_token: 'test-only' } }));
   const completed = { kind: 'pentest_agent_v1', scope_sha256: 'a'.repeat(64), execution: { state: scenario === 'failed' ? 'failed' : 'completed', duration_ms: 600_000, provider: 'fixture', model: 'fixture', inference_calls: 0, http_requests: 0, cost_upper_microusd: 0, cleanup_confirmed: true }, assessment: null, evidence: [], raw_summary: '' };
@@ -21,13 +22,10 @@ for (const scenario of ['first', 'estimate', 'overrun', 'failed'] as const) test
   } }));
   await page.goto(`/#/reviews/${id}`);
   const guide = page.getByLabel('Agent time guide');
-  if (scenario === 'first' || scenario === 'failed') {
-    await expect(guide).toContainText('configured time limits');
-    await expect(guide).not.toContainText('roughly');
-  } else {
-    await expect(guide).toContainText('10 min recorded');
-    await expect(guide).toContainText('roughly 10 min once started');
-    await expect(guide).toContainText('queue waits are extra');
-    await expect(guide).toContainText(scenario === 'overrun' ? 'taking longer than the earlier-agent average' : 'roughly 8 min more');
-  }
+  await expect(guide).toContainText('limits, not estimates');
+  await expect(guide).not.toContainText('roughly');
+  await expect(guide).toContainText('Focused evidence review · timing not yet measured');
+  await expect(guide).toContainText('queue waits are extra');
+  await expect(guide).toContainText(scenario === 'overrun' ? '15 min elapsed · up to 45 min left' : '2 min elapsed · up to 58 min left');
+  if(scenario !== 'first') await expect(guide).toContainText('10 min recorded');
 });
