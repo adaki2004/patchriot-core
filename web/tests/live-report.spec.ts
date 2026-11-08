@@ -724,13 +724,13 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   const received=Math.floor(Date.now()/1000);
   const review={id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
     pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic workflow fixture',...(grey?{authentication:'session',browser_login:{}}:{})},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
-    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:received,progress:{phase:'investigating',http_requests:71,inference_calls:8,completed_tools:5,workflow}}}]};
+    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:received,progress:{phase:grey?'investigating':'scoped_tools',http_requests:71,inference_calls:8,completed_tools:5,workflow}}}]};
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
   await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Deeper public checks']);
-  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(1);
+  await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(grey?2:1);
   await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
   if(grey) {
     await expect(activity.getByRole('list',{name:'Additional authenticated workflow'}).locator('strong')).toHaveText(['Verify access','Signed-in checks']);
@@ -1044,4 +1044,32 @@ test('coverage limitations and recorded URLs wrap within the report on narrow sc
   }
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.locator('.report-tab-content').screenshot({path:info.outputPath('wrapped-coverage.png')});
+});
+
+for (const scenario of ['discovery', 'investigating', 'finishing', 'stale', 'queued', 'saved', 'gap'] as const) test(`evidence review distinguishes follow-up work from waiting: ${scenario}`, async ({page}) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r=>r.fulfill({json:{account:{id,display_name:'Fixture owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(false);
+  if(scenario==='gap') workflow.checks[7].state='incomplete';
+  const now=Math.floor(Date.now()/1000);
+  const active=!['queued','saved'].includes(scenario);
+  const reviewing=['investigating','finishing','stale'].includes(scenario);
+  const review={id,mode:'pentest_agent',state:scenario==='saved'?'completed':'running',created_at:now-120,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic fixture'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:scenario==='saved'?'completed':active?'leased':'queued',
+      result:scenario==='saved'?{...result,workflow}:null,
+      progress:{received_at:now-(scenario==='stale'?200:0),progress:{phase:scenario==='discovery'?'scoped_tools':scenario==='finishing'?'finishing':'investigating',http_requests:71,inference_calls:8,completed_tools:5,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  const activity=page.getByRole('region',{name:'Recorded assessment activity'});
+  if(scenario==='saved') await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  const node=activity.locator('[data-check=evidence_review]');
+  await expect(node).toHaveAttribute('data-status',reviewing?'running':scenario==='gap'?'incomplete':'pending');
+  await expect(node).toHaveAttribute('data-live',String(reviewing&&scenario!=='stale'));
+  if(reviewing) {
+    await node.getByRole('button').click();
+    await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText(scenario==='finishing'?'preparing and returning its report':'may make follow-up requests');
+    if(scenario==='stale') await expect(node).toContainText('Last reported running');
+  }
+  await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-status','recorded');
 });
