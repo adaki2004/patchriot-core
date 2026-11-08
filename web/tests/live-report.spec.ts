@@ -707,6 +707,43 @@ for (const stopped of [false, true, 'cancelled'] as const) test(`ended assessmen
 });
 
 const publicWorkflowIds = ['public_baseline','public_mapping','public_signatures','public_fingerprints','public_analysis'] as const;
+test('supporting tool graph retains scoped scanner outcomes without inventing live execution', async ({page}, info) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', route => route.fulfill({json:{account:{id,display_name:'Fixture owner',role:'member'},csrf_token:'test-csrf'}}));
+  const base = {...result.tool_runs![0], output_truncated:false, output_excerpt:'{}'};
+  const tools = [
+    {...base, tool:'patchriot-probes'}, {...base, tool:'ffuf'}, {...base, tool:'zap'},
+    {...base, tool:'schemathesis', evidence_ids:[], output_excerpt:JSON.stringify({contexts:[{result:{state:'inapplicable'}}]})},
+    {...base, tool:'zap', arguments:['--engine-discoveries'], evidence_ids:[], output_excerpt:JSON.stringify({phase:'engine_discoveries',state:'inapplicable',reason:'no_new_recorded_get_inputs'})},
+    {...base, tool:'patchriot-coverage', failure:'incomplete'},
+  ];
+  const received = Math.floor(Date.now()/1000);
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:{id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Owned supporting scanner fixture'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'completed',evidence_complete:false,result:{...result,workflow:structuredWorkflow(false,'recorded'),tool_runs:tools}},
+      {role:'reproducer',state:'leased',result:null,progress:{received_at:received,progress:{phase:'investigating',http_requests:0,inference_calls:1,completed_tools:0}}}]}}));
+  await page.goto(`/#/reviews/${id}`);
+  const activity = page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.getByRole('region',{name:'Recorded supporting checks'})).toHaveCount(0);
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  const branch = activity.getByRole('region',{name:'Recorded supporting checks'});
+  await expect(branch.getByRole('button')).toHaveCount(6);
+  await expect(branch.getByRole('button',{name:'API schema checks: Not applicable',exact:true})).toBeVisible();
+  await expect(branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true})).toBeVisible();
+  await branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true}).click();
+  const detail = activity.getByRole('region',{name:'Selected workflow step'});
+  await expect(detail).toContainText('bounded scanner profile');
+  await branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true}).click();
+  await expect(detail).toContainText('Only approved origins and verified account contexts');
+  await expect(detail).toContainText('No new inputs');
+  await branch.getByRole('button',{name:'Evidence coverage: Incomplete',exact:true}).click();
+  await expect(detail).toContainText('A tool gap remains visible');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await branch.screenshot({path:info.outputPath('supporting-tool-graph.png')});
+  await activity.getByRole('button',{name:'Recon Working'}).click();
+  await expect(branch).toHaveCount(0);
+});
+
 function structuredWorkflow(grey: boolean, state: 'running' | 'recorded' = 'running'): LiveWorkflow {
   return {version:1,checks:[
     ...publicWorkflowIds.map((id,index)=>({id,state:'recorded' as const,evidence_count:10+index})),

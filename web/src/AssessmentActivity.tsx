@@ -39,6 +39,37 @@ function reportsCombinedInvestigation(step: LiveStep): boolean {
     && state('authentication') === 'recorded' && state('authenticated_checks') === 'running';
 }
 
+/** Supporting checks are populated from saved receipts, never inferred from a heartbeat. */
+function supportingToolNodes(tools: LiveToolRun[]): WorkflowNode[] {
+  const primaryTools = new Set(['patchriot-baseline', 'patchriot-crawl', 'nuclei', 'ares-web-surface', 'artex-engine']);
+  const descriptions: Record<string, string> = {
+    'patchriot-probes': 'Compare HTTP controls using bounded requests and retained response evidence.',
+    ffuf: 'Check candidate endpoints against missing-path controls. A matching response is a lead, not a confirmed vulnerability.',
+    zap: 'Run scoped ZAP response checks and selected reflected-input checks. This is a bounded scanner profile, not every ZAP rule.',
+    'zap-discoveries': 'Give ZAP new successful GET inputs recorded during the agentic investigation. Only approved origins and verified account contexts are eligible; missing inputs remain explicit.',
+    schemathesis: 'Check an observed API schema when one is available. No schema means this check is not applicable.',
+    'patchriot-coverage': 'Summarize retained checks and gaps. This is evidence accounting, not an additional target scan.',
+  };
+  const groups = new Map<string, LiveToolRun[]>();
+  for (const tool of tools) {
+    if (primaryTools.has(tool.tool)) continue;
+    const key = tool.tool === 'zap' && tool.arguments.includes('--engine-discoveries') ? 'zap-discoveries' : tool.tool;
+    groups.set(key, [...(groups.get(key) ?? []), tool]);
+  }
+  return [...groups].map(([key, records]) => {
+    const outcomes = records.map(toolOutcome);
+    const incomplete = outcomes.includes('Incomplete');
+    const ran = outcomes.includes('Ran');
+    return { id: `tool-${key}`, title: workflowToolName(records[0].tool, records[0]), tool: records[0].tool,
+      description: descriptions[key] ?? 'Inspect the saved receipt for this supporting tool.',
+      status: incomplete ? 'incomplete' : ran ? 'recorded' : 'not_applicable',
+      state_label: incomplete ? 'Incomplete' : ran ? 'Recorded' : outcomes[0],
+      detail: `${records.length} saved receipt${records.length === 1 ? '' : 's'}: ${outcomes.join(', ')}. ${incomplete ? 'A tool gap remains visible; inspect its receipt and the report’s limitations.' : 'Execution does not establish complete coverage or confirm a vulnerability.'}${records.some(record => record.output_truncated) ? 'Some retained tool output is shortened.' : ''}`,
+      measured_duration_ms: records.reduce((total, record) => total + record.duration_ms, 0),
+      evidence_count: new Set(records.flatMap(record => record.evidence_ids)).size };
+  });
+}
+
 /** Uses only accepted progress snapshots and retained result records; no estimated coverage. */
 export function AssessmentActivity({ steps, state, authenticatedScope = false, pairedScope = false }: { steps: LiveStep[]; state: string; authenticatedScope?: boolean; pairedScope?: boolean }) {
   const [choice, setChoice] = useState<LiveRole | null>(null);
@@ -78,7 +109,7 @@ export function AssessmentActivity({ steps, state, authenticatedScope = false, p
   return <section className="assessment-activity" aria-label="Recorded assessment activity">
     <div className="activity-heading"><div><span className="assessment-kicker">RECORDED ACTIVITY</span><h3>Inside the assessment</h3></div><span className="activity-refresh">{running && progress ? stale ? 'Awaiting a fresh update' : 'Updates automatically' : selected.result ? 'Saved execution' : selected.state === 'failed' || state === 'failed' ? 'Execution stopped' : selected.state === 'cancelled' || state === 'cancelled' ? 'Execution cancelled' : state === 'awaiting_payment' ? 'Waiting for payment' : ['completed', 'needs_review'].includes(state) ? 'No execution record' : 'Waiting for an agent'}</span></div>
     <div className="activity-role-tabs" aria-label="Activity by agent">{steps.map(step => <button key={step.role} aria-pressed={selected.role === step.role} onClick={() => setChoice(step.role)}>{roles[step.role]}<span>{step.result ? step.evidence_complete ? 'Report received' : 'Needs review' : ['leased', 'running'].includes(step.state) ? 'Working' : step.state === 'failed' ? 'Stopped' : step.state === 'cancelled' ? 'Cancelled' : 'Waiting'}</span></button>)}</div>
-    <WorkflowGraph key={selected.role} publicNodes={nodes.slice(0, combinedInvestigation ? 4 : 5)} accessNodes={combinedInvestigation ? [nodes[5], nodes[4]] : authenticatedScope ? nodes.slice(5, 7) : []} coverageNode={coverage} reportNode={nodes[7]} recorded={workflow?.version === 1} live={running && !stale} />
+    <WorkflowGraph key={selected.role} publicNodes={nodes.slice(0, combinedInvestigation ? 4 : 5)} accessNodes={combinedInvestigation ? [nodes[5], nodes[4]] : authenticatedScope ? nodes.slice(5, 7) : []} coverageNode={coverage} toolNodes={supportingToolNodes(tools)} reportNode={nodes[7]} recorded={workflow?.version === 1} live={running && !stale} />
     <div className="activity-runtime"><dl><div><dt>HTTP requests</dt><dd>{counts?.http_requests ?? '—'}</dd></div><div><dt>Model calls</dt><dd>{counts?.inference_calls ?? '—'}</dd></div><div><dt>Tool runs</dt><dd>{selected.result ? tools.length : progress?.progress.completed_tools ?? '—'}</dd></div><div><dt>{selected.result ? 'Run duration' : 'Model wait'}</dt><dd>{selected.result ? `${Math.round(selected.result.execution.duration_ms / 1000)}s` : progress?.progress.model_request ? `${progress.progress.model_request.elapsed_seconds}s` : '—'}</dd></div></dl>
       <p>{progress ? <>Last received <time dateTime={new Date(progress.received_at * 1000).toISOString()}>{new Date(progress.received_at * 1000).toLocaleString()}</time>. </> : !selected.result ? 'No activity snapshot received yet. ' : ''}Snapshots show reported work, not a percentage of coverage.</p>
     </div>

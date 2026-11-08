@@ -141,6 +141,20 @@
 .workflow-inspector dl { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 16px 35px; border-top: 1px solid #3c5375; padding-top: 13px; margin: 0; }
 .workflow-inspector dt { color: #92aacc; font-size: 11px; }
 .workflow-inspector dd { font: 500 17px/1.5 var(--body-font); color: #dceaff; margin: 5px 0 0; overflow-wrap: anywhere; }
+.workflow-tool-branch { margin: 24px 0; padding: 18px; border: 1px solid #344c69; border-radius: 8px; background: #111e2dda; }
+.workflow-tool-heading { display: flex; gap: 12px; align-items: start; }
+.workflow-tool-heading > svg { flex: none; width: 22px; height: 22px; color: #a9c6ea; }
+.workflow-tool-heading strong { color: #dce7f7; font-size: 13px; font-weight: 500; }
+.workflow-tool-heading p { color: #a4b7d2; font-size: 12px; margin: 6px 0 0; line-height: 1.5; }
+.workflow-tool-branch ul { list-style: none; padding: 0; margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px; }
+.workflow-tool-branch li { min-width: 0; }
+.textmode-ui .workflow-tool-branch button { width: 100%; height: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 7px 10px; padding: 13px; text-align: left; border: 1px solid #3d5574; border-radius: 6px; background: #17273b; color: #c3d6ee; box-shadow: none; }
+.workflow-tool-branch button > svg { width: 19px; height: 19px; grid-row: 1 / span 3; }
+.workflow-tool-branch button > strong { font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.workflow-tool-branch button > span { font-size: 11px; color: #b9d4f5; }
+.workflow-tool-branch button > small { font-size: 10px; color: #9ab1ce; }
+.textmode-ui .workflow-tool-branch button[aria-pressed=true], .textmode-ui .workflow-tool-branch button:focus-visible { border-color: #b4d3f8; outline: 1px solid #b4d3f8; outline-offset: 2px; }
+.workflow-tool-branch li[data-status=incomplete] button > span { color: #f6b8a4; }
 .workflow-footnote { color: #8da4c7; font-size: 11px; line-height: 1.65; margin: 14px 0 0; }
 @container(max-width:760px) {
   .workflow-map { padding: 22px 18px 16px; }

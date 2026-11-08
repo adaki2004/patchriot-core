@@ -14,6 +14,7 @@ export type WorkflowNode = {
   evidence_count?: number;
   measured_duration_ms?: number;
   source_role?: string;
+  state_label?: string;
 };
 type WorkflowEdge = { from: string; to: string; path: string };
 type WorkflowDrawing = { width: number; height: number; edges: WorkflowEdge[] };
@@ -64,15 +65,15 @@ function useWorkflowEdges(key: string) {
 }
 
 /** A fixed workflow graph with accessible node controls, never a simulated event feed. */
-export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNode, recorded, live }: {
-  publicNodes: WorkflowNode[]; accessNodes: WorkflowNode[]; reportNode: WorkflowNode; coverageNode?: WorkflowNode; recorded: boolean; live: boolean;
+export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNode, toolNodes = [], recorded, live }: {
+  publicNodes: WorkflowNode[]; accessNodes: WorkflowNode[]; reportNode: WorkflowNode; coverageNode?: WorkflowNode; toolNodes?: WorkflowNode[]; recorded: boolean; live: boolean;
 }) {
-  const nodes = [...publicNodes, ...accessNodes, reportNode, ...(coverageNode ? [coverageNode] : [])];
+  const nodes = [...publicNodes, ...accessNodes, reportNode, ...(coverageNode ? [coverageNode] : []), ...toolNodes];
   const marker=useId().replaceAll(':','');
   const {ref,drawing}=useWorkflowEdges(nodes.map(node=>node.id).join(','));
   const [choice, setChoice] = useState<string | null>(null);
   const selected = nodes.find(node => node.id === choice) ?? nodes.find(node => node.status === 'running') ?? nodes.find(node => node.status === 'incomplete') ?? nodes[0];
-  const label = (node: WorkflowNode) => node.status === 'running' && !live ? 'Last reported running' : statusText[node.status];
+  const label = (node: WorkflowNode) => node.state_label ?? (node.status === 'running' && !live ? 'Last reported running' : statusText[node.status]);
   function nodeButton(node: WorkflowNode, index: number, icon: 'shield' | 'globe' | 'agent' | 'lock' | 'file') {
     return <li key={node.id} data-check={node.id} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step">
       <button type="button" aria-pressed={selected.id === node.id} onClick={() => setChoice(node.id)} aria-label={`${node.title}: ${label(node)}`}>
@@ -100,6 +101,15 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
         <ol aria-label="Report workflow">{nodeButton(reportNode, publicNodes.length + accessNodes.length, 'file')}</ol>
       </div>
     </div>
+    {toolNodes.length > 0 && <section className="workflow-tool-branch" aria-label="Recorded supporting checks">
+      <div className="workflow-tool-heading"><UIIcon name="file" /><div><strong>Supporting checks → evidence review</strong><p>Saved tool receipts contribute to this agent’s report. These are evidence links, not a second execution sequence.</p></div></div>
+      <ul>{toolNodes.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
+        <button type="button" aria-pressed={selected.id === node.id} onClick={() => setChoice(node.id)} aria-label={`${node.title}: ${label(node)}`}>
+          <UIIcon name={node.id.includes('coverage') ? 'file' : 'shield'} /><strong>{node.title}</strong><span>{label(node)}</span>
+          <small>{node.evidence_count ?? 0} request references · {Math.round((node.measured_duration_ms ?? 0) / 1000)}s</small>
+        </button>
+      </li>)}</ul>
+    </section>}
     <p className="workflow-status-help"><strong>Recorded = finished work saved.</strong> These checks run once, often quickly; they are not continuous monitoring. Running marks the current step. Reused evidence comes from an earlier agent.</p>
     <section className="workflow-inspector" aria-label="Selected workflow step">
       <div><span className="assessment-kicker">STEP DETAILS</span><h5>{selected.title}</h5><p>{selected.description}</p></div>
