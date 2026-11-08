@@ -51,6 +51,21 @@ export function combinedEngineAccess(tool: LiveToolRun): { anonymous: number; au
 
 /** Display known receipt metadata only; target/model text never becomes an execution diagnosis. */
 export function toolCoverageDetail(tool: LiveToolRun): string | undefined {
+  if (tool.tool === 'zap' && tool.failure) {
+    try {
+      const receipt = JSON.parse(tool.output_excerpt);
+      const contexts = Array.isArray(receipt.contexts) ? receipt.contexts : [];
+      const requests = contexts.reduce((sum: number, context: {requests?: number}) => sum + (Number.isSafeInteger(context.requests) && (context.requests ?? -1) >= 0 ? context.requests! : 0), 0);
+      const gaps = [...(Array.isArray(receipt.gaps) ? receipt.gaps : []), ...contexts.flatMap((context: {gaps?: string[]}) => Array.isArray(context.gaps) ? context.gaps : [])];
+      const phase = tool.arguments.includes('--engine-discoveries') ? 'ZAP follow-up' : 'ZAP scan';
+      const reasons: Record<string,string> = {scanner_api_url_not_found:'ZAP could not index a discovered input',scanner_startup_timeout:'ZAP did not start within its allowance',scanner_version_mismatch:'The scanner version did not match the configured version',scanner_api_internal_error:'ZAP returned an internal error',TimeoutError:'The scanner operation timed out'};
+      const cause = contexts.map((context: {result?: {reason?: string}}) => reasons[context.result?.reason ?? '']).find(Boolean);
+
+      if (gaps.includes('scanner_execution_incomplete')) return `${phase} stopped early after ${requests} recorded requests. ${cause ? `Retained reason: ${cause}.` : 'The receipt records a scanner execution failure; its underlying cause was not retained.'} Saved responses remain available, but unfinished scanner checks cannot be treated as passed. Other tool runs have separate outcomes.`;
+      if (gaps.some(gap => ['scanner_budget_reached','active_scan_incomplete','passive_scan_incomplete','follow_up_time_unavailable'].includes(gap))) return `${phase} did not finish within its available request or time allowance. Saved responses remain available; unfinished checks are a coverage gap, not a passed scan.`;
+    } catch { /* Keep unstructured failures explicit. */ }
+    return undefined;
+  }
   if (tool.tool !== 'artex-engine') return undefined;
   try {
     const receipt = JSON.parse(tool.output_excerpt);

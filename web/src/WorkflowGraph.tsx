@@ -14,6 +14,7 @@ export type WorkflowNode = {
   evidence_count?: number;
   measured_duration_ms?: number;
   source_role?: string;
+  summary_counts?: {shown: number; omitted: number};
   state_label?: string;
 };
 type WorkflowEdge = { from: string; to: string; path: string };
@@ -52,24 +53,25 @@ function useWorkflowEdges(key: string) {
       const branches = [...root.querySelectorAll<HTMLElement>('[data-parents]')].flatMap(cluster => {
         const parents = (cluster.dataset.parents ?? '').split(' ').map(id => nodes.find(node => node.id === id)).filter(node => node !== undefined);
         if (!parents.length) return [];
-        const heading = cluster.querySelector('h5')!.getBoundingClientRect();
-        const target = {x: heading.left - bounds.left + heading.width / 2, y: heading.top - bounds.top - 5};
+        const heading = cluster.querySelector('.workflow-cluster-root')!.getBoundingClientRect();
+        const target = {x: heading.left - bounds.left + heading.width / 2, y: heading.top - bounds.top};
         if (vertical) {
           // The mobile shelf branches from its last related step on the continuous main spine.
           const parent = parents[parents.length - 1];
           const y = heading.top - bounds.top + heading.height / 2;
-          const end = heading.left - bounds.left - 8;
+          const end = heading.left - bounds.left;
           return [{group: cluster.dataset.cluster!, path: `M${parent.x} ${parent.y + parent.radius}V${y}H${end}`, anchors: [{x: parent.x, y: y}]}];
         }
         const anchors = parents.map(parent => {
           const step = [...root.querySelectorAll<HTMLElement>('[data-check]')].find(el => el.dataset.check === parent.id)!;
-          const rect = step.getBoundingClientRect();
-          return {x: parent.x, y: rect.bottom - bounds.top};
+          const content = step.querySelector('.workflow-coverage') ?? step.querySelector('.workflow-state') ?? step;
+          const rect = content.getBoundingClientRect();
+          return {x: parent.x, y: rect.bottom - bounds.top + 8};
         });
         const rail = target.y - 12;
         const drops = anchors.map(point => `M${point.x} ${point.y}V${rail}`).join('');
         const path = parents.length === 1
-          ? `M${anchors[0].x} ${anchors[0].y}V${target.y}`
+          ? `M${anchors[0].x} ${anchors[0].y}V${rail}H${target.x}V${target.y}`
           : `${drops}M${anchors[0].x} ${rail}H${anchors[anchors.length - 1].x}M${target.x} ${rail}V${target.y}`;
         return [{group: cluster.dataset.cluster!, path, anchors}];
       });
@@ -119,12 +121,12 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   function toolCluster(title: string, records: WorkflowNode[], column: string, order: number, kind: string) {
     if (!records.length) return null;
     return <section className="workflow-tool-cluster" data-cluster={kind} data-parents={parentIds[kind].join(' ')} data-related={activeGroup === kind} onPointerEnter={() => setHoveredGroup(kind)} onPointerLeave={() => setHoveredGroup(null)} onFocus={() => setHoveredGroup(kind)} onBlur={() => setHoveredGroup(null)} aria-label={title} style={{gridColumn: column, order}}>
-      <h5>{title}</h5><ul>{records.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
+      <div className="workflow-tool-tree"><h5><span className="workflow-cluster-root" aria-hidden="true" />{title}</h5><ul>{records.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
         <button type="button" aria-pressed={selected.id === node.id} onClick={() => inspectTool(node.id)} aria-label={`${node.title}: ${label(node)}`}>
           <span className="tool-record-mark" aria-hidden="true">{node.status === 'incomplete' ? '!' : node.status === 'not_applicable' ? '–' : '✓'}</span>
           <span className="tool-record-name">{node.id === 'tool-zap-discoveries' ? 'ZAP follow-up' : node.title}<small>{label(node)}</small></span><span className="tool-record-open" aria-hidden="true">›</span>
         </button>
-      </li>)}</ul>
+      </li>)}</ul></div>
     </section>;
   }
   function nodeButton(node: WorkflowNode, index: number, icon: 'shield' | 'globe' | 'agent' | 'lock' | 'file') {
@@ -161,7 +163,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
     <section ref={inspector} className="workflow-inspector" aria-label="Selected workflow step">
       <div><span className="assessment-kicker">STEP DETAILS</span><h5>{selected.title}</h5><p>{selected.description}</p></div>
       <div className="workflow-inspector-state" data-status={selected.status}><strong>{label(selected)}</strong><p>{selected.detail ?? (selected.status === 'not_recorded' ? 'No structured execution record was retained. A report or heartbeat does not establish that this step finished.' : 'Select the recorded evidence in the report to inspect what the target returned.')}</p></div>
-      {(selected.evidence_count !== undefined || selected.source_role || selected.measured_duration_ms !== undefined) && <dl><div><dt>Evidence records</dt><dd>{selected.evidence_count ?? '—'}</dd></div>{selected.measured_duration_ms !== undefined && selected.tool !== 'patchriot-coverage' && <div><dt>Recorded tool time</dt><dd>{Math.round(selected.measured_duration_ms / 1000)}s</dd></div>}{selected.source_role && <div><dt>Evidence source</dt><dd>{selected.source_role}</dd></div>}</dl>}
+      {(selected.evidence_count !== undefined || selected.source_role || selected.measured_duration_ms !== undefined) && <dl>{selected.summary_counts && <><div><dt>Summary entries shown</dt><dd>{selected.summary_counts.shown}</dd></div><div><dt>Additional summary entries</dt><dd>{selected.summary_counts.omitted}</dd></div></>}<div><dt>{selected.summary_counts ? 'Linked HTTP requests' : 'Evidence records'}</dt><dd>{selected.evidence_count ?? '—'}</dd></div>{selected.measured_duration_ms !== undefined && selected.tool !== 'patchriot-coverage' && <div><dt>Recorded tool time</dt><dd>{Math.round(selected.measured_duration_ms / 1000)}s</dd></div>}{selected.source_role && <div><dt>Evidence source</dt><dd>{selected.source_role}</dd></div>}</dl>}
     </section>
     <p className="workflow-footnote">{workflowCaveat}</p>
   </div>;

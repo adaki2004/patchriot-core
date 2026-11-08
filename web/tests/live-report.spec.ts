@@ -749,6 +749,10 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await expect(activity.getByRole('region',{name:'Scoped tools'})).toBeVisible();
   await expect(activity.getByRole('region',{name:'Discovery follow-up'})).toBeVisible();
   await expect(activity.getByRole('region',{name:'Coverage summary'})).toBeVisible();
+  const tree = activity.locator('[data-cluster=baseline] .workflow-tool-tree');
+  expect((await tree.boundingBox())!.width).toBeLessThanOrEqual(241);
+  const rows = await tree.locator('li').evaluateAll(items=>items.map(item=>item.getBoundingClientRect().y));
+  expect(rows.every((y,index)=>index===0||y>rows[index-1])).toBe(true);
   const baseline = await activity.getByRole('region',{name:'Scoped tools'}).boundingBox();
   const analysis = await activity.locator('[data-check=public_analysis]').boundingBox();
   if (info.project.name === 'mobile') expect(baseline!.y + baseline!.height).toBeLessThanOrEqual(analysis!.y);
@@ -771,8 +775,8 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
       const first=path.getPointAtLength(0);
       const vertical=root.getBoundingClientRect().width<=760;
       const parent=root.querySelector<HTMLElement>(`[data-check="${vertical?parentIds.at(-1):parentIds[0]}"]`)!;
-      const anchor=(vertical?parent.querySelector('.workflow-node')!:parent).getBoundingClientRect();
-      return {kind, gap:Math.abs(first.y+origin.y-anchor.bottom), length:path.getTotalLength(), path:path.getAttribute('d')};
+      const anchor=(vertical?parent.querySelector('.workflow-node')!:(parent.querySelector('.workflow-coverage')??parent.querySelector('.workflow-state')??parent)).getBoundingClientRect();
+      return {kind, gap:Math.abs(first.y+origin.y-anchor.bottom-(vertical?0:8)), length:path.getTotalLength(), path:path.getAttribute('d')};
     });
   });
   expect(connections).toHaveLength(3);
@@ -790,10 +794,21 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await page.reload();
   await activity.getByRole('button',{name:'Scout Needs review'}).click();
   await branch.getByRole('button',{name:'Evidence coverage: Limits recorded',exact:true}).click();
-  await expect(detail).toContainText('44 additional entries omitted');
+  await expect(detail).toContainText('44 entries are outside this display');
+  await expect(detail).toContainText('Linked HTTP requests');
+  await expect(detail).toContainText('Summary entries shown');
   await expect(detail).toContainText('Coverage is not established for: session lifecycle');
-  await expect(detail).toContainText('does not indicate a stalled or failed agent');
+  await expect(detail).toContainText('request evidence is still saved');
   await activity.locator('.workflow-map').screenshot({path:info.outputPath('supporting-tool-graph.png')});
+  tools[4].failure='incomplete';
+  tools[4].output_excerpt=JSON.stringify({contexts:[{requests:20,result:{state:'blocked',reason:'scanner_follow_up_incomplete'},gaps:['scanner_execution_incomplete']}],gaps:['scanner_execution_incomplete']});
+  await page.reload();
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  await branch.getByRole('button',{name:'ZAP · discovered inputs: Stopped early',exact:true}).click();
+  await expect(detail).toContainText('stopped early after 20 recorded requests');
+  await expect(branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true})).toBeVisible();
+  await activity.locator('.workflow-map').screenshot({path:info.outputPath('follow-up-warning.png')});
+
   await activity.getByRole('button',{name:'Recon Working'}).click();
   await expect(branch).toHaveCount(0);
 });
@@ -1188,4 +1203,14 @@ test('coverage display omission does not hide scanner or execution failures', ()
   expect(toolOutcome({...run,tool:'artex-engine'})).toBe('Incomplete');
   expect(toolOutcome({...run,output_excerpt:'{}'})).toBe('Incomplete');
   expect(toolOutcome({...run,output_truncated:true})).toBe('Incomplete');
+});
+
+
+test('ZAP follow-up failure is distinct from a completed initial scan', () => {
+  const run={...result.tool_runs![0],tool:'zap',arguments:['--engine-discoveries'],failure:'incomplete',
+    output_excerpt:JSON.stringify({contexts:[{requests:20,result:{state:'blocked',reason:'scanner_follow_up_incomplete'},gaps:['scanner_execution_incomplete']}],gaps:['scanner_execution_incomplete']})};
+  expect(toolCoverageDetail(run)).toContain('stopped early after 20 recorded requests');
+  expect(toolCoverageDetail(run)).toContain('underlying cause was not retained');
+  expect(toolOutcome(run)).toBe('Incomplete');
+  expect(toolOutcome({...run,failure:null,arguments:[],output_excerpt:'{}'})).toBe('Ran');
 });

@@ -59,16 +59,19 @@ function supportingToolNodes(tools: LiveToolRun[]): WorkflowNode[] {
   return [...groups].map(([key, records]) => {
     const outcomes = records.map(toolOutcome);
     const incomplete = outcomes.includes('Incomplete');
+    const scannerDetail = records.map(toolCoverageDetail).filter(Boolean).join(' ');
+    const stoppedScanner = incomplete && scannerDetail.includes('stopped early');
     const ran = outcomes.includes('Ran');
     const summaries = records.map(coverageSummary).filter(summary => summary !== undefined);
     const limits = [...new Set(summaries.flatMap(summary => summary.unverified))];
     const summaryDetail = summaries.length === records.length ? summaries.map(summary =>
-      `Evidence summary saved: ${summary.shown} entries shown${summary.omitted ? `; ${summary.omitted} additional entries omitted from this compact view` : ''}. ${summary.unverified.length ? `Coverage is not established for: ${summary.unverified.join(', ')}. ` : ''}The saved request evidence remains available. This summary does not indicate a stalled or failed agent.`).join(' ') : undefined;
+      `Showing ${summary.shown} of ${summary.shown + summary.omitted} grouped entries. Each groups a URL, HTTP method and account context, or an unverified check; several HTTP requests can support one entry. ${summary.omitted ? `${summary.omitted} entries are outside this display; the request evidence is still saved. ` : ''}${summary.unverified.length ? `Coverage is not established for: ${summary.unverified.join(', ')}.` : ''}`).join(' ') : undefined;
     return { id: `tool-${key}`, title: workflowToolName(records[0].tool, records[0]), tool: records[0].tool,
       description: descriptions[key] ?? 'Inspect the saved receipt for this supporting tool.',
       status: incomplete || limits.length ? 'incomplete' : ran || summaries.length ? 'recorded' : 'not_applicable',
-      state_label: incomplete ? 'Incomplete' : limits.length ? 'Limits recorded' : ran ? 'Recorded' : outcomes[0],
-      detail: summaryDetail ?? `${records.length} saved receipt${records.length === 1 ? '' : 's'}: ${outcomes.join(', ')}. ${incomplete ? 'A tool gap remains visible; inspect its receipt and the report’s limitations.' : 'Execution does not establish complete coverage or confirm a vulnerability.'}${records.some(record => record.output_truncated) ? 'Some retained tool output is shortened.' : ''}`,
+      state_label: stoppedScanner ? 'Stopped early' : incomplete ? 'Incomplete' : limits.length ? 'Limits recorded' : ran ? 'Recorded' : outcomes[0],
+      detail: summaryDetail ?? (scannerDetail || undefined) ?? `${records.length} saved receipt${records.length === 1 ? '' : 's'}: ${outcomes.join(', ')}. ${incomplete ? 'A tool gap remains visible; inspect its receipt and the report’s limitations.' : 'Execution does not establish complete coverage or confirm a vulnerability.'}${records.some(record => record.output_truncated) ? 'Some retained tool output is shortened.' : ''}`,
+      summary_counts: summaries.length === 1 && records.length === 1 ? {shown:summaries[0].shown,omitted:summaries[0].omitted} : undefined,
       measured_duration_ms: records.reduce((total, record) => total + record.duration_ms, 0),
       evidence_count: new Set(records.flatMap(record => record.evidence_ids)).size };
   });
