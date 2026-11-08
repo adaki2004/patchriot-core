@@ -622,6 +622,10 @@ test('queue waiting and active role deadlines are explained separately', async (
   await expect(page.getByText('WAITING TO START',{exact:true})).toHaveCount(0);
   await expect(page.getByText('WAITING FOR THE NEXT AGENT',{exact:true})).toBeVisible();
   await expect(page.getByLabel('Agent time guide')).not.toContainText('roughly');
+  const activity = page.getByRole('region', { name: 'Recorded assessment activity' });
+  await activity.getByRole('button', { name: /Recon/ }).click();
+  await expect(activity.getByRole('button', { name: 'Headers & config: Waiting', exact: true })).toBeVisible();
+  await expect(activity.getByRole('button', { name: /Not recorded/ })).toHaveCount(0);
   if(info.project.name==='desktop') {
     const art=page.locator('.assessment-orbit');
     await expect(art).toBeVisible();
@@ -688,13 +692,15 @@ test('historical activity keeps unknown checklist states and retained tool evide
   const activity = page.getByRole('region', {name:'Recorded assessment activity'});
   await expect(activity.getByRole('button', {name:'Recon Working'})).toHaveAttribute('aria-pressed', 'true');
   await expect(activity.getByText('Awaiting a fresh update', {exact:true})).toBeVisible();
-  await expect(activity.getByText('Structured checklist not recorded for this role.', {exact:false})).toBeVisible();
-  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(6);
+  await expect(activity.getByText('Waiting for this agent’s stage updates.', {exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(0);
+  await expect(activity.locator('.workflow-step[data-status=pending]')).toHaveCount(6);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
   await expect(activity.getByText('Full tool transcripts appear when the agent returns its evidence.')).toBeVisible();
   await expect(activity).not.toContainText('nuclei');
   await activity.getByRole('button',{name:'Scout Report received'}).click();
   await expect(activity.getByText('Saved execution', {exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(6);
   await expect(activity.locator('.workflow-step[data-status=recorded]')).toHaveCount(0);
   await activity.getByText('Recorded tools · 1', {exact:true}).click();
   await expect(activity.getByText('nuclei', {exact:true})).toBeVisible();

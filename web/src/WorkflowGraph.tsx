@@ -93,8 +93,8 @@ function useWorkflowEdges(key: string) {
 }
 
 /** A fixed workflow graph with accessible node controls, never a simulated event feed. */
-export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNode, toolNodes = [], recorded, live }: {
-  publicNodes: WorkflowNode[]; accessNodes: WorkflowNode[]; reportNode: WorkflowNode; coverageNode?: WorkflowNode; toolNodes?: WorkflowNode[]; recorded: boolean; live: boolean;
+export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNode, toolNodes = [], recorded, live, awaitingRecords = false }: {
+  publicNodes: WorkflowNode[]; accessNodes: WorkflowNode[]; reportNode: WorkflowNode; coverageNode?: WorkflowNode; toolNodes?: WorkflowNode[]; recorded: boolean; live: boolean; awaitingRecords?: boolean;
 }) {
   const nodes = [...publicNodes, ...accessNodes, reportNode, ...(coverageNode ? [coverageNode] : []), ...toolNodes];
   const marker=useId().replaceAll(':','');
@@ -140,7 +140,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   }
   return <div className="workflow-map" data-recorded={recorded}>
     <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>{accessNodes.length ? 'Public and signed-in investigation.' : 'Public first. Deeper with access.'}</h4><p>{coverageNode ? 'Access is verified before one Agentic investigation. Open signed-in coverage for its request evidence and later agent checks.' : accessNodes.length ? 'Public investigation and signed-in checks follow the recorded workflow.' : 'Public checks lead into evidence review. Select a step for its evidence.'}</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
-    {!recorded && <p className="workflow-history" role="status">Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.</p>}
+    {!recorded && <p className="workflow-history" role="status">{awaitingRecords ? 'Waiting for this agent’s stage updates.' : 'Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.'}</p>}
     <div ref={ref} className="workflow-diagram" data-authenticated={accessNodes.length > 0} data-combined={!!coverageNode}>
       <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}<g className="workflow-evidence-edges">{drawing.branches.map(branch => <g key={branch.group} data-branch={branch.group} data-related={activeGroup === branch.group}><path d={branch.path} />{branch.anchors.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="2.5" />)}</g>)}</g></svg>
       <div className="workflow-lane workflow-public">
