@@ -32,7 +32,7 @@ export function workflowRecordLines(workflow: LiveWorkflow | undefined): string[
 export function workflowToolName(tool: string, record?: LiveToolRun) {
   if (record && combinedEngineAccess(record)) return 'Agentic security checks';
   if (tool === 'zap' && record?.arguments.includes('--engine-discoveries')) return 'ZAP · discovered inputs';
-  const names: Record<string, string> = { 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'ZAP web scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
+  const names: Record<string, string> = { 'patchriot-controls': 'Access controls', 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'ZAP web scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
   if (names[tool]) return names[tool];
   return tool === 'artex-engine' ? 'Agentic security checks' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
 }

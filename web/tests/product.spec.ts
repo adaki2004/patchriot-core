@@ -131,6 +131,11 @@ test('architecture fits docs and mobile with readable vertical contributors', as
   await expect(diagram).toBeVisible();
   await expect(diagram.locator('.architecture-core')).toContainText('Core');
   await expect(diagram.locator('.architecture-core .architecture-dispatcher')).toContainText('Dispatcher');
+  const coreBox=await diagram.locator('.architecture-core').boundingBox();
+  const appBox=await diagram.locator(':scope > .architecture-box').first().boundingBox();
+  const dispatcherBox=await diagram.locator('.architecture-dispatcher').boundingBox();
+  expect(appBox!.width).toBeLessThan(coreBox!.width * .9);
+  expect(dispatcherBox!.x).toBeGreaterThan(coreBox!.x + 28);
   for(const name of ['Agent 1','Agent 2','Agent N']) await expect(diagram.getByText(name,{exact:true})).toBeVisible();
   await expect(diagram.locator('.architecture-more')).toHaveText('⋮');
   await expect(diagram.getByAltText('NEAR AI')).toBeVisible();

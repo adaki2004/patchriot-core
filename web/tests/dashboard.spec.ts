@@ -607,5 +607,6 @@ test('workspace shows real runner facts and a qualified NEAR integration', async
   await expect(network).toContainText('Your checkout and report identify the providers used.');
   await expect(page.locator('.workspace-art')).toHaveCSS('object-fit','contain');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.locator('.workspace-heading').screenshot({path:info.outputPath('workspace-banner.png')});
   await page.screenshot({path:info.outputPath('workspace-runtime.png'),fullPage:true});
 });

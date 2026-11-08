@@ -724,10 +724,16 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
       {role:'reproducer',state:'leased',result:null,progress:{received_at:received,progress:{phase:'investigating',http_requests:0,inference_calls:1,completed_tools:0}}}]}}));
   await page.goto(`/#/reviews/${id}`);
   const activity = page.getByRole('region',{name:'Recorded assessment activity'});
-  await expect(activity.getByRole('region',{name:'Recorded supporting checks'})).toHaveCount(0);
+  await expect(activity.locator('.workflow-tool-cluster')).toHaveCount(0);
   await activity.getByRole('button',{name:'Scout Needs review'}).click();
-  const branch = activity.getByRole('region',{name:'Recorded supporting checks'});
+  const branch = activity.locator('.workflow-tool-cluster');
   await expect(branch.getByRole('button')).toHaveCount(6);
+  await expect(activity.getByRole('region',{name:'Scoped tools'})).toBeVisible();
+  await expect(activity.getByRole('region',{name:'Discovery follow-up'})).toBeVisible();
+  await expect(activity.getByRole('region',{name:'Coverage summary'})).toBeVisible();
+  const baseline = await activity.getByRole('region',{name:'Scoped tools'}).boundingBox();
+  const analysis = await activity.locator('[data-check=public_analysis]').boundingBox();
+  if (info.project.name === 'mobile') expect(baseline!.y + baseline!.height).toBeLessThanOrEqual(analysis!.y);
   await expect(branch.getByRole('button',{name:'API schema checks: Not applicable',exact:true})).toBeVisible();
   await expect(branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true})).toBeVisible();
   await branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true}).click();
@@ -738,8 +744,9 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await expect(detail).toContainText('No new inputs');
   await branch.getByRole('button',{name:'Evidence coverage: Incomplete',exact:true}).click();
   await expect(detail).toContainText('A tool gap remains visible');
+  await expect(detail.getByText('Recorded tool time')).toHaveCount(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await branch.screenshot({path:info.outputPath('supporting-tool-graph.png')});
+  await activity.locator('.workflow-map').screenshot({path:info.outputPath('supporting-tool-graph.png')});
   await activity.getByRole('button',{name:'Recon Working'}).click();
   await expect(branch).toHaveCount(0);
 });
@@ -789,7 +796,7 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await expect(details).toContainText('curated signature checks');
   await expect(details.getByText('12',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await expect(activity).toContainText('Recorded = finished work saved.');
+  await expect(activity).toContainText('Recorded = saved work.');
   for(const width of info.project.name==='desktop' ? [1280,1920,1024,760] : [390]) {
     await page.setViewportSize({width,height:1000});
     await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe(grey?7:5);

@@ -71,11 +71,32 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   const nodes = [...publicNodes, ...accessNodes, reportNode, ...(coverageNode ? [coverageNode] : []), ...toolNodes];
   const marker=useId().replaceAll(':','');
   const {ref,drawing}=useWorkflowEdges(nodes.map(node=>node.id).join(','));
+  const inspector = useRef<HTMLElement>(null);
   const [choice, setChoice] = useState<string | null>(null);
   const selected = nodes.find(node => node.id === choice) ?? nodes.find(node => node.status === 'running') ?? nodes.find(node => node.status === 'incomplete') ?? nodes[0];
   const label = (node: WorkflowNode) => node.state_label ?? (node.status === 'running' && !live ? 'Last reported running' : statusText[node.status]);
+  const route = [...publicNodes, ...accessNodes, reportNode];
+  const investigationIndex = route.findIndex(node => node.id === 'public_analysis');
+  const scopedTools = toolNodes.filter(node => !['tool-zap-discoveries', 'tool-patchriot-coverage'].includes(node.id));
+  function inspectTool(id: string) {
+    setChoice(id);
+    if ((ref.current?.clientWidth ?? Infinity) <= 760) requestAnimationFrame(() => {
+      inspector.current?.scrollIntoView({block: 'nearest', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
+    });
+  }
+  function toolCluster(title: string, records: WorkflowNode[], column: string, order: number, kind: string) {
+    if (!records.length) return null;
+    return <section className="workflow-tool-cluster" data-cluster={kind} aria-label={title} style={{gridColumn: column, order}}>
+      <h5>{title}</h5><ul>{records.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
+        <button type="button" aria-pressed={selected.id === node.id} onClick={() => inspectTool(node.id)} aria-label={`${node.title}: ${label(node)}`}>
+          <span className="tool-record-mark" aria-hidden="true">{node.status === 'incomplete' ? '!' : node.status === 'not_applicable' ? '–' : '✓'}</span>
+          <span className="tool-record-name">{node.id === 'tool-zap-discoveries' ? 'ZAP follow-up' : node.title}<small>{label(node)}</small></span><span className="tool-record-open" aria-hidden="true">›</span>
+        </button>
+      </li>)}</ul>
+    </section>;
+  }
   function nodeButton(node: WorkflowNode, index: number, icon: 'shield' | 'globe' | 'agent' | 'lock' | 'file') {
-    return <li key={node.id} data-check={node.id} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step">
+    return <li key={node.id} data-check={node.id} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step" style={{order: (index + 1) * 10}}>
       <button type="button" aria-pressed={selected.id === node.id} onClick={() => setChoice(node.id)} aria-label={`${node.title}: ${label(node)}`}>
         <span className="workflow-node"><UIIcon name={icon} /><span className="workflow-index">{String(index + 1).padStart(2, '0')}</span></span>
         <strong>{node.title}</strong><span className="workflow-tool">{node.tool}</span><span className="workflow-state">{label(node)}</span>
@@ -93,28 +114,22 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
         <ol aria-label="Public assessment workflow">{publicNodes.map((node, index) => nodeButton(node, index, index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol>
       </div>
       {accessNodes.length > 0 && <div className="workflow-lane workflow-access">
-        <div className="workflow-lane-label"><strong>{coverageNode ? 'Combined investigation' : 'Behind the login'}</strong><small>{coverageNode ? 'Verify access, then investigate' : 'Additional grey-box checks'}</small></div>
+        <div className="workflow-lane-label" style={{order: publicNodes.length * 10 + 6}}><strong>{coverageNode ? 'Combined investigation' : 'Behind the login'}</strong><small>{coverageNode ? 'Verify access, then investigate' : 'Additional grey-box checks'}</small></div>
         <ol aria-label="Additional authenticated workflow">{accessNodes.map((node, index) => nodeButton(node, index + publicNodes.length, node.id === 'public_analysis' ? 'agent' : 'lock'))}</ol>
       </div>}
       <div className="workflow-lane workflow-output">
-        <div className="workflow-lane-label"><strong>Evidence review</strong></div>
+        <div className="workflow-lane-label" style={{order: (route.length - 1) * 10 + 6}}><strong>Evidence review</strong></div>
         <ol aria-label="Report workflow">{nodeButton(reportNode, publicNodes.length + accessNodes.length, 'file')}</ol>
       </div>
+      {toolCluster('Scoped tools', scopedTools, '1 / span 4', 45, 'baseline')}
+      {toolCluster('Discovery follow-up', toolNodes.filter(node => node.id === 'tool-zap-discoveries'), String(investigationIndex + 1), (investigationIndex + 1) * 10 + 5, 'follow-up')}
+      {toolCluster('Coverage summary', toolNodes.filter(node => node.id === 'tool-patchriot-coverage'), '-2 / -1', route.length * 10 + 5, 'coverage')}
     </div>
-    {toolNodes.length > 0 && <section className="workflow-tool-branch" aria-label="Recorded supporting checks">
-      <div className="workflow-tool-heading"><UIIcon name="file" /><div><strong>Supporting checks → evidence review</strong><p>Saved tool receipts contribute to this agent’s report. These are evidence links, not a second execution sequence.</p></div></div>
-      <ul>{toolNodes.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
-        <button type="button" aria-pressed={selected.id === node.id} onClick={() => setChoice(node.id)} aria-label={`${node.title}: ${label(node)}`}>
-          <UIIcon name={node.id.includes('coverage') ? 'file' : 'shield'} /><strong>{node.title}</strong><span>{label(node)}</span>
-          <small>{node.evidence_count ?? 0} request references · {Math.round((node.measured_duration_ms ?? 0) / 1000)}s</small>
-        </button>
-      </li>)}</ul>
-    </section>}
-    <p className="workflow-status-help"><strong>Recorded = finished work saved.</strong> These checks run once, often quickly; they are not continuous monitoring. Running marks the current step. Reused evidence comes from an earlier agent.</p>
-    <section className="workflow-inspector" aria-label="Selected workflow step">
+    <p className="workflow-status-help"><strong>Recorded = saved work.</strong> {toolNodes.length ? 'Dashed branches show tool evidence for this agent. Select a step or tool to inspect it.' : 'Select a step to inspect its evidence.'}</p>
+    <section ref={inspector} className="workflow-inspector" aria-label="Selected workflow step">
       <div><span className="assessment-kicker">STEP DETAILS</span><h5>{selected.title}</h5><p>{selected.description}</p></div>
       <div className="workflow-inspector-state" data-status={selected.status}><strong>{label(selected)}</strong><p>{selected.detail ?? (selected.status === 'not_recorded' ? 'No structured execution record was retained. A report or heartbeat does not establish that this step finished.' : 'Select the recorded evidence in the report to inspect what the target returned.')}</p></div>
-      {(selected.evidence_count !== undefined || selected.source_role || selected.measured_duration_ms !== undefined) && <dl><div><dt>Evidence records</dt><dd>{selected.evidence_count ?? '—'}</dd></div>{selected.measured_duration_ms !== undefined && <div><dt>Recorded tool time</dt><dd>{Math.round(selected.measured_duration_ms / 1000)}s</dd></div>}{selected.source_role && <div><dt>Evidence source</dt><dd>{selected.source_role}</dd></div>}</dl>}
+      {(selected.evidence_count !== undefined || selected.source_role || selected.measured_duration_ms !== undefined) && <dl><div><dt>Evidence records</dt><dd>{selected.evidence_count ?? '—'}</dd></div>{selected.measured_duration_ms !== undefined && selected.tool !== 'patchriot-coverage' && <div><dt>Recorded tool time</dt><dd>{Math.round(selected.measured_duration_ms / 1000)}s</dd></div>}{selected.source_role && <div><dt>Evidence source</dt><dd>{selected.source_role}</dd></div>}</dl>}
     </section>
     <p className="workflow-footnote">{workflowCaveat}</p>
   </div>;

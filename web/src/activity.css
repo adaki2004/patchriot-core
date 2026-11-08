@@ -141,20 +141,22 @@
 .workflow-inspector dl { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 16px 35px; border-top: 1px solid #3c5375; padding-top: 13px; margin: 0; }
 .workflow-inspector dt { color: #92aacc; font-size: 11px; }
 .workflow-inspector dd { font: 500 17px/1.5 var(--body-font); color: #dceaff; margin: 5px 0 0; overflow-wrap: anywhere; }
-.workflow-tool-branch { margin: 24px 0; padding: 18px; border: 1px solid #344c69; border-radius: 8px; background: #111e2dda; }
-.workflow-tool-heading { display: flex; gap: 12px; align-items: start; }
-.workflow-tool-heading > svg { flex: none; width: 22px; height: 22px; color: #a9c6ea; }
-.workflow-tool-heading strong { color: #dce7f7; font-size: 13px; font-weight: 500; }
-.workflow-tool-heading p { color: #a4b7d2; font-size: 12px; margin: 6px 0 0; line-height: 1.5; }
-.workflow-tool-branch ul { list-style: none; padding: 0; margin: 18px 0 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 12px; }
-.workflow-tool-branch li { min-width: 0; }
-.textmode-ui .workflow-tool-branch button { width: 100%; height: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 7px 10px; padding: 13px; text-align: left; border: 1px solid #3d5574; border-radius: 6px; background: #17273b; color: #c3d6ee; box-shadow: none; }
-.workflow-tool-branch button > svg { width: 19px; height: 19px; grid-row: 1 / span 3; }
-.workflow-tool-branch button > strong { font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
-.workflow-tool-branch button > span { font-size: 11px; color: #b9d4f5; }
-.workflow-tool-branch button > small { font-size: 10px; color: #9ab1ce; }
-.textmode-ui .workflow-tool-branch button[aria-pressed=true], .textmode-ui .workflow-tool-branch button:focus-visible { border-color: #b4d3f8; outline: 1px solid #b4d3f8; outline-offset: 2px; }
-.workflow-tool-branch li[data-status=incomplete] button > span { color: #f6b8a4; }
+/* Tool evidence hangs from the stages it supports; it is not another route. */
+.workflow-tool-cluster { position: relative; grid-row: 3; min-width: 0; margin: 6px 8px 18px; padding-top: 13px; border-top: 1px dashed #49617d; }
+.workflow-tool-cluster::before { content: ''; position: absolute; left: 50%; top: -19px; height: 18px; border-left: 1px dashed #49617d; }
+.textmode-ui .workflow-tool-cluster h5 { margin: 0 0 6px; color: #8fa9c9; font: 500 11px/1.5 var(--body-font); }
+.workflow-tool-cluster ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px 18px; }
+.workflow-tool-cluster[data-cluster=baseline] ul { grid-template-columns: repeat(auto-fit,minmax(165px,1fr)); }
+.workflow-tool-cluster li { min-width: 0; }
+.textmode-ui .workflow-tool-cluster button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 7px 3px; text-align: left; border: 0; border-radius: 3px; background: transparent; color: #c3d6ee; box-shadow: none; }
+.tool-record-mark { flex: none; color: #8caed2; font-size: 13px; width: 13px; text-align: center; }
+.tool-record-name { min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.tool-record-name small { display: block; margin-top: 3px; color: #91a6bf; font-size: 10px; }
+.tool-record-open { margin-left: auto; color: #8caed2; opacity: .6; }
+.textmode-ui .workflow-tool-cluster button:hover, .textmode-ui .workflow-tool-cluster button[aria-pressed=true] { background: #a5c6ed0c; color: #edf4ff; }
+.textmode-ui .workflow-tool-cluster button:focus-visible { outline: 2px solid #b4d3f8; outline-offset: 2px; }
+.workflow-tool-cluster li[data-status=incomplete] .tool-record-mark, .workflow-tool-cluster li[data-status=incomplete] small { color: #f6b8a4; }
+.workflow-tool-cluster li[data-status=not_applicable] .tool-record-mark { color: #7f91a9; }
 .workflow-footnote { color: #8da4c7; font-size: 11px; line-height: 1.65; margin: 14px 0 0; }
 @container(max-width:760px) {
   .workflow-map { padding: 22px 18px 16px; }
@@ -188,8 +190,8 @@
 }
 
 /* A consistent workspace surface, with compact network metadata instead of a tall directory. */
-.textmode-ui .workspace-dashboard .workspace-heading { background: linear-gradient(100deg,#1a273b,#111b2a); border-color: #35465f; }
-.workspace-dashboard .workspace-art { mix-blend-mode: screen; opacity: .9; mask-image: linear-gradient(90deg,transparent,#000 28%); }
+.textmode-ui .workspace-dashboard .workspace-heading { background: #182638; border-color: #35465f; }
+.workspace-dashboard .workspace-art { mix-blend-mode: normal; opacity: .9; mask-image: none; padding: 8px 18px; box-sizing: border-box; }
 .textmode-ui .workspace-dashboard .workspace-cards { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
 .textmode-ui .workspace-cards > .workspace-orders { grid-column: 1; grid-row: 1; min-height: 220px; background: #121b28; border: 1px solid #334259; }
 .textmode-ui .workspace-cards > .workspace-contribute { grid-column: 2; grid-row: 1; flex-direction: column; align-items: start; justify-content: space-between; min-height: 220px; margin: 0; background: #182439; border: 1px solid #334259; padding: 24px; }
@@ -223,7 +225,7 @@
 
 .architecture-map { container-type: inline-size; }
 
-@media(max-width:700px) { .workspace-dashboard .workspace-art { opacity: .32; width: 72%; right: -15%; }.contributor-machine { display: grid; grid-template-columns: 36px minmax(0,1fr); }.contributor-machine > span { grid-column: 2; margin-left: 0; } }
+@media(max-width:700px) { .workspace-dashboard .workspace-art { opacity: .65; width: clamp(90px, 30vw, 140px); height: 110px; right: 8px; top: auto; bottom: 14px; padding: 0; }.contributor-machine { display: grid; grid-template-columns: 36px minmax(0,1fr); }.contributor-machine > span { grid-column: 2; margin-left: 0; } }
 
 /* Combined investigation has one stage, with signed-in coverage available inside it. */
 .workflow-diagram[data-combined=true] { grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -244,18 +246,21 @@
 .docs-article:has(.architecture-map) > :not(.architecture-map):not(.docs-diagram) { max-width: 780px; }
 .architecture-map { min-width: 0; }
 .architecture-wide svg { display: block; width: 100%; height: auto; }
-.architecture-vertical { display: none; max-width: 560px; margin: 0 auto; }
+.architecture-vertical { display: none; max-width: 500px; margin: 0 auto; padding: 0 12px; }
+.architecture-vertical > .architecture-box { width: 82%; max-width: 340px; margin-inline: auto; box-sizing: border-box; }
 .architecture-box { display: grid; gap: 6px; padding: 18px 20px; background: #192a3d; border: 1px solid #5a7294; border-radius: 8px; }
 .architecture-box strong { color: #edf1f7; font-size: 17px; font-weight: 500; }
 .architecture-box span, .architecture-box small { color: #b5c5df; font-size: 13px; line-height: 1.5; }
 .architecture-dispatcher { border-color: #ff8f7d; }
 .architecture-link { display: grid; justify-items: center; gap: 8px; padding: 12px 0; color: #94b3ee; font-size: 24px; }
 .architecture-link > span:first-child:not(:last-child) { font-size: 12px; text-align: center; }
-.architecture-contributors { padding: 18px; border: 1px solid #405675; border-radius: 10px; background: #101c2b; }
+.architecture-contributors { padding: 12px 20px; }
 .architecture-contributors h3, .architecture-models h4 { margin: 0 0 14px; color: #b5c5df; font: 500 13px/1.5 var(--body-font); }
-.architecture-agents { display: grid; gap: 12px; }
+.architecture-agents { display: grid; gap: 6px; margin-left: 10px; padding-left: 22px; border-left: 1px solid #405675; }
+.architecture-agents .architecture-box { position: relative; padding: 14px 0; border: 0; border-bottom: 1px solid #2b3c51; border-radius: 0; background: none; }
+.architecture-agents .architecture-box::before { content: ''; position: absolute; left: -26px; top: 22px; width: 7px; height: 7px; border: 1px solid #8caedc; border-radius: 50%; background: #142234; }
 .architecture-more { text-align: center; color: #8caddb; font-size: 24px; line-height: 1; }
-.architecture-models { display: grid; gap: 16px; margin-top: 22px; }
+.architecture-models { display: grid; gap: 16px; margin-top: 22px; padding-top: 18px; border-top: 1px solid #2b3c51; }
 .architecture-models h4 { margin: 0; }
 .architecture-models > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .architecture-models img { max-width: 115px; width: 38%; height: auto; max-height: 44px; border: 0; background: transparent; }
@@ -265,8 +270,10 @@
   .architecture-vertical { display: block; }
 }
 @media(max-width:700px) {
-  .architecture-map.service-map { padding: 20px 0; }
-  .architecture-contributors { padding: 14px; }
+  .architecture-map.service-map { padding: 20px 8px; }
+  .architecture-map .flow-permission { gap: 8px 12px; font-size: 12px; padding-inline: 12px; }
+  .architecture-map .flow-permission > span:first-child { flex-basis: 100%; }
+  .architecture-contributors { padding: 12px 16px; }
   .architecture-box { padding: 16px; }
 }
 
@@ -275,3 +282,15 @@
 .architecture-core { width: 100%; box-sizing: border-box; border: 1px solid #718fb8; border-radius: 12px; padding: 18px; background: #142234; }
 .textmode-ui .architecture-core h3 { margin: 0; color: #edf1f7; font: 500 22px/1.3 var(--body-font); }
 .textmode-ui .architecture-core p { margin: 8px 0 18px; color: #b5c5df; font-size: 13px; }
+.architecture-core .architecture-dispatcher { margin-left: 18px; padding: 12px 0 12px 18px; border: 0; border-left: 2px solid #ff8f7d; border-radius: 0; background: transparent; }
+
+@container(max-width:760px) {
+  .workflow-diagram { display: flex; flex-direction: column; gap: 0; }
+  .workflow-diagram .workflow-lane, .workflow-diagram .workflow-lane > ol { display: contents; }
+  .workflow-diagram .workflow-lane-label { margin: 18px 0 10px 70px; }
+  .workflow-diagram .workflow-public .workflow-lane-label { margin-top: 0; }
+  .workflow-tool-cluster { margin: 2px 0 20px 70px; padding: 8px 0 0 12px; border-top: 0; border-left: 1px dashed #49617d; }
+  .workflow-tool-cluster::before { left: -45px; top: 0; width: 44px; height: 0; border-left: 0; border-top: 1px dashed #49617d; }
+  .workflow-tool-cluster[data-cluster=coverage]::after { content: ''; position: absolute; left: -45px; bottom: 100%; height: 28px; border-left: 1px dashed #49617d; }
+  .workflow-tool-cluster[data-cluster=baseline] ul { grid-template-columns: 1fr; }
+}
