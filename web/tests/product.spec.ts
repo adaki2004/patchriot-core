@@ -123,22 +123,31 @@ test('members cannot load connection details or open a pairing dialog', async ({
   expect(calls).not.toContain('/api/devices');
 });
 
-test('shared architecture names vertical numbered contributors and separates inference routes', async ({page}, info) => {
+test('architecture fits docs and mobile with readable vertical contributors', async ({page}, info) => {
   await setup(page);
   await page.goto('/#/docs/infrastructure');
-  const diagram=page.locator('.architecture-scroll');
-  await expect(diagram.locator('svg').first()).toBeVisible();
-  for(const name of ['Agent 1','Agent 2','Agent N','Uncensored LLM']) await expect(diagram).toContainText(name);
-  await expect(diagram.locator('text').filter({hasText:'Kali Linux®'})).toHaveCount(3);
-  await expect(diagram.locator('text').filter({hasText:'Scoped relay + model access'})).toHaveCount(3);
-  await expect(diagram).toContainText('NEAR · VERIFIED TEE');
-  await expect(diagram).toContainText('VENICE · API ROUTE');
-  for(const role of ['Scout','Recon','Verifier']) await expect(diagram).not.toContainText(role);
-  const positions=await diagram.locator('text').filter({hasText:/^Agent [12N]$/}).evaluateAll(nodes=>nodes.map(node=>({x:node.getAttribute('x'),y:Number(node.getAttribute('y'))})));
-  expect(new Set(positions.map(p=>p.x)).size).toBe(1);
-  expect(positions[0].y < positions[1].y && positions[1].y < positions[2].y).toBe(true);
-  const image=await page.getByRole('link',{name:'Open full diagram'}).getAttribute('href');
-  expect(image).toContain('assessment-architecture.svg');
+  const map=page.locator('.architecture-map');
+  const diagram=map.locator('.architecture-vertical');
+  await expect(diagram).toBeVisible();
+  for(const name of ['Agent 1','Agent 2','Agent N']) await expect(diagram.getByText(name,{exact:true})).toBeVisible();
+  await expect(diagram.getByAltText('NEAR AI')).toBeVisible();
+  await expect(diagram.getByAltText('Venice')).toBeVisible();
+  const boxes=await diagram.locator('.architecture-agents .architecture-box').all();
+  const positions=await Promise.all(boxes.map(box=>box.boundingBox()));
+  expect(positions[0]!.x).toBe(positions[1]!.x);
+  expect(positions[1]!.y).toBeGreaterThan(positions[0]!.y+positions[0]!.height);
+  expect(positions[2]!.y).toBeGreaterThan(positions[1]!.y+positions[1]!.height);
+  await expect(map).not.toContainText('Scroll sideways');
+  expect(await map.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await page.screenshot({path:info.outputPath('shared-architecture.png'),fullPage:true});
+  await map.screenshot({path:info.outputPath('responsive-architecture.png')});
+  expect(await page.getByRole('link',{name:'Open full diagram'}).getAttribute('href')).toContain('assessment-architecture.svg');
+  if(info.project.name==='desktop') {
+    await page.setViewportSize({width:1920,height:1200});
+    await page.goto('/#/home');
+    await expect(map.locator('.architecture-wide')).toBeVisible();
+    await expect(map.locator('.architecture-vertical')).toBeHidden();
+    expect(await map.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true);
+    await map.screenshot({path:info.outputPath('wide-architecture.png')});
+  }
 });

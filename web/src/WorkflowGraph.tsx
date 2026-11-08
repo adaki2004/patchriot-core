@@ -83,7 +83,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
     </li>;
   }
   return <div className="workflow-map" data-recorded={recorded}>
-    <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>{accessNodes.length ? 'Public and signed-in investigation.' : 'Public first. Deeper with access.'}</h4><p>{coverageNode ? 'Access is verified before one ARTEX investigation. Open signed-in coverage for its request evidence and later agent checks.' : accessNodes.length ? 'Public investigation and signed-in checks follow the recorded workflow.' : 'Public checks lead into evidence review. Select a step for its evidence.'}</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
+    <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>{accessNodes.length ? 'Public and signed-in investigation.' : 'Public first. Deeper with access.'}</h4><p>{coverageNode ? 'Access is verified before one Agentic investigation. Open signed-in coverage for its request evidence and later agent checks.' : accessNodes.length ? 'Public investigation and signed-in checks follow the recorded workflow.' : 'Public checks lead into evidence review. Select a step for its evidence.'}</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
     {!recorded && <p className="workflow-history" role="status">Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.</p>}
     <div ref={ref} className="workflow-diagram" data-authenticated={accessNodes.length > 0} data-combined={!!coverageNode}>
       <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}</svg>
@@ -92,7 +92,7 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
         <ol aria-label="Public assessment workflow">{publicNodes.map((node, index) => nodeButton(node, index, index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol>
       </div>
       {accessNodes.length > 0 && <div className="workflow-lane workflow-access">
-        <div className="workflow-lane-label"><strong>{coverageNode ? 'Combined investigation' : 'Behind the login'}</strong><small>{coverageNode ? 'Verify access, then run ARTEX' : 'Additional grey-box checks'}</small></div>
+        <div className="workflow-lane-label"><strong>{coverageNode ? 'Combined investigation' : 'Behind the login'}</strong><small>{coverageNode ? 'Verify access, then investigate' : 'Additional grey-box checks'}</small></div>
         <ol aria-label="Additional authenticated workflow">{accessNodes.map((node, index) => nodeButton(node, index + publicNodes.length, node.id === 'public_analysis' ? 'agent' : 'lock'))}</ol>
       </div>}
       <div className="workflow-lane workflow-output">

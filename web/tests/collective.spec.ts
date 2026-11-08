@@ -120,9 +120,16 @@ test('one service diagram explains scope, agents and inference and respects redu
   await expect(page.getByRole('slider')).toHaveCount(0);
   await expect(page.locator('.service-map')).toContainText('Verify your domain');
   await expect(page.locator('.service-map')).toContainText('Confirm access');
-  await expect(page.locator('.service-map .map-key strong')).toHaveText(['1. Your web app', '2. Dispatcher', '3. Isolated Hermes agents', '4. Inference']);
-  await expect(page.locator('.service-map')).toContainText('NEAR · VERIFIED TEE');
-  await expect(page.locator('.service-map')).toContainText('VENICE · API ROUTE');
+  const diagram=page.locator('.architecture-wide:visible, .architecture-vertical:visible');
+  await expect(diagram).toHaveCount(1);
+  for(const name of ['Your web app','Dispatcher','Agent 1','Agent 2','Agent N','Your private report']) await expect(diagram).toContainText(name);
+  if(await page.locator('.architecture-vertical').isVisible()) {
+    await expect(diagram.getByAltText('NEAR AI')).toBeVisible();
+    await expect(diagram.getByAltText('Venice')).toBeVisible();
+  } else {
+    await expect(diagram).toContainText('NEAR · VERIFIED TEE');
+    await expect(diagram).toContainText('VENICE · API ROUTE');
+  }
   await expect(page.locator('.service-map')).toContainText('shown at checkout');
   await expect(page.locator('.service-map')).toHaveAttribute('data-paused', 'true');
   await expect(page.locator('link[rel=icon]')).toHaveAttribute('href', '/brand/white-hat.png');
@@ -230,6 +237,11 @@ test('the architecture animation continues while visible without a pause control
     await page.goto(path);
     const map = page.locator('.service-map');
     await map.scrollIntoViewIfNeeded();
+    if (await map.locator('.architecture-vertical').isVisible()) {
+      await expect(map).toHaveAttribute('data-paused', 'true');
+      await expect(map.locator('animateMotion')).toHaveCount(0);
+      continue;
+    }
     await expect(map.locator('animateMotion')).toHaveCount(5);
     await expect(map.getByRole('button')).toHaveCount(0);
     // It previously stopped at four seconds. Confirm both continued activity

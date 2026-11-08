@@ -1,4 +1,4 @@
-import { workflowRecordLines, workflowCaveat, workflowAbsent } from './workflow';
+import { workflowRecordLines, workflowCaveat, workflowAbsent, workflowToolName } from './workflow';
 import { reportBlocks } from './reportFormatting';
 import { fallbackDescription, browserAccessDescription } from './LiveReport';
 import { coverageChecks, checkLabels, evidenceAccessLabel, findingRequest } from './report';
@@ -212,7 +212,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.paragraph('Assigned methods: ' + roleMethods[s.role].join('; '), 9, muted);
     if (!s.result?.tool_runs?.length) p.paragraph('No tool execution records were received.');
     for (const t of s.result?.tool_runs ?? []) {
-      p.paragraph(`${t.tool} / ${t.version}`, 11, blue);
+      p.paragraph(`${workflowToolName(t.tool, t)} / ${t.version}`, 11, blue);
       p.paragraph(`${toolOutcome(t)} · ${Math.round(t.duration_ms / 1000)} seconds · ${t.evidence_ids.length} request references${t.failure ? ` · Recorded reason: ${t.failure}` : ''}`, 9);
       p.paragraph(`Output SHA-256: ${t.output_sha256}${t.output_truncated ? '. Retained excerpt was shortened.' : ''}`, 8, muted);
     }

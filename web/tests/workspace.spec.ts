@@ -49,7 +49,7 @@ test('personal audits join material to its latest report while staff records sta
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('dashboard keeps decisions and active work ahead of finished reports', async ({ page }) => {
+test('dashboard keeps running work ahead of older decisions and reports', async ({ page }) => {
   await setup(page);
   const rows = [
     { id: 'running', state: 'running', created_at: timestamp + 30 },
@@ -63,11 +63,29 @@ test('dashboard keeps decisions and active work ahead of finished reports', asyn
   await page.goto('/#/overview');
   const work = page.locator('.recent-work');
   await expect(work.getByRole('heading', { name: 'Work in progress.' })).toBeVisible();
-  await expect(work.locator('.audit-state .status-chip')).toHaveText(['Needs attention', 'Awaiting payment', 'Incomplete', 'Agents working', 'Report ready']);
-  await expect(page.getByLabel('Workspace summary')).toHaveText('3Need attention0Queued1Running1Reports ready');
+  await expect(work.locator('.audit-state .status-chip')).toHaveText(['Agents working', 'Needs review', 'Awaiting payment', 'Incomplete', 'Report available']);
+  await expect(page.getByLabel('Workspace summary')).toHaveText('3Need attention0Queued1Running1Reports available');
   expect((await page.getByLabel('Workspace summary').boundingBox())!.y).toBeLessThan((await work.boundingBox())!.y);
   await work.locator('.audit-title').first().click();
-  await expect(page).toHaveURL(/#\/reviews\/needs-review$/);
+  await expect(page).toHaveURL(/#\/reviews\/running$/);
+});
+
+test('dashboard retains every running review even beside newer reports for the same material', async ({page},info)=>{
+  await setup(page);
+  const material={id:'shared-material',scope:{origins:['https://shared.example']},state:'approved',created_at:timestamp-500};
+  await page.route('**/api/pentests?scope=mine',route=>route.fulfill({json:[material]}));
+  const running=Array.from({length:7},(_,index)=>({id:`running-${index}`,mode:'pentest_agent',state:'running',created_at:timestamp-100-index,steps:[{state:'leased'},{state:'waiting'}],pentest:{pentest_id:index?'separate-'+index:material.id,scope:{origins:[index?`https://running-${index}.example`:'https://shared.example']}}}));
+  const old=Array.from({length:9},(_,index)=>({id:`older-${index}`,mode:'source_agent',state:'needs_review',created_at:timestamp+index,steps:[{state:'completed'},{state:'failed'}]}));
+  await page.route('**/api/reviews?scope=mine',route=>route.fulfill({json:[...old,...running,{...running[0],id:'newer-report',state:'completed',created_at:timestamp+100,steps:[{state:'completed'},{state:'completed'}]}]}));
+  await page.goto('/#/overview');
+  const work=page.locator('.recent-work');
+  await expect(work.locator('.audit-row')).toHaveCount(7);
+  await expect(work.locator('.audit-state .status-chip')).toHaveText(Array(7).fill('Agents working'));
+  await expect(page.getByLabel('Workspace summary')).toContainText('7Running');
+  await expect(page.getByLabel('Workspace summary')).toContainText('10Reports available');
+  await work.screenshot({path:info.outputPath('running-reviews.png')});
+  await work.getByRole('button',{name:/https:\/\/shared.example/}).click();
+  await expect(page).toHaveURL(/#\/reviews\/running-0$/);
 });
 
 test('unavailable audit data is not reported as empty history and contributor totals stay hidden', async ({ page }) => {

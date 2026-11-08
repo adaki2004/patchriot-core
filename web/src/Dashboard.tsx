@@ -1,6 +1,6 @@
 import type { Fleet } from './api';
 import type { View } from './navigation';
-import { AuditRows, auditActive, useAudits } from './Audits';
+import { AuditRows, auditActive, auditReportAvailable, useAudits } from './Audits';
 import { AgentList } from './Pairing';
 import { orderLabel, paymentLabel } from './Orders';
 import { useOrderHistory } from './orderHistory';
@@ -8,16 +8,16 @@ import { Trial } from './Trial';
 import { UIIcon } from './UIIcon';
 
 
-// Keep actions and active work visible before finished reports.
+// Running reviews stay visible even when older work needs attention.
 const needsAction = (state: string) => ['needs_review', 'failed', 'awaiting_payment', 'awaiting_verification', 'collected', 'approved'].includes(state);
-const workPriority = (state: string) => needsAction(state) ? 0 : auditActive(state) ? 1 : state === 'completed' ? 2 : 3;
+const workPriority = (state: string) => ['running', 'collecting'].includes(state) ? 0 : state === 'queued' ? 1 : needsAction(state) ? 2 : auditActive(state) ? 3 : state === 'completed' ? 4 : 5;
 
 export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: string; fleet?: Fleet | null; onOpen: (view: View, id?: string | null) => void }) {
   const audits = useAudits();
   const history = useOrderHistory();
   const { orders, coupons } = history;
   const ready = audits.ready && !audits.error;
-  const complete = audits.items.filter(item => item.state === 'completed').length;
+  const complete = audits.items.filter(auditReportAvailable).length;
   const active = audits.items.filter(item => ['running', 'collecting'].includes(item.state)).length;
   const queued = audits.items.filter(item => item.state === 'queued').length;
   const attention = audits.items.filter(item => needsAction(item.state)).length;
@@ -33,13 +33,13 @@ export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: s
       <div className="metric-attention"><strong>{ready ? attention : '—'}</strong><span>Need attention</span></div>
       <div><strong>{ready ? queued : '—'}</strong><span>Queued</span></div>
       <div><strong>{ready ? active : '—'}</strong><span>Running</span></div>
-      <div><strong>{ready ? complete : '—'}</strong><span>Reports ready</span></div>
+      <div><strong>{ready ? complete : '—'}</strong><span>Reports available</span></div>
     </div>
     <section className="work-card recent-work"><div className="card-title"><div><p className="section-kicker">YOUR REQUESTS</p><h2>Work in progress.</h2></div><button onClick={() => onOpen('audits')}>View all audits <span aria-hidden="true">↗</span></button></div>
       {audits.error && <p className="notice error" role="alert">Audits could not fully refresh. Saved entries may be out of date. <button className="inline" onClick={audits.refresh}>Retry audits</button></p>}
       {!audits.ready && !audits.error && <p role="status">Loading audits…</p>}
       {ready && total === 0 && <div className="workspace-empty"><UIIcon name="folder" /><h3>A fresh pair of eyes.</h3><p>Start with a website you control.<br />Your requests and reports will appear here.</p><button onClick={() => onOpen('request')}>Create your first request <UIIcon name="arrow" /></button></div>}
-      <AuditRows items={work.slice(0, 5)} onOpen={onOpen} />
+      <AuditRows items={work.slice(0, Math.max(5, active))} onOpen={onOpen} />
       <p className="card-note"><UIIcon name="lock" />{ready ? `${total} recent ${total === 1 ? 'audit' : 'audits'} in your account. ` : ''}You can close this page; queued and running work continues.</p>
     </section>
     <div className="workspace-cards">

@@ -60,18 +60,19 @@ export function SwarmSignal({ paused }: { paused: boolean }) {
   return <canvas ref={ref} className="swarm-signal" aria-hidden="true" />;
 }
 
-/** The same source SVG is embedded in the website, docs and repository README. */
+/** Wide screens share the README drawing; narrow screens keep the same flow readable. */
 export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: boolean }) {
   const root = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     let visible = false;
-    const update = () => setPlaying(visible && !document.hidden && !media.matches);
+    const update = () => { const wide = root.current?.querySelector('.architecture-wide'); setPlaying(visible && !document.hidden && !media.matches && !!wide && getComputedStyle(wide).display !== 'none'); };
     const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; update(); });
-    if (root.current) observer.observe(root.current);
+    const resize = new ResizeObserver(update);
+    if (root.current) { observer.observe(root.current); resize.observe(root.current); }
     media.addEventListener('change', update); document.addEventListener('visibilitychange', update);
-    return () => { observer.disconnect(); media.removeEventListener('change', update); document.removeEventListener('visibilitychange', update); };
+    return () => { observer.disconnect(); resize.disconnect(); media.removeEventListener('change', update); document.removeEventListener('visibilitychange', update); };
   }, []);
   const stopped = paused === true || !playing;
   const paths = ['M225 320H285', 'M505 320H550V165H605', 'M505 320H605', 'M865 320H950', 'M395 385V535'];
@@ -80,9 +81,20 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
   const drawing = architectureSvg.replace(/<\/svg>\s*$/, `${packets}</svg>`);
   return <div ref={root} className="service-map architecture-map" data-paused={stopped} aria-label="From your verified domain to a private security report">
     <div className="flow-permission"><span>YOU START HERE</span><strong>Verify your domain</strong><span aria-hidden="true">→</span><strong>Confirm access</strong></div>
-    <div className="architecture-scroll" tabIndex={0} aria-label="Assessment architecture diagram" dangerouslySetInnerHTML={{ __html: drawing }} />
-    <span className="architecture-scroll-hint">Scroll sideways to explore the contributor network →</span>
-    <ol className="map-key"><li><strong>1. Your web app</strong><span>Exact domain. Your permission.</span></li><li><strong>2. Dispatcher</strong><span>Sets the scope and queues work.</span></li><li><strong>3. Isolated Hermes agents</strong><span>Agent 1, 2, …, N contribute inference capacity.</span></li><li><strong>4. Inference</strong><span>NEAR · VERIFIED TEE<br />VENICE · API ROUTE</span></li></ol>
+    <div className="architecture-wide" aria-label="Assessment architecture diagram" dangerouslySetInnerHTML={{ __html: drawing }} />
+    <div className="architecture-vertical" role="group" aria-label="Assessment architecture diagram">
+      <div className="architecture-box"><strong>Your web app</strong><span>Verified domain and approved scope</span></div>
+      <div className="architecture-link" aria-hidden="true">↓</div>
+      <div className="architecture-box architecture-dispatcher"><strong>Dispatcher</strong><span>Permission, scheduling and evidence</span><small>Core handles your account and checkout</small></div>
+      <div className="architecture-link" aria-hidden="true">↓</div>
+      <section className="architecture-contributors" aria-label="Inference contributors">
+        <h3>Inference contributors</h3>
+        <div className="architecture-agents">{['1', '2', 'N'].map(number => <div className="architecture-box" key={number}><strong>Agent {number}</strong><span>Kali Linux® · Hermes · scoped relay</span></div>)}</div>
+        <div className="architecture-models"><h4>Approved model routes</h4><div><img src="/brand/near-ai.svg" alt="NEAR AI" width="150" height="29" /><span>Verified TEE inference</span></div><div><img src="/brand/venice.svg" alt="Venice" width="130" height="59" /><span>API inference</span></div></div>
+      </section>
+      <div className="architecture-link"><span>Evidence returns through the dispatcher</span><span aria-hidden="true">↓</span></div>
+      <div className="architecture-box"><strong>Your private report</strong><span>Findings, request evidence and coverage gaps</span></div>
+    </div>
     <p className="flow-caption">The numbered agents are inference contributors, not fixed review roles. Patchriot operates them today; public contribution is coming soon. Provider order and optional fallback are shown at checkout. This illustrates the architecture, not live activity. <a href={architectureUrl} target="_blank" rel="noreferrer">Open full diagram ↗</a></p>
   </div>;
 }
