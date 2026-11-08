@@ -240,6 +240,8 @@
 }
 
 /* The architecture follows its container, including the narrower docs article. */
+.docs-article:has(.architecture-map) { max-width: none; }
+.docs-article:has(.architecture-map) > :not(.architecture-map):not(.docs-diagram) { max-width: 780px; }
 .architecture-map { min-width: 0; }
 .architecture-wide svg { display: block; width: 100%; height: auto; }
 .architecture-vertical { display: none; max-width: 560px; margin: 0 auto; }
@@ -252,6 +254,7 @@
 .architecture-contributors { padding: 18px; border: 1px solid #405675; border-radius: 10px; background: #101c2b; }
 .architecture-contributors h3, .architecture-models h4 { margin: 0 0 14px; color: #b5c5df; font: 500 13px/1.5 var(--body-font); }
 .architecture-agents { display: grid; gap: 12px; }
+.architecture-more { text-align: center; color: #8caddb; font-size: 24px; line-height: 1; }
 .architecture-models { display: grid; gap: 16px; margin-top: 22px; }
 .architecture-models h4 { margin: 0; }
 .architecture-models > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
