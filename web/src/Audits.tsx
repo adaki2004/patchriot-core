@@ -1,5 +1,6 @@
 import { AdminStats } from './AdminStats';
 import { TrialDesk } from './Trial';
+import { RunExpectations } from './RunExpectations';
 import { useState } from 'react';
 import { useLive } from './useLive';
 import type { View } from './navigation';
@@ -54,6 +55,7 @@ export function Audits({ onOpen, admin = false, csrf }: { csrf?: string; onOpen:
   return <section className="audits-page">
     <div className="dashboard-title"><div><p className="eyebrow">{admin ? 'ADMINISTRATION' : 'YOUR WORK'}</p><h1>{admin ? 'Audit activity' : 'Audits'}</h1><p className="subtle">{admin ? 'Queued work, active tests and reports across accounts.' : 'Your requests, saved material and agent reports.'}</p></div><button className="primary" onClick={() => onOpen('request')}>Request an audit</button></div>
     {admin && <AdminStats />}
+    <RunExpectations />
     <div className="audit-controls"><div className="segmented" aria-label="Audit type">{['All', 'Website', 'Source code', 'Example'].map(value => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div><button className="quiet" onClick={data.refresh}>Refresh audits</button></div>
     <div className="audit-controls"><div className="segmented" aria-label="Work status">{['All work', 'Queued', 'Running'].map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{value}</button>)}</div></div>
     {data.error && <p className="notice error" role="alert">Some audits could not refresh. Any entries shown may be out of date.</p>}
