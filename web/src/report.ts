@@ -144,7 +144,24 @@ export function reportSummary(input: ReportInput) {
   return { findings, assessments, complete, expected, requests, finished, partial, reportsReady, headline, description };
 }
 
+/** Coverage is an index of evidence and unknowns, not another scanner execution. */
+export function coverageSummary(run: NonNullable<LiveResult['tool_runs']>[number]) {
+  if (run.tool !== 'patchriot-coverage' || run.exit_code !== 0 || run.output_truncated) return undefined;
+  try {
+    const data = JSON.parse(run.output_excerpt);
+    if (data.version !== 1 || !Array.isArray(data.units) || data.units.length > 40
+      || !Number.isSafeInteger(data.omitted_units) || data.omitted_units < 0
+      || !data.units.every((unit: Record<string, unknown>) => unit && typeof unit.class === 'string' && ['tested','blocked','deferred','inapplicable'].includes(String(unit.state)))) return undefined;
+    // Older ledgers used failure=incomplete solely for display omission. Other failures stay failures.
+    if (run.failure && !(run.failure === 'incomplete' && data.omitted_units > 0)) return undefined;
+    const unverified = [...new Set<string>(data.units.filter((unit: {state: string}) => ['blocked','deferred'].includes(unit.state)).map((unit: {class: string}) => unit.class.replaceAll('_',' ')))];
+    return {shown: data.units.length as number, omitted: data.omitted_units as number, unverified};
+  } catch { return undefined; }
+}
+
 export function toolOutcome(run: NonNullable<LiveResult['tool_runs']>[number]) {
+  const summary = coverageSummary(run);
+  if (summary) return summary.unverified.length ? 'Limits recorded' : summary.omitted ? 'Summary shortened' : 'Recorded summary';
   if (run.failure || run.exit_code !== 0) return 'Incomplete';
   if (['schemathesis', 'ffuf', 'zap'].includes(run.tool) && !run.output_truncated) {
     try {

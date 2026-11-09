@@ -34,7 +34,8 @@ const pollActiveReview = (review: Review) => ['awaiting_payment', 'queued', 'run
 
 function reportInput(review: Review): ReportInput {
   const liveSteps: LiveStep[] = review.steps.map(s => ({ role: s.role, state: s.state, evidence_complete: s.evidence_complete, progress: s.progress, result: s.result && 'kind' in s.result && s.result.kind === 'pentest_agent_v1' ? s.result : null }));
-  const team = review.pentest?.reviewers ?? [];
+  const approved = review.pentest?.reviewers ?? [];
+  const team = review.pentest?.use_worker_pool ? approved.filter(r => review.steps.some(s => s.device_id === r.device_id)) : approved;
   return { id: review.id, state: review.state, created_at: review.created_at, steps: liveSteps, origins: review.pentest?.scope.origins ?? [], methods: review.pentest?.scope.methods, tools: review.pentest?.scope.tools, profile: review.pentest?.scope.profile, authentication: review.pentest?.scope.authentication, account_policy: review.pentest?.scope.account_policy, auth_check_path: review.pentest?.scope.auth_check_path, browser_login: review.pentest?.scope.browser_login !== undefined, scope_sha256: review.pentest?.scope_sha256, review_policy: review.pentest?.review_policy, third_review: review.pentest?.third_review, team };
 }
 
@@ -169,7 +170,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
       <details className="assessment-disclosure report-technical"><summary>Other downloads & test details</summary>
         <LiveReportDownloads id={review.id} steps={liveSteps} loadReport={loadReport} disabled={!canExport} />
         <button className="quiet" disabled={!canExport || busy} onClick={() => void exportEvidence()}>Download evidence JSON ↓</button>
-        <dl><dt>Reference</dt><dd>{id}</dd><dt>Website</dt><dd>{review.pentest?.scope.origins.join(', ')}</dd><dt>Test plan</dt><dd>{review.pentest?.scope.objective}</dd><dt>Model provider</dt><dd>{review.pentest?.provider}</dd><dt>Selected team</dt><dd>{team.length} agents · {teamOperators} operator(s) · {teamGroups} machine group(s). Shared machines and models are not independent reviewers.</dd></dl>
+        <dl><dt>Reference</dt><dd>{id}</dd><dt>Website</dt><dd>{review.pentest?.scope.origins.join(', ')}</dd><dt>Test plan</dt><dd>{review.pentest?.scope.objective}</dd><dt>Model provider</dt><dd>{review.pentest?.provider}</dd><dt>{review.pentest?.use_worker_pool ? 'Approved worker pool' : 'Selected team'}</dt><dd>{team.length} {review.pentest?.use_worker_pool ? 'eligible workers' : 'agents'} · {teamOperators} operator(s) · {teamGroups} machine group(s). Shared machines and models are not independent reviewers.</dd></dl>
         <ol>{team.map((r, i) => <li key={r.device_id}>{Object.values(liveRoles)[i]} · {r.device_name} · {r.declared_model}</li>)}</ol>
       </details>
       <p className="report-footnote">An automated assessment within the approved methods and account access. It does not replace a full human penetration test.</p>

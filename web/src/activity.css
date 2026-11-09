@@ -25,10 +25,10 @@
 .checkout-paused { border-style: dashed; }
 .setup-saved-notice { line-height: 1.7; }
 .textmode-ui .live-review { padding: clamp(20px, 3vw, 38px); }
-.textmode-ui .live-review .assessment-status { grid-template-columns: minmax(0, 1fr) 180px; border: 0; border-left: 3px solid #ff8f7d; background: linear-gradient(90deg, #192333, #10151e); padding: 22px 26px; gap: 20px; }
+.textmode-ui .live-review .assessment-status { grid-template-columns: minmax(0, 1fr) minmax(260px, 38%); border: 0; border-left: 3px solid #ff8f7d; background: linear-gradient(90deg, #192333, #10151e); padding: 22px 26px; gap: 20px; }
 .textmode-ui .live-review .assessment-status h2 { font-size: clamp(25px, 2.6vw, 34px); }
-.live-review .assessment-orbit { height: 130px; }
-.live-review .assessment-orbit img { height: 130px; width: 195px; object-fit: contain; }
+.live-review .assessment-orbit { width: 100%; height: clamp(260px, 28vw, 440px); max-width: 620px; justify-self: center; isolation: auto; }
+.live-review .assessment-orbit img { width: 100%; height: 100%; object-fit: cover; mask-image: radial-gradient(ellipse at center, #000 28%, transparent 70%); }
 .role-deadline { display: block; margin-top: 5px; }
 .live-review .assessment-status details { margin-top: 12px; font-size: 12px; color: var(--muted); }
 .textmode-ui .live-review .live-stage-list li { border: 0; border-top: 2px solid #42516b; background: none; padding: 14px 8px; gap: 4px 10px; }
@@ -125,6 +125,8 @@
 .workflow-step[data-status=reused] .workflow-node { border-style: dashed; color: #b7cced; }
 .workflow-step[data-status=incomplete] .workflow-node { border-color: #efaa92; color: #f5c4b5; }
 .workflow-step[data-status=incomplete] .workflow-state { color: #f6b8a4; }
+.workflow-step[data-status=limited] .workflow-node { border-color: #e8c36a; color: #e8c36a; }
+.workflow-step[data-status=limited] .workflow-state { color: #e8c36a; }
 .workflow-step[data-status=running] .workflow-node { border-color: #ff9c87; color: #ffd3c8; box-shadow: inset 0 0 20px #ff9c8720; }
 .workflow-step[data-status=running] .workflow-state { color: #ffc0af; }
 .workflow-step[data-status=not_applicable] { opacity: .7; }
@@ -138,9 +140,27 @@
 .workflow-inspector p { font-size: 12px; line-height: 1.65; color: #a9bddb; margin: 0; }
 .workflow-inspector-state > strong { display: block; font: 500 13px/1.4 var(--body-font); color: #bcd8ff; margin-bottom: 10px; }
 .workflow-inspector-state[data-status=incomplete] > strong { color: #f6b8a4; }
+.workflow-inspector-state[data-status=limited] > strong { color: #e8c36a; }
 .workflow-inspector dl { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 16px 35px; border-top: 1px solid #3c5375; padding-top: 13px; margin: 0; }
 .workflow-inspector dt { color: #92aacc; font-size: 11px; }
 .workflow-inspector dd { font: 500 17px/1.5 var(--body-font); color: #dceaff; margin: 5px 0 0; overflow-wrap: anywhere; }
+/* Tool evidence hangs from the stages it supports; it is not another route. */
+.workflow-tool-cluster { position: relative; grid-row: 3; min-width: 0; margin: 24px 8px 18px; padding-top: 13px; }
+
+.textmode-ui .workflow-tool-cluster h5 { margin: 0 0 6px; text-align: center; color: #8fa9c9; font: 500 11px/1.5 var(--body-font); }
+.workflow-tool-cluster ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px 18px; }
+.workflow-tool-cluster[data-cluster=baseline] ul { grid-template-columns: 1fr; }
+.workflow-tool-cluster li { min-width: 0; }
+.textmode-ui .workflow-tool-cluster button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 9px; padding: 7px 3px; text-align: left; border: 0; border-radius: 3px; background: transparent; color: #c3d6ee; box-shadow: none; }
+.tool-record-mark { flex: none; color: #8caed2; font-size: 13px; width: 13px; text-align: center; }
+.tool-record-name { min-width: 0; font-size: 12px; overflow-wrap: anywhere; }
+.tool-record-name small { display: block; margin-top: 3px; color: #91a6bf; font-size: 10px; }
+.tool-record-open { margin-left: auto; color: #8caed2; opacity: .6; }
+.textmode-ui .workflow-tool-cluster button:hover, .textmode-ui .workflow-tool-cluster button[aria-pressed=true] { background: #a5c6ed0c; color: #edf4ff; }
+.textmode-ui .workflow-tool-cluster button:focus-visible { outline: 2px solid #b4d3f8; outline-offset: 2px; }
+.workflow-tool-cluster li[data-status=incomplete] .tool-record-mark, .workflow-tool-cluster li[data-status=incomplete] small { color: #f6b8a4; }
+.workflow-tool-cluster li[data-status=limited] .tool-record-mark, .workflow-tool-cluster li[data-status=limited] small { color: #e8c36a; }
+.workflow-tool-cluster li[data-status=not_applicable] .tool-record-mark { color: #7f91a9; }
 .workflow-footnote { color: #8da4c7; font-size: 11px; line-height: 1.65; margin: 14px 0 0; }
 @container(max-width:760px) {
   .workflow-map { padding: 22px 18px 16px; }
@@ -174,8 +194,8 @@
 }
 
 /* A consistent workspace surface, with compact network metadata instead of a tall directory. */
-.textmode-ui .workspace-dashboard .workspace-heading { background: linear-gradient(100deg,#1a273b,#111b2a); border-color: #35465f; }
-.workspace-dashboard .workspace-art { mix-blend-mode: screen; opacity: .9; mask-image: linear-gradient(90deg,transparent,#000 28%); }
+.textmode-ui .workspace-dashboard .workspace-heading { background: #182638; border-color: #35465f; }
+.workspace-dashboard .workspace-art { mix-blend-mode: normal; opacity: .9; mask-image: none; padding: 8px 18px; box-sizing: border-box; }
 .textmode-ui .workspace-dashboard .workspace-cards { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
 .textmode-ui .workspace-cards > .workspace-orders { grid-column: 1; grid-row: 1; min-height: 220px; background: #121b28; border: 1px solid #334259; }
 .textmode-ui .workspace-cards > .workspace-contribute { grid-column: 2; grid-row: 1; flex-direction: column; align-items: start; justify-content: space-between; min-height: 220px; margin: 0; background: #182439; border: 1px solid #334259; padding: 24px; }
@@ -209,7 +229,7 @@
 
 .architecture-map { container-type: inline-size; }
 
-@media(max-width:700px) { .workspace-dashboard .workspace-art { opacity: .32; width: 72%; right: -15%; }.contributor-machine { display: grid; grid-template-columns: 36px minmax(0,1fr); }.contributor-machine > span { grid-column: 2; margin-left: 0; } }
+@media(max-width:700px) { .workspace-dashboard .workspace-art { opacity: .65; width: clamp(90px, 30vw, 140px); height: 110px; right: 8px; top: auto; bottom: 14px; padding: 0; }.contributor-machine { display: grid; grid-template-columns: 36px minmax(0,1fr); }.contributor-machine > span { grid-column: 2; margin-left: 0; } }
 
 /* Combined investigation has one stage, with signed-in coverage available inside it. */
 .workflow-diagram[data-combined=true] { grid-template-columns: repeat(7, minmax(0, 1fr)); }
@@ -226,19 +246,25 @@
 }
 
 /* The architecture follows its container, including the narrower docs article. */
+.docs-article:has(.architecture-map) { max-width: none; }
+.docs-article:has(.architecture-map) > :not(.architecture-map):not(.docs-diagram) { max-width: 780px; }
 .architecture-map { min-width: 0; }
 .architecture-wide svg { display: block; width: 100%; height: auto; }
-.architecture-vertical { display: none; max-width: 560px; margin: 0 auto; }
+.architecture-vertical { display: none; max-width: 500px; margin: 0 auto; padding: 0 12px; }
+.architecture-vertical > .architecture-box { width: 82%; max-width: 340px; margin-inline: auto; box-sizing: border-box; }
 .architecture-box { display: grid; gap: 6px; padding: 18px 20px; background: #192a3d; border: 1px solid #5a7294; border-radius: 8px; }
 .architecture-box strong { color: #edf1f7; font-size: 17px; font-weight: 500; }
 .architecture-box span, .architecture-box small { color: #b5c5df; font-size: 13px; line-height: 1.5; }
 .architecture-dispatcher { border-color: #ff8f7d; }
 .architecture-link { display: grid; justify-items: center; gap: 8px; padding: 12px 0; color: #94b3ee; font-size: 24px; }
 .architecture-link > span:first-child:not(:last-child) { font-size: 12px; text-align: center; }
-.architecture-contributors { padding: 18px; border: 1px solid #405675; border-radius: 10px; background: #101c2b; }
+.architecture-contributors { padding: 12px 20px; }
 .architecture-contributors h3, .architecture-models h4 { margin: 0 0 14px; color: #b5c5df; font: 500 13px/1.5 var(--body-font); }
-.architecture-agents { display: grid; gap: 12px; }
-.architecture-models { display: grid; gap: 16px; margin-top: 22px; }
+.architecture-agents { display: grid; gap: 6px; margin-left: 10px; padding-left: 22px; border-left: 1px solid #405675; }
+.architecture-agents .architecture-box { position: relative; padding: 14px 0; border: 0; border-bottom: 1px solid #2b3c51; border-radius: 0; background: none; }
+.architecture-agents .architecture-box::before { content: ''; position: absolute; left: -26px; top: 22px; width: 7px; height: 7px; border: 1px solid #8caedc; border-radius: 50%; background: #142234; }
+.architecture-more { text-align: center; color: #8caddb; font-size: 24px; line-height: 1; }
+.architecture-models { display: grid; gap: 16px; margin-top: 22px; padding-top: 18px; border-top: 1px solid #2b3c51; }
 .architecture-models h4 { margin: 0; }
 .architecture-models > div { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .architecture-models img { max-width: 115px; width: 38%; height: auto; max-height: 44px; border: 0; background: transparent; }
@@ -248,9 +274,61 @@
   .architecture-vertical { display: block; }
 }
 @media(max-width:700px) {
-  .architecture-map.service-map { padding: 20px 0; }
-  .architecture-contributors { padding: 14px; }
+  .architecture-map.service-map { padding: 20px 8px; }
+  .architecture-map .flow-permission { gap: 8px 12px; font-size: 12px; padding-inline: 12px; }
+  .architecture-map .flow-permission > span:first-child { flex-basis: 100%; }
+  .architecture-contributors { padding: 12px 16px; }
   .architecture-box { padding: 16px; }
 }
 
 .textmode-ui .workflow-step > .workflow-coverage:focus-visible { outline: 2px solid #accbff; outline-offset: 3px; }
+
+.architecture-core { width: 100%; box-sizing: border-box; border: 1px solid #718fb8; border-radius: 12px; padding: 18px; background: #142234; }
+.textmode-ui .architecture-core h3 { margin: 0; color: #edf1f7; font: 500 22px/1.3 var(--body-font); }
+.textmode-ui .architecture-core p { margin: 8px 0 18px; color: #b5c5df; font-size: 13px; }
+.architecture-core .architecture-dispatcher { margin-left: 18px; padding: 12px 0 12px 18px; border: 0; border-left: 2px solid #ff8f7d; border-radius: 0; background: transparent; }
+
+@container(max-width:760px) {
+  .workflow-diagram { display: flex; flex-direction: column; gap: 0; }
+  .workflow-diagram .workflow-lane, .workflow-diagram .workflow-lane > ol { display: contents; }
+  .workflow-diagram .workflow-lane-label { margin: 18px 0 10px 70px; }
+  .workflow-diagram .workflow-public .workflow-lane-label { margin-top: 0; }
+  .workflow-tool-cluster { margin: 2px 0 20px 70px; padding: 8px 0 0 12px; border: 0; }
+  .textmode-ui .workflow-tool-cluster h5 { text-align: left; }
+  .workflow-tool-cluster[data-cluster=baseline] ul { grid-template-columns: 1fr; }
+}
+
+/* Decorative orbital drift; never represents assessment activity. */
+.workspace-dashboard .workspace-art { animation: workspace-orbit-drift 18s ease-in-out infinite; transform-origin: 65% 50%; }
+@keyframes workspace-orbit-drift {
+  0%, 100% { transform: translateY(3px); }
+  50% { transform: translateY(-3px); }
+}
+@media(prefers-reduced-motion:reduce) { .workspace-dashboard .workspace-art { animation: none; transform: none; } }
+
+.workflow-edges .workflow-evidence-edges path { stroke: #89a8cb; stroke-width: 1.4; stroke-dasharray: 4 3; stroke-linecap: round; }
+.workflow-evidence-edges circle { fill: #8ba9ca; stroke: #101b29; stroke-width: 1; }
+.workflow-edges .workflow-evidence-edges [data-related=true] path { stroke: #bdd9fa; stroke-width: 1.5; }
+.workflow-evidence-edges [data-related=true] circle { fill: #d5e8ff; }
+.workflow-step[data-related=true] .workflow-node { outline: 1px solid #bdd9fa; outline-offset: 5px; }
+.textmode-ui .workflow-tool-cluster[data-related=true] h5 { color: #d5e8ff; }
+
+.textmode-ui .workflow-tool-cluster [data-tool-check=tool-zap-discoveries] button { gap: 5px; }
+.workflow-tool-cluster [data-tool-check=tool-zap-discoveries] .tool-record-name { white-space: nowrap; }
+
+.live-review .assessment-status:is([data-active=true], [data-awaiting=true]) .assessment-orbit img { animation: workspace-orbit-drift 16s ease-in-out infinite; }
+@media(prefers-reduced-motion:reduce) { .live-review .assessment-status .assessment-orbit img { animation: none; } }
+
+/* One shared toolkit, then its children; wide screens must not imply one tool per stage. */
+.workflow-tool-tree { width: min(240px, 100%); margin-inline: auto; }
+.textmode-ui .workflow-tool-tree h5 { display: flex; align-items: center; gap: 9px; text-align: left; margin: 0; min-height: 24px; }
+.workflow-cluster-root { display: inline-block; width: 8px; height: 8px; flex: none; border: 1px solid #a6bdd9; background: #152437; }
+.workflow-tool-tree ul { display: block; padding-left: 22px; }
+.workflow-tool-tree li { position: relative; }
+.workflow-tool-tree li::before { content: ''; position: absolute; left: -18px; top: 0; bottom: 0; border-left: 1px solid #6683a5; }
+.workflow-tool-tree li::after { content: ''; position: absolute; left: -18px; top: 50%; width: 16px; border-top: 1px solid #6683a5; }
+.workflow-tool-tree li:last-child::before { bottom: 50%; }
+.workflow-tool-cluster[data-related=true] .workflow-tool-tree li::before, .workflow-tool-cluster[data-related=true] .workflow-tool-tree li::after { border-color: #bdd9fa; }
+@container(max-width:760px) { .workflow-tool-tree { margin-inline: 0; } }
+
+.workflow-tool-tree .tool-record-open { display: none; }

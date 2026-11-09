@@ -1,0 +1,5 @@
+.run-expectations { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; padding: 16px 0; border-block: 1px solid var(--line); color: var(--muted); }
+.run-expectations-clock { flex: 0 0 auto; color: var(--accent); font-size: 23px; line-height: 1; }
+.run-expectations strong { display: block; color: var(--ink); font-size: 14px; }
+.run-expectations p { max-width: 80ch; margin: 6px 0 0; font-size: 13px; line-height: 1.6; }
+.assessment-status .run-expectations { margin-bottom: 16px; }

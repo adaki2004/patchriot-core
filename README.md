@@ -23,6 +23,8 @@ flowchart LR
 | **Grey box** | The same, plus a dedicated test account, API token or permission to use an empty test wallet | Public checks plus verified signed-in access where supported; unsupported or inconclusive checks are clearly marked |
 | **White box** | Source + a deployment | Roadmap; not part of current onboarding |
 
+New live-test checkout discloses an approved worker pool. Each ready role is assigned to an available eligible worker in FIFO order; a different device validates the investigation. Pool size does not change the number of roles or the assessment price. Existing requests keep their saved assignments. The audits list labels each saved live test as black-box or grey-box.
+
 Scout runs the full scoped investigation and hands its findings and evidence to Recon. Recon validates those claims with fresh controls. New requests use these two agents, with no automatic third role. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
 
 Reports also retain scoped scanner receipts and an evidence-indexed coverage ledger with account context and unresolved areas.

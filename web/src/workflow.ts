@@ -32,7 +32,7 @@ export function workflowRecordLines(workflow: LiveWorkflow | undefined): string[
 export function workflowToolName(tool: string, record?: LiveToolRun) {
   if (record && combinedEngineAccess(record)) return 'Agentic security checks';
   if (tool === 'zap' && record?.arguments.includes('--engine-discoveries')) return 'ZAP · discovered inputs';
-  const names: Record<string, string> = { 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'ZAP web scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
+  const names: Record<string, string> = { 'patchriot-controls': 'Access controls', 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'ZAP web scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
   if (names[tool]) return names[tool];
   return tool === 'artex-engine' ? 'Agentic security checks' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
 }
@@ -51,16 +51,39 @@ export function combinedEngineAccess(tool: LiveToolRun): { anonymous: number; au
 
 /** Display known receipt metadata only; target/model text never becomes an execution diagnosis. */
 export function toolCoverageDetail(tool: LiveToolRun): string | undefined {
+  if (tool.tool === 'zap' && tool.failure) {
+    try {
+      const receipt = JSON.parse(tool.output_excerpt);
+      const contexts = Array.isArray(receipt.contexts) ? receipt.contexts : [];
+      const requests = contexts.reduce((sum: number, context: {requests?: number}) => sum + (Number.isSafeInteger(context.requests) && (context.requests ?? -1) >= 0 ? context.requests! : 0), 0);
+      const gaps = [...(Array.isArray(receipt.gaps) ? receipt.gaps : []), ...contexts.flatMap((context: {gaps?: string[]}) => Array.isArray(context.gaps) ? context.gaps : [])];
+      const phase = tool.arguments.includes('--engine-discoveries') ? 'ZAP follow-up' : 'ZAP scan';
+      const reasons: Record<string,string> = {scanner_api_url_not_found:'ZAP could not index a discovered input',scanner_startup_timeout:'ZAP did not start within its allowance',scanner_version_mismatch:'The scanner version did not match the configured version',scanner_api_internal_error:'ZAP returned an internal error',TimeoutError:'The scanner operation timed out'};
+      const cause = contexts.map((context: {result?: {reason?: string}}) => reasons[context.result?.reason ?? '']).find(Boolean);
+
+      if (gaps.includes('scanner_execution_incomplete')) return `${phase} stopped early after ${requests} recorded requests. ${cause ? `Retained reason: ${cause}.` : 'The receipt records a scanner execution failure; its underlying cause was not retained.'} Saved responses remain available, but unfinished scanner checks cannot be treated as passed. Other tool runs have separate outcomes.`;
+      if (gaps.some(gap => ['scanner_budget_reached','active_scan_incomplete','passive_scan_incomplete','follow_up_time_unavailable'].includes(gap))) return `${phase} did not finish within its available request or time allowance. Saved responses remain available; unfinished checks are a coverage gap, not a passed scan.`;
+    } catch { /* Keep unstructured failures explicit. */ }
+    return undefined;
+  }
   if (tool.tool !== 'artex-engine') return undefined;
   try {
     const receipt = JSON.parse(tool.output_excerpt);
     if (receipt.receipt_schema !== 1 || receipt.coverage_complete !== false) return undefined;
+    const gaps = Array.isArray(receipt.collection_errors) ? receipt.collection_errors : [];
+    if (gaps.includes('authenticated_context_unverified') || gaps.includes('account_context_unverified'))
+      return 'Signed-in access was not verified for every required account in this engine pass. Public checks are retained; authenticated coverage remains incomplete.';
+    if (gaps.includes('access_context_untested'))
+      return 'The engine did not retain requests for every required public and signed-in context. Combined coverage remains incomplete.';
     const reasons: Record<string, string> = {
       target_request_budget: 'Reached this tool’s request limit. Deeper public coverage remains incomplete.',
       time_budget: 'Reached this tool’s time limit. Deeper public coverage remains incomplete.',
       model_budget: 'Reached this tool’s model budget. Deeper public coverage remains incomplete.',
       no_target_progress: 'Stopped after no further target progress. Deeper public coverage remains incomplete.',
       interrupted: 'The engine was interrupted before a finished receipt. Deeper public coverage remains incomplete.',
+      provider_rate_limited: 'The model provider kept refusing requests after the available recovery attempts. Engine coverage remains incomplete.',
+      model_request_rejected: 'A model request was rejected before the engine finished. The retained reason does not identify the underlying rejection. Engine coverage remains incomplete.',
+      model_request_too_large: 'The engine’s model input exceeded the bridge size limit. Engine coverage remains incomplete.',
     };
     const reason = reasons[receipt.stop_reason];
     return combinedEngineAccess(tool) ? reason?.replace('Deeper public coverage', 'Combined public and signed-in coverage') : reason;

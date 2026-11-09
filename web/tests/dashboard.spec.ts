@@ -606,6 +606,12 @@ test('workspace shows real runner facts and a qualified NEAR integration', async
   await expect(network.getByRole('img',{name:'NEAR AI',exact:true})).toBeVisible();
   await expect(network).toContainText('Your checkout and report identify the providers used.');
   await expect(page.locator('.workspace-art')).toHaveCSS('object-fit','contain');
+  await expect(page.locator('.workspace-art')).toHaveAttribute('src','/brand/workspace-globe-detailed.png');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await expect(page.locator('.workspace-art')).toHaveCSS('animation-name','workspace-orbit-drift');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await expect(page.locator('.workspace-art')).toHaveCSS('animation-name','none');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.locator('.workspace-heading').screenshot({path:info.outputPath('workspace-banner.png')});
   await page.screenshot({path:info.outputPath('workspace-runtime.png'),fullPage:true});
 });

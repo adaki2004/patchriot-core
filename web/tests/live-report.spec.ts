@@ -594,16 +594,16 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   expect(md.match(/^### [SRV]-\d+$/gm)).toHaveLength(2);
 });
 
-test('queue waiting and active role deadlines are explained separately', async ({ page }) => {
+test('queue waiting and active role deadlines are explained separately', async ({ page }, info) => {
   await setup(page);
   const review = { ...repeatedReport(), mode: 'pentest_agent', state: 'queued', deadline_at: 1793726400,
     timing: { role_limit_seconds: 3600, started_at: null as number | null, active_role_deadline_at: null as number | null, requests_ahead: 2 },
     pentest: { scope: { origins: ['https://owned.example'], methods: ['GET'] }, reviewers: [] },
-    steps: (['investigator', 'reproducer', 'challenger'] as const).map(role => ({ role, state: 'queued', result: null })),
+    steps: (['investigator', 'reproducer', 'challenger'] as const).map(role => ({ role, state: 'queued', result: null as LiveResult | null })),
   };
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await page.reload();
-  await expect(page.getByText(/2 earlier tests share your selected agents/)).toBeVisible();
+  await expect(page.getByText(/2 other tests have earlier work on shared agents/)).toBeVisible();
   await expect(page.getByText(/Each agent gets up to 60 minutes after its own work starts/)).toBeVisible();
   await expect(page.getByText(/Run window ends/)).toHaveCount(0);
   await expect(page.getByText(/This agent’s time limit ends/)).toHaveCount(0);
@@ -612,9 +612,31 @@ test('queue waiting and active role deadlines are explained separately', async (
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Scout is on the case.' })).toBeVisible();
   await expect(page.getByText(/This agent’s time limit ends/)).toBeVisible();
-  await expect(page.getByText(/2 earlier tests share your selected agents/)).toHaveCount(0);
+  await expect(page.getByText(/2 other tests have earlier work on shared agents/)).toHaveCount(0);
   await page.getByText('Timing & permission', { exact: true }).click();
   await expect(page.getByText(/Work must stop if permission or test-account access expires/)).toBeVisible();
+  review.steps[0].state = 'completed'; review.steps[0].result = result;
+  review.timing.active_role_deadline_at = null;
+  await page.reload();
+  await expect(page.getByRole('heading', {name:'Scout report saved. Recon is queued.'})).toBeVisible();
+  await expect(page.getByText('WAITING TO START',{exact:true})).toHaveCount(0);
+  await expect(page.getByText('WAITING FOR THE NEXT AGENT',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('Agent time guide')).not.toContainText('roughly');
+  const activity = page.getByRole('region', { name: 'Recorded assessment activity' });
+  await activity.getByRole('button', { name: /Recon/ }).click();
+  await expect(activity.getByRole('button', { name: 'Headers & config: Waiting', exact: true })).toBeVisible();
+  await expect(activity.getByRole('button', { name: /Not recorded/ })).toHaveCount(0);
+  if(info.project.name==='desktop') {
+    const art=page.locator('.assessment-orbit');
+    await expect(art).toBeVisible();
+    expect((await art.boundingBox())!.width).toBeGreaterThan(260);
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await expect(art.locator('img')).toHaveCSS('animation-name','workspace-orbit-drift');
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await expect(art.locator('img')).toHaveCSS('animation-name','none');
+  }
+  await page.locator('.assessment-status').screenshot({path:info.outputPath('audit-waiting-review.png')});
+
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
@@ -670,13 +692,15 @@ test('historical activity keeps unknown checklist states and retained tool evide
   const activity = page.getByRole('region', {name:'Recorded assessment activity'});
   await expect(activity.getByRole('button', {name:'Recon Working'})).toHaveAttribute('aria-pressed', 'true');
   await expect(activity.getByText('Awaiting a fresh update', {exact:true})).toBeVisible();
-  await expect(activity.getByText('Structured checklist not recorded for this role.', {exact:false})).toBeVisible();
-  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(6);
+  await expect(activity.getByText('Waiting for this agent’s stage updates.', {exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(0);
+  await expect(activity.locator('.workflow-step[data-status=pending]')).toHaveCount(6);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
   await expect(activity.getByText('Full tool transcripts appear when the agent returns its evidence.')).toBeVisible();
   await expect(activity).not.toContainText('nuclei');
   await activity.getByRole('button',{name:'Scout Report received'}).click();
   await expect(activity.getByText('Saved execution', {exact:true})).toBeVisible();
+  await expect(activity.locator('.workflow-step[data-status=not_recorded]')).toHaveCount(6);
   await expect(activity.locator('.workflow-step[data-status=recorded]')).toHaveCount(0);
   await activity.getByText('Recorded tools · 1', {exact:true}).click();
   await expect(activity.getByText('nuclei', {exact:true})).toBeVisible();
@@ -707,6 +731,98 @@ for (const stopped of [false, true, 'cancelled'] as const) test(`ended assessmen
 });
 
 const publicWorkflowIds = ['public_baseline','public_mapping','public_signatures','public_fingerprints','public_analysis'] as const;
+test('supporting tool graph retains scoped scanner outcomes without inventing live execution', async ({page}, info) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', route => route.fulfill({json:{account:{id,display_name:'Fixture owner',role:'member'},csrf_token:'test-csrf'}}));
+  const base = {...result.tool_runs![0], output_truncated:false, output_excerpt:'{}'};
+  const tools = [
+    {...base, tool:'patchriot-probes'}, {...base, tool:'ffuf'}, {...base, tool:'zap'},
+    {...base, tool:'schemathesis', evidence_ids:[], output_excerpt:JSON.stringify({contexts:[{result:{state:'inapplicable'}}]})},
+    {...base, tool:'zap', arguments:['--engine-discoveries'], evidence_ids:[], output_excerpt:JSON.stringify({phase:'engine_discoveries',state:'inapplicable',reason:'no_new_recorded_get_inputs'})},
+    {...base, tool:'patchriot-coverage', failure:'incomplete'},
+  ];
+  const received = Math.floor(Date.now()/1000);
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:{id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Owned supporting scanner fixture'},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'completed',evidence_complete:false,result:{...result,workflow:structuredWorkflow(false,'recorded'),tool_runs:tools}},
+      {role:'reproducer',state:'leased',result:null,progress:{received_at:received,progress:{phase:'investigating',http_requests:0,inference_calls:1,completed_tools:0}}}]}}));
+  await page.goto(`/#/reviews/${id}`);
+  const activity = page.getByRole('region',{name:'Recorded assessment activity'});
+  await expect(activity.locator('.workflow-tool-cluster')).toHaveCount(0);
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  const branch = activity.locator('.workflow-tool-cluster');
+  await expect(branch.getByRole('button')).toHaveCount(6);
+  await expect(activity.getByRole('region',{name:'Scoped tools'})).toBeVisible();
+  await expect(activity.getByRole('region',{name:'Discovery follow-up'})).toBeVisible();
+  await expect(activity.getByRole('region',{name:'Coverage summary'})).toBeVisible();
+  const tree = activity.locator('[data-cluster=baseline] .workflow-tool-tree');
+  expect((await tree.boundingBox())!.width).toBeLessThanOrEqual(241);
+  const rows = await tree.locator('li').evaluateAll(items=>items.map(item=>item.getBoundingClientRect().y));
+  expect(rows.every((y,index)=>index===0||y>rows[index-1])).toBe(true);
+  const baseline = await activity.getByRole('region',{name:'Scoped tools'}).boundingBox();
+  const analysis = await activity.locator('[data-check=public_analysis]').boundingBox();
+  if (info.project.name === 'mobile') expect(baseline!.y + baseline!.height).toBeLessThanOrEqual(analysis!.y);
+  await expect(branch.getByRole('button',{name:'API schema checks: Not applicable',exact:true})).toBeVisible();
+  await expect(branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true})).toBeVisible();
+  await branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true}).click();
+  const detail = activity.getByRole('region',{name:'Selected workflow step'});
+  await expect(detail).toContainText('bounded scanner profile');
+  await expect(activity.locator('[data-check=public_baseline]')).toHaveAttribute('data-related','true');
+  await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','false');
+  await expect(activity.locator('[data-branch=baseline]')).toHaveAttribute('data-related','true');
+  const connections = await activity.locator('.workflow-diagram').evaluate(root => {
+    const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;
+    const origin=svg.getBoundingClientRect();
+    return [...root.querySelectorAll<SVGGElement>('[data-branch]')].map(group=>{
+      const kind=group.getAttribute('data-branch')!;
+      const cluster=root.querySelector<HTMLElement>(`[data-cluster="${kind}"]`)!;
+      const parentIds=cluster.dataset.parents!.split(' ');
+      const path=group.querySelector<SVGPathElement>('path')!;
+      const first=path.getPointAtLength(0);
+      const vertical=root.getBoundingClientRect().width<=760;
+      const parent=root.querySelector<HTMLElement>(`[data-check="${vertical?parentIds.at(-1):parentIds[0]}"]`)!;
+      const anchor=(vertical?parent.querySelector('.workflow-node')!:(parent.querySelector('.workflow-coverage')??parent.querySelector('.workflow-state')??parent)).getBoundingClientRect();
+      return {kind, gap:Math.abs(first.y+origin.y-anchor.bottom-(vertical?0:8)), length:path.getTotalLength(), path:path.getAttribute('d')};
+    });
+  });
+  expect(connections).toHaveLength(3);
+  for(const connection of connections) { expect(connection.gap).toBeLessThan(1.5); expect(connection.length).toBeGreaterThan(10); }
+  await info.attach('evidence-branch-geometry', {body:JSON.stringify(connections,null,2),contentType:'application/json'});
+
+  await branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true}).click();
+  await expect(detail).toContainText('Only approved origins and verified account contexts');
+  await expect(detail).toContainText('No new inputs');
+  await branch.getByRole('button',{name:'Evidence coverage: Incomplete',exact:true}).click();
+  await expect(detail).toContainText('A tool gap remains visible');
+  await expect(detail.getByText('Recorded tool time')).toHaveCount(0);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  tools[tools.length-1].output_excerpt=JSON.stringify({version:1,omitted_units:44,units:[{class:'session_lifecycle',state:'deferred'}]});
+  await page.reload();
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  await branch.getByRole('button',{name:'Evidence coverage: Limits recorded',exact:true}).click();
+  await expect(detail.locator('.workflow-inspector-state')).toHaveAttribute('data-status','limited');
+  await expect(detail.locator('.workflow-inspector-state > strong')).toHaveCSS('color','rgb(232, 195, 106)');
+  await expect(detail).toContainText('44 entries are outside this display');
+  await expect(detail).toContainText('Linked HTTP requests');
+  await expect(detail).toContainText('Summary entries shown');
+  await expect(detail).toContainText('Coverage is not established for: session lifecycle');
+  await expect(detail).toContainText('request evidence is still saved');
+  await activity.locator('.workflow-map').screenshot({path:info.outputPath('supporting-tool-graph.png')});
+  tools[4].failure='incomplete';
+  tools[4].output_excerpt=JSON.stringify({contexts:[{requests:20,result:{state:'blocked',reason:'scanner_follow_up_incomplete'},gaps:['scanner_execution_incomplete']}],gaps:['scanner_execution_incomplete']});
+  await page.reload();
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  await branch.getByRole('button',{name:'ZAP · discovered inputs: Stopped early',exact:true}).click();
+  await expect(detail.locator('.workflow-inspector-state')).toHaveAttribute('data-status','incomplete');
+  await expect(detail.locator('.workflow-inspector-state > strong')).toHaveCSS('color','rgb(246, 184, 164)');
+  await expect(detail).toContainText('stopped early after 20 recorded requests');
+  await expect(branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true})).toBeVisible();
+  await activity.locator('.workflow-map').screenshot({path:info.outputPath('follow-up-warning.png')});
+
+  await activity.getByRole('button',{name:'Recon Working'}).click();
+  await expect(branch).toHaveCount(0);
+});
+
 function structuredWorkflow(grey: boolean, state: 'running' | 'recorded' = 'running'): LiveWorkflow {
   return {version:1,checks:[
     ...publicWorkflowIds.map((id,index)=>({id,state:'recorded' as const,evidence_count:10+index})),
@@ -752,7 +868,7 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await expect(details).toContainText('curated signature checks');
   await expect(details.getByText('12',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-  await expect(activity).toContainText('Recorded = finished work saved.');
+  await expect(activity).toContainText('Recorded = saved work.');
   for(const width of info.project.name==='desktop' ? [1280,1920,1024,760] : [390]) {
     await page.setViewportSize({width,height:1000});
     await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe(grey?7:5);
@@ -840,6 +956,9 @@ test('partial engine explanations require known structured receipt metadata',()=
   const tool={...result.tool_runs![0],tool:'artex-engine'};
   expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'target_request_budget',coverage_complete:false})})).toContain('request limit');
   expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'interrupted',coverage_complete:false})})).toContain('interrupted');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'done',coverage_complete:false,collection_errors:['authenticated_context_unverified']})})).toContain('Signed-in access was not verified');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'done',coverage_complete:false,collection_errors:['access_context_untested']})})).toContain('did not retain requests');
+  expect(toolCoverageDetail({...tool,output_excerpt:JSON.stringify({receipt_schema:1,stop_reason:'model_request_rejected',coverage_complete:false})})).toContain('does not identify the underlying rejection');
   for(const output_excerpt of ['<script>bad()</script>','{"stop_reason":"target_request_budget"}',JSON.stringify({receipt_schema:1,stop_reason:'unknown_reason',coverage_complete:false}),JSON.stringify({receipt_schema:1,stop_reason:'time_budget',coverage_complete:true})]) expect(toolCoverageDetail({...tool,output_excerpt})).toBeUndefined();
 });
 
@@ -885,6 +1004,7 @@ test('combined engine receipt identifies both access modes without inventing usa
   review.pentest.scope.authentication='session';
   const workflow=structuredWorkflow(true,'recorded');
   review.steps[0].result={...result,workflow,tool_runs:[{...result.tool_runs![0],tool:'artex-engine',output_excerpt:JSON.stringify({receipt_schema:1,access_mode:'anonymous_and_authenticated',anonymous_evidence_count:1,authenticated_evidence_count:1})}]};
+  review.steps[0].result.tool_runs.push({...result.tool_runs![0],tool:'patchriot-probes'});
   await page.route(`**/api/reviews/${id}`, route=>route.fulfill({json:review}));
   await page.reload();
   await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
@@ -897,6 +1017,14 @@ test('combined engine receipt identifies both access modes without inventing usa
   await expect(activity).toContainText('Agentic security checks');
   await expect(activity).not.toContainText('ARTEX');
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
+  await expect(activity.locator('[data-cluster=baseline]')).toHaveAttribute('data-parents', 'public_baseline public_mapping public_signatures public_fingerprints authentication');
+  if (info.project.name==='mobile') {
+    const shelf=await activity.locator('[data-cluster=baseline]').boundingBox();
+    const access=await activity.locator('[data-check=authentication]').boundingBox();
+    const investigation=await activity.locator('[data-check=public_analysis]').boundingBox();
+    expect(shelf!.y).toBeGreaterThan(access!.y+access!.height);
+    expect(shelf!.y+shelf!.height).toBeLessThanOrEqual(investigation!.y);
+  }
   await activity.getByRole('button',{name:'Signed-in coverage: Recorded',exact:true}).click();
   await expect(selected).toContainText('Signed-in coverage');
   await expect(selected).toContainText('4');
@@ -1072,4 +1200,27 @@ for (const scenario of ['discovery', 'investigating', 'finishing', 'stale', 'que
     if(scenario==='stale') await expect(node).toContainText('Last reported running');
   }
   await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-status','recorded');
+});
+
+
+test('coverage display omission does not hide scanner or execution failures', () => {
+  const run={...result.tool_runs![0],tool:'patchriot-coverage',exit_code:0,failure:'incomplete',output_truncated:false,
+    output_excerpt:JSON.stringify({version:1,omitted_units:44,units:[{class:'authorization',state:'deferred'}]})};
+  expect(toolOutcome(run)).toBe('Limits recorded');
+  expect(toolOutcome({...run,failure:null})).toBe('Limits recorded');
+  expect(toolOutcome({...run,failure:'time_budget'})).toBe('Incomplete');
+  expect(toolOutcome({...run,exit_code:1})).toBe('Incomplete');
+  expect(toolOutcome({...run,tool:'artex-engine'})).toBe('Incomplete');
+  expect(toolOutcome({...run,output_excerpt:'{}'})).toBe('Incomplete');
+  expect(toolOutcome({...run,output_truncated:true})).toBe('Incomplete');
+});
+
+
+test('ZAP follow-up failure is distinct from a completed initial scan', () => {
+  const run={...result.tool_runs![0],tool:'zap',arguments:['--engine-discoveries'],failure:'incomplete',
+    output_excerpt:JSON.stringify({contexts:[{requests:20,result:{state:'blocked',reason:'scanner_follow_up_incomplete'},gaps:['scanner_execution_incomplete']}],gaps:['scanner_execution_incomplete']})};
+  expect(toolCoverageDetail(run)).toContain('stopped early after 20 recorded requests');
+  expect(toolCoverageDetail(run)).toContain('underlying cause was not retained');
+  expect(toolOutcome(run)).toBe('Incomplete');
+  expect(toolOutcome({...run,failure:null,arguments:[],output_excerpt:'{}'})).toBe('Ran');
 });

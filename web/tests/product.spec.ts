@@ -129,7 +129,15 @@ test('architecture fits docs and mobile with readable vertical contributors', as
   const map=page.locator('.architecture-map');
   const diagram=map.locator('.architecture-vertical');
   await expect(diagram).toBeVisible();
+  await expect(diagram.locator('.architecture-core')).toContainText('Core');
+  await expect(diagram.locator('.architecture-core .architecture-dispatcher')).toContainText('Dispatcher');
+  const coreBox=await diagram.locator('.architecture-core').boundingBox();
+  const appBox=await diagram.locator(':scope > .architecture-box').first().boundingBox();
+  const dispatcherBox=await diagram.locator('.architecture-dispatcher').boundingBox();
+  expect(appBox!.width).toBeLessThan(coreBox!.width * .9);
+  expect(dispatcherBox!.x).toBeGreaterThan(coreBox!.x + 28);
   for(const name of ['Agent 1','Agent 2','Agent N']) await expect(diagram.getByText(name,{exact:true})).toBeVisible();
+  await expect(diagram.locator('.architecture-more')).toHaveText('⋮');
   await expect(diagram.getByAltText('NEAR AI')).toBeVisible();
   await expect(diagram.getByAltText('Venice')).toBeVisible();
   const boxes=await diagram.locator('.architecture-agents .architecture-box').all();
@@ -143,11 +151,15 @@ test('architecture fits docs and mobile with readable vertical contributors', as
   await map.screenshot({path:info.outputPath('responsive-architecture.png')});
   expect(await page.getByRole('link',{name:'Open full diagram'}).getAttribute('href')).toContain('assessment-architecture.svg');
   if(info.project.name==='desktop') {
-    await page.setViewportSize({width:1920,height:1200});
-    await page.goto('/#/home');
-    await expect(map.locator('.architecture-wide')).toBeVisible();
-    await expect(map.locator('.architecture-vertical')).toBeHidden();
-    expect(await map.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true);
-    await map.screenshot({path:info.outputPath('wide-architecture.png')});
+    await page.setViewportSize({width:1440,height:1000});
+    for (const route of ['infrastructure','workflow','home']) {
+      await page.goto(route === 'home' ? '/#/home' : `/#/docs/${route}`);
+      await expect(map.locator('.architecture-wide')).toBeVisible();
+      await expect(map.locator('.architecture-vertical')).toBeHidden();
+      expect(await map.evaluate(element=>element.scrollWidth<=element.clientWidth)).toBe(true);
+      expect(await map.locator('.architecture-wide > svg').getAttribute('viewBox')).toBe('0 0 1200 700');
+      expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+      await map.screenshot({path:info.outputPath(`wide-architecture-${route}.png`)});
+    }
   }
 });

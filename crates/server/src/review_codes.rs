@@ -147,16 +147,13 @@ async fn reserve(
     if (target.pentest_id().is_some() && !consent.accepts_provider_access)
         || (target.pentest_id().is_none()
             && (!consent.review_policy.is_legacy()
+                || consent.use_worker_pool
                 || consent.allows_venice_fallback
                 || consent.fallback_model.is_some()))
         || !consent.accepts_operator_access
-        || consent.device_ids.len() != consent.review_policy.team_size()
-        || consent
-            .device_ids
-            .iter()
-            .collect::<std::collections::HashSet<_>>()
-            .len()
-            != consent.review_policy.team_size()
+        || !consent
+            .review_policy
+            .valid_devices(&consent.device_ids, consent.use_worker_pool)
         || consent.snapshot_sha256.len() != 64
         || !consent
             .snapshot_sha256

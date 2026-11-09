@@ -40,6 +40,7 @@ async fn completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
             allows_venice_fallback: false,
             fallback_model: None,
             review_policy: Default::default(),
+            use_worker_pool: false,
             request_id: payment.request_id,
             snapshot_sha256: "a".repeat(64),
             device_ids: devices.to_vec(),
@@ -251,6 +252,7 @@ async fn live_completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
         allows_venice_fallback: false,
         fallback_model: None,
         review_policy: Default::default(),
+        use_worker_pool: false,
         third_review: None,
         pentest_id: website.site_check_id,
         scope: scope.clone(),
@@ -414,5 +416,55 @@ async fn fixed_two_earnings_require_matching_consent_and_exactly_two_reports() {
     assert_eq!(shares.iter().map(|r| r.amount).sum::<i64>(), 9_000_002);
     assert!(allocate(&db.pool, &candidate, &view).await.unwrap());
     assert!(!allocate(&db.pool, &candidate, &view).await.unwrap());
+    db.finish().await;
+}
+
+#[tokio::test]
+async fn pooled_earnings_pay_only_executed_roles_and_require_the_original_permission() {
+    let db = TestDb::new().await;
+    let (mut candidate, mut view) = live_completed(&db, 10_000_002).await;
+    view.steps.pop();
+    let context = view.pentest.as_mut().unwrap();
+    context.review_policy = patchriot_protocol::pentests::LiveReviewPolicy::InvestigateValidateV1;
+    context.use_worker_pool = true;
+    context.reviewers.rotate_left(1);
+    // Rotating the disclosed list must not rotate role earnings.
+    candidate.terms["consent"]["device_ids"] = json!(
+        context
+            .reviewers
+            .iter()
+            .map(|r| r.device_id)
+            .collect::<Vec<_>>()
+    );
+    candidate.terms["consent"]["review_policy"] = json!("investigate_validate_v1");
+    assert!(
+        allocate(&db.pool, &candidate, &view).await.is_err(),
+        "A pinned order cannot be converted into pooled consent after purchase"
+    );
+    candidate.terms["consent"]["use_worker_pool"] = json!(true);
+    let shares = credits(&view, candidate.amount).unwrap();
+    assert_eq!(shares.len(), 2);
+    assert_eq!(shares[0].device, view.steps[0].device_id.unwrap());
+    assert_eq!(shares[1].device, view.steps[1].device_id.unwrap());
+    assert_eq!(shares.iter().map(|s| s.amount).sum::<i64>(), 9_000_002);
+    let mut duplicate = view.clone();
+    duplicate.steps[1].device_id = duplicate.steps[0].device_id;
+    duplicate.steps[1].operator_id = duplicate.steps[0].operator_id;
+    assert!(credits(&duplicate, candidate.amount).is_err());
+    let mut outsider = view.clone();
+    outsider.steps[1].device_id = Some(Uuid::new_v4());
+    assert!(credits(&outsider, candidate.amount).is_err());
+    assert!(allocate(&db.pool, &candidate, &view).await.unwrap());
+    let recipients: Vec<Uuid> =
+        sqlx::query_scalar("SELECT device_id FROM operator_earnings ORDER BY device_id")
+            .fetch_all(&db.pool)
+            .await
+            .unwrap();
+    assert_eq!(recipients.len(), 2);
+    assert!(
+        recipients
+            .iter()
+            .all(|id| view.steps.iter().any(|s| s.device_id == Some(*id)))
+    );
     db.finish().await;
 }

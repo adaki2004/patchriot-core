@@ -13,6 +13,7 @@ fn terms(db: &TestDb) -> (CheckoutTerms, QuoteResponse) {
         allows_venice_fallback: false,
         fallback_model: None,
         review_policy: Default::default(),
+        use_worker_pool: false,
         request_id: payment.request_id,
         snapshot_sha256: "a".repeat(64),
         device_ids: vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()],

@@ -77,11 +77,13 @@ impl ReviewTarget {
             || match self {
                 Self::Pentest(_) => view.pentest.as_ref().is_none_or(|c| {
                     c.review_policy != consent.review_policy
+                        || c.use_worker_pool != consent.use_worker_pool
                         || c.allows_venice_fallback != consent.allows_venice_fallback
                         || c.fallback_model != consent.fallback_model
                 }),
                 _ => {
                     !consent.review_policy.is_legacy()
+                        || consent.use_worker_pool
                         || consent.allows_venice_fallback
                         || consent.fallback_model.is_some()
                 }

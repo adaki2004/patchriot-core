@@ -34,8 +34,8 @@ pub struct WebsiteReviewPlan {
 pub struct CreateWebsiteReview {
     pub request_id: Uuid,
     pub snapshot_sha256: String,
-    /// Ordered: investigator, reproducer, challenger. No replacement or broader
-    /// operator pool is authorized by this consent.
+    /// Ordered roles by default. Live tests may explicitly consent to a worker
+    /// pool; only the listed devices can then claim a ready role.
     pub device_ids: Vec<Uuid>,
     pub accepts_operator_access: bool,
     /// Live assessments disclose their inference provider separately. Omitted
@@ -52,6 +52,8 @@ pub struct CreateWebsiteReview {
         skip_serializing_if = "crate::pentests::LiveReviewPolicy::is_legacy"
     )]
     pub review_policy: crate::pentests::LiveReviewPolicy,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub use_worker_pool: bool,
 }
 
 impl From<crate::pentests::StartPentest> for CreateWebsiteReview {
@@ -65,6 +67,7 @@ impl From<crate::pentests::StartPentest> for CreateWebsiteReview {
             allows_venice_fallback: input.allows_venice_fallback,
             fallback_model: input.fallback_model,
             review_policy: input.review_policy,
+            use_worker_pool: input.use_worker_pool,
         }
     }
 }
@@ -80,6 +83,7 @@ impl From<CreateWebsiteReview> for crate::pentests::StartPentest {
             allows_venice_fallback: input.allows_venice_fallback,
             fallback_model: input.fallback_model,
             review_policy: input.review_policy,
+            use_worker_pool: input.use_worker_pool,
         }
     }
 }

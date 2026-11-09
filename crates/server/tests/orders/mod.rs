@@ -35,6 +35,7 @@ async fn seed(test: &TestApp, account: Uuid) -> (Uuid, Uuid, Uuid) {
             allows_venice_fallback: false,
             fallback_model: None,
             review_policy: Default::default(),
+            use_worker_pool: false,
             request_id: request,
             snapshot_sha256: "a".repeat(64),
             device_ids: (0..3).map(|_| Uuid::new_v4()).collect(),

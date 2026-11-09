@@ -141,3 +141,22 @@ test('private pairing explains Tailscale admission separately from device approv
   await expect(page.locator('.pair-command').filter({ hasText: './patchriot-relay init' })).toContainText("--audience 'private-team'");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test('audit rows distinguish black and grey box from each saved run scope', async ({ page }) => {
+  await setup(page);
+  const greyScope = { origins: ['https://authenticated.example/'], authentication: 'session' };
+  const publicScope = { origins: ['https://public.example/'] };
+  await page.route('**/api/pentests?scope=mine', route => route.fulfill({json:[
+    {id:siteId, scope:publicScope, state:'approved', created_at:timestamp, ownership_verified:true},
+    {id:sourceId, scope:greyScope, state:'approved', created_at:timestamp, ownership_verified:true}
+  ]}));
+  await page.route('**/api/reviews?scope=mine', route => route.fulfill({json:[
+    // The saved run's scope wins over a subsequently edited setup.
+    {id:runId, mode:'pentest_agent',state:'running',created_at:timestamp+1,steps:[],pentest:{pentest_id:siteId,scope:greyScope}},
+    {id:'00000000-0000-4000-8000-000000000005',mode:'pentest_agent',state:'completed',created_at:timestamp,steps:[],pentest:{pentest_id:'removed-target',scope:publicScope}}
+  ]}));
+  await page.goto('/#/audits');
+  await expect(page.locator('.audit-row')).toHaveCount(3);
+  await expect(page.locator('.audit-title small').filter({hasText:'Grey-box'})).toHaveCount(2);
+  await expect(page.locator('.audit-title small').filter({hasText:'Black-box'})).toHaveCount(1);
+});

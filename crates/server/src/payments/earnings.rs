@@ -51,11 +51,20 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
         (None, None, Some(c)) => (&c.reviewers, &c.scope_sha256),
         _ => return Err("earning_context_mismatch"),
     };
-    if people.len()
-        != view
-            .pentest
-            .as_ref()
-            .map_or(3, |c| c.review_policy.team_size())
+    let pooled = view.pentest.as_ref().is_some_and(|c| c.use_worker_pool);
+    let policy = view
+        .pentest
+        .as_ref()
+        .map_or(Default::default(), |c| c.review_policy);
+    let ids: Vec<_> = people.iter().map(|p| p.device_id).collect();
+    if !policy.valid_devices(&ids, pooled)
+        || view
+            .steps
+            .iter()
+            .filter_map(|s| s.device_id)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            != required
     {
         return Err("earning_team_mismatch");
     }
@@ -75,7 +84,14 @@ fn credits(view: &ReviewView, amount: i64) -> Result<Vec<RoleCredit>, &'static s
             .iter()
             .find(|s| s.role == role)
             .ok_or("earning_role_missing")?;
-        let person = &people[index];
+        let person = if pooled {
+            people
+                .iter()
+                .find(|p| Some(p.device_id) == step.device_id)
+                .ok_or("earning_role_mismatch")?
+        } else {
+            &people[index]
+        };
         if step.state != "completed"
             || step.evidence_complete != Some(true)
             || step.device_id != Some(person.device_id)
