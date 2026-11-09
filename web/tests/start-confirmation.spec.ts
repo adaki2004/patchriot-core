@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { emptyDashboard } from './helpers';
 const id='00000000-0000-4000-8000-000000000002';
 const run='00000000-0000-4000-8000-000000000003';
-for (const screening of ['accepted','unavailable'] as const) {
+for (const screening of ['accepted','unavailable','rejected'] as const) {
   test(`final confirmation keeps gate secrets separate and screening ${screening}`,async({page},info)=>{
     await emptyDashboard(page);
     await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Member',role:'member'},csrf_token:'fixture'}}));
@@ -14,7 +14,12 @@ for (const screening of ['accepted','unavailable'] as const) {
     await page.route('**/api/checkout',r=>r.fulfill({json:{mode:'pilot'}}));
     await page.route(`**/api/pentests/${id}/review-plan`,r=>r.fulfill({json:{pentest_id:id,scope_sha256:target.scope_sha256,candidates:team,recommended_device_ids:team.map(t=>t.device_id),provider:'venice.ai',recommended_review_policy:'investigate_validate_v1'}}));
     let prepared:any,started:any;
-    await page.route(`**/api/pentests/${id}/prepare`,r=>{prepared=r.request().postDataJSON();return r.fulfill(screening==='accepted'?{json:{accepted:true}}:{status:503,json:{error:'context_screening_unavailable'}});});
+    const attempts:any[]=[];
+    await page.route(`**/api/pentests/${id}/prepare`,r=>{
+      prepared=r.request().postDataJSON();attempts.push(prepared);
+      if(screening==='accepted'||prepared.testing_context==='Inspect the public interface within the approved permissions.') return r.fulfill({json:{accepted:true}});
+      return r.fulfill(screening==='rejected'?{status:400,json:{error:'testing_context_not_accepted'}}:{status:503,json:{error:'context_screening_unavailable'}});
+    });
     await page.route(`**/api/pentests/${id}/review`,r=>{started=r.request().postDataJSON();return r.fulfill({json:{id:run}});});
     await page.goto(`/#/pentests/${id}`);
     await page.getByRole('checkbox',{name:/I allow these named operators/}).check();
@@ -41,9 +46,22 @@ for (const screening of ['accepted','unavailable'] as const) {
       expect(started).toEqual(prepared.consent);
       expect(JSON.stringify(started)).not.toContain('synthetic-gate-secret');
     }else{
-      await expect(dialog.getByRole('alert')).toContainText('instruction check is unavailable');
+      const message=screening==='rejected'?'extra testing context was not accepted':'instruction check is unavailable';
+      await expect(dialog.getByRole('alert')).toContainText(message);
       expect(started).toBeUndefined();
       await expect(dialog.getByRole('button',{name:'Confirm & start test'})).toBeEnabled();
+      const firstId=prepared.consent.request_id;
+      await dialog.getByRole('button',{name:'Confirm & start test'}).click();
+      await expect.poll(()=>attempts.length).toBe(2);
+      expect(prepared.consent.request_id).toBe(firstId);
+      await expect(dialog.getByRole('alert')).toContainText(message);
+      expect(started).toBeUndefined();
+      await dialog.getByRole('textbox',{name:/Extra testing context/}).fill('Inspect the public interface within the approved permissions.');
+      await dialog.getByRole('button',{name:'Confirm & start test'}).click();
+      await expect.poll(()=>!!started).toBe(true);
+      expect(prepared.consent.request_id).not.toBe(firstId);
+      expect(started).toEqual(prepared.consent);
+      expect(JSON.stringify(started)).not.toContain('synthetic-gate-secret');
     }
   });
 }

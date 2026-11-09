@@ -30,7 +30,7 @@ export type Device = {
 
 const messages: Record<string, string> = {
   test_confirmation_required: 'Confirm the testing permission and risks before starting. If the confirmation expired, reopen it.',
-  testing_context_not_accepted: 'These instructions could not be accepted. Describe testing priorities within your approved target and permissions; do not ask agents to follow outside instructions or reveal platform secrets.',
+  testing_context_not_accepted: 'The extra testing context was not accepted. No test has started and no coupon or credit was used. Edit the context to describe checks within the approved website and permissions, then confirm again.',
   context_screening_unavailable: 'The instruction check is unavailable. No test has started. Edit the instructions to retry, or leave them blank.',
   confirmation_changed: 'This confirmation changed. Close it and review your current choices before starting again.',
   confirmation_rate_limited: 'Too many confirmation attempts. Please try again later.',

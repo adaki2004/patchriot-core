@@ -156,6 +156,28 @@ async fn request_as<T: Serialize, R: DeserializeOwned>(
             }
         }
         if path.starts_with("/internal/pentests/")
+            && path.ends_with("/prepare")
+            && matches!(status.as_u16(), 400 | 409 | 429 | 503)
+            && let Some(code) = public_upstream_error(
+                &mut response,
+                &[
+                    "test_confirmation_required",
+                    "testing_context_not_accepted",
+                    "context_screening_unavailable",
+                    "confirmation_changed",
+                    "confirmation_rate_limited",
+                    "run_context_not_supported",
+                    "invalid_environment_gate",
+                    "environment_gate_authorization_conflict",
+                    "test_credentials_unavailable",
+                    "live_scope_not_ready",
+                ],
+            )
+            .await
+        {
+            return Err(ApiError::new(status, code));
+        }
+        if path.starts_with("/internal/pentests/")
             && matches!(status.as_u16(), 409 | 429)
             && let Some(code) = public_upstream_error(
                 &mut response,
