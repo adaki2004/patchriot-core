@@ -14,6 +14,8 @@ const paths = {
   wallet: <><path d="M20 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h15V7M20 11h-6v6h6" /><path d="M16 14h.01" /></>,
   file: <><path d="M14 3H5v18h14V8l-5-5v5h5M8 12h8m-8 4h6" /></>,
   shield: <><path d="m12 2 8 3v7c0 5-8 10-8 10S4 17 4 12V5l8-3Z" /><path d="m8 12 3 3 5-6" /></>,
+  scan: <><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" /><circle cx="11" cy="11" r="4" /><path d="m14 14 4 4" /></>,
+  code: <><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-13-2 16" /></>,
 } as const;
 export function UIIcon({ name, className, style }: { name: keyof typeof paths; className?: string; style?: CSSProperties }) {
   return <svg className={className ?? 'ui-icon'} style={style} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;

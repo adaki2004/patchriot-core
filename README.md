@@ -6,6 +6,12 @@ Give us your website URL. Our hosted agents run an automated web application sec
 
 **[Open Patchriot ↗](https://patchriot.net)** · [How it works](https://patchriot.net/#/docs/workflow) · [Testing FAQ](https://patchriot.net/#/docs/safety)
 
+### Final testing confirmation
+
+Before starting, the requester confirms authority and testing risks. Optional context can prioritize areas inside the saved scope; it is screened through server-side OpenRouter before admission and stays untrusted data for both agents. Screening cannot grant new targets, methods, account permissions or access to platform secrets. Failure or uncertainty blocks nonempty context; an empty context needs no model call.
+
+An optional HTTP Basic site gate is separate from application login. Its credentials are encrypted, delivered only to an assigned worker's active lease and injected by the relay for the exact approved origin. They never enter model prompts. Black-box testing behind that perimeter remains anonymous at the application level. A site gate cannot share the HTTP Authorization header with application Basic/Bearer authentication; that conflict is reported explicitly. Extra context and gates require compatible workers and a new setup advertising `run_context_v1`.
+
 ## URL in. Evidence out.
 
 ```mermaid
@@ -509,6 +515,8 @@ Do not put the treasury signing key in the web service. Payment reconciliation a
 Choose **Grey box**, select username/password, a bearer token, HTTP Basic or EVM wallet sign-in, and verify the domain. Supply a dedicated account or token after verification; wallet mode needs permission to create a fresh, unfunded identity. Login and signed-in paths are optional hints. New requests do not need API endpoint layouts or JSON field names.
 
 **How login works:** the agent opens the approved website in isolated Chromium, finds its sign-in and follows the website's own frontend. A private helper fills supplied credentials. For wallet login, the website sees an injected test wallet; the agent reviews each readable login challenge before the relay signs it. The same browser retains the resulting session for approved testing. Some dapps only connect an address and never request a signature; that permits public account views but does not prove private access. Requests still pass through the relay's exact-origin, public-DNS, lease and request limits. External identity providers are not added to scope. If the app needs a separate CDN or public API, the requester can list up to eight exact HTTPS hosts under **Optional sign-in hints → Page dependencies**. The browser may read those hosts without account cookies, tokens or referrers. They cannot become login or test targets; changing the list changes the saved permission and consent hash.
+
+**Separate frontend and API (adapter 23):** API clients can include both owned hosts in `scope.origins` and set `browser_entry_origin` to the website. Ownership and consent cover every target. Browser session login can then use that approved API; wallet, Basic and bearer scopes remain single-host. `browser_resource_origins` allows up to eight public dependencies for black or grey browsing, with anonymous GET/HEAD only. These dependencies are never test targets. A perimeter password goes only to the entry host. Update core, dispatcher/gateway and the relay image together before using these optional fields; existing requests keep their hashes.
 
 **Two supplied accounts (adapter 20):** browser session setup can include a testing account and a protected reference account. Both are preserved by default. An explicit permission allows one narrowly recognized self-service password-change attempt on the testing account after both distinct identities are verified. The reference account stays available for cross-account controls and later validation. Password recovery and other account-setting changes remain outside this permission. The relay enforces these rules, keeps the browser profiles separate, and records each signed-in request's account. Deploy matching protocol, dispatcher migration 32 and capable runners before enabling paired requests.
 

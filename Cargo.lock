@@ -1211,6 +1211,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql-parser"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a818c0d883d7c0801df27be910917750932be279c7bc82dc541b8769425f409"
+dependencies = [
+ "combine",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "group"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2098,6 +2108,7 @@ name = "patchriot-protocol"
 version = "0.0.1"
 dependencies = [
  "ed25519-dalek 3.0.0",
+ "graphql-parser",
  "hex",
  "serde",
  "serde_json",

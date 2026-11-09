@@ -26,7 +26,7 @@ export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: s
   return <section className="workspace-dashboard">
     <div className="workspace-heading">
       <img className="workspace-art" src="/brand/workspace-globe-detailed.png" alt="" width="1536" height="1024" />
-      <div className="workspace-welcome"><p className="section-kicker">YOUR WORKSPACE / COLLECTIVE DEFENSE</p><h1>Hello, {name}.</h1><p>Your systems. More eyes on the weak points.</p><button className="primary" onClick={() => onOpen('request')}><UIIcon name="plus" />Request an audit</button></div>
+      <div className="workspace-welcome"><p className="section-kicker">Your proactive defense workspace</p><h1>Hello, {name}.</h1><p>Your systems. More eyes on the weak points.</p><button className="primary" onClick={() => onOpen('request')}><UIIcon name="plus" />Request an audit</button></div>
     </div>
     <Trial csrf={csrf} onStart={() => onOpen('request')} />
     <div className="workspace-metrics" aria-label="Workspace summary">

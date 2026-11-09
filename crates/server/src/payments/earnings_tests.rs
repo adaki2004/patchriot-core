@@ -249,6 +249,8 @@ async fn live_completed(db: &TestDb, amount: i64) -> (Candidate, ReviewView) {
     view.mode = "pentest_agent".into();
     view.scenario = patchriot_protocol::FixtureScenario::LiveHttpV1;
     view.pentest = Some(PentestContext {
+        requester_context: String::new(),
+        environment_gate: false,
         allows_venice_fallback: false,
         fallback_model: None,
         review_policy: Default::default(),

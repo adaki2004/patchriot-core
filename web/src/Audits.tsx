@@ -1,6 +1,7 @@
 import { AdminStats } from './AdminStats';
 import { TrialDesk } from './Trial';
 import { RunExpectations } from './RunExpectations';
+import { UIIcon } from './UIIcon';
 import { useState } from 'react';
 import { useLive } from './useLive';
 import type { View } from './navigation';
@@ -40,7 +41,7 @@ export function useAudits(all = false) {
 
 export function AuditRows({ items, onOpen }: { items: Audit[]; onOpen: (view: View, id?: string | null) => void }) {
   return <div className="audit-rows">{items.map(item => <article key={item.key} className="audit-row" data-state={item.state}>
-    <span className={`audit-kind kind-${item.kind === 'Website' ? 'web' : item.kind === 'Source code' ? 'source' : 'example'}`} aria-hidden="true">{item.kind === 'Website' ? '↗' : item.kind === 'Source code' ? '{ }' : '✓'}</span>
+    <span className={`audit-kind kind-${item.kind === 'Website' ? 'web' : item.kind === 'Source code' ? 'source' : 'example'}`} aria-hidden="true"><UIIcon name={item.kind === 'Website' ? 'scan' : item.kind === 'Source code' ? 'code' : 'file'} /></span>
     <button className="audit-title" onClick={() => onOpen(item.run ? 'reviews' : item.view, item.run?.id ?? item.id)}><strong>{item.title}</strong><small>{item.assessment ?? item.kind} · {new Date(item.created * 1000).toLocaleDateString()}</small></button>
     <div className="audit-state"><span className={`status-chip state-${item.state}`}>{auditLabel(item.state)}</span>{item.state !== 'completed' && auditReportAvailable(item) && <small>Report available</small>}{item.state === 'queued' && <small className="queue-note">Waiting for agents. Check back later.</small>}{item.run && <span className="role-progress" aria-label={`${item.run.steps.filter(s => s.state === 'completed').length} of ${item.run.steps.length} role reports received`}>{item.run.steps.map((step, index) => <i key={index} data-done={step.state === 'completed'} />)}</span>}</div>
     {item.run && item.view !== 'reviews' && <button className="quiet audit-material" onClick={() => onOpen(item.view, item.id)}>Material</button>}

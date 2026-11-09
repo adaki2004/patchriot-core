@@ -114,3 +114,93 @@
 .login-targets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .login-targets > label:only-child { grid-column: 1 / -1; }
 @media (max-width: 640px) { .login-targets { grid-template-columns: 1fr; gap: 0; } }
+
+.test-start-dialog { max-width: 38rem; max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.test-start-dialog fieldset { display: grid; gap: 1rem; border: 0; padding: 0; margin: 0; }
+.test-start-dialog .check { align-items: start; }
+.test-start-dialog small { display: block; line-height: 1.5; }
+
+/* Setup steps 2 and 3 only. Craft pass informed by unslop by Damir Sokolovsky
+   (@heydamir, https://heydamir.design/unslop), CC BY 4.0. */
+.textmode-ui .pentests-page[data-setup-step] { max-width: 1040px; container-type: inline-size; }
+.pentests-page[data-setup-step] .assessment-heading { margin: 24px 0; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-heading h1 { font-size: clamp(28px, 3vw, 36px); }
+.textmode-ui .pentests-page[data-setup-step] .assessment-navigation .quiet { min-height: 44px; height: auto; padding: 8px 12px; border-radius: 8px; }
+.textmode-ui .pentests-page[data-setup-step] .setup-back-button { min-height: 44px; height: auto; padding: 10px 16px; border-radius: 8px; border: 1px solid #5b6a83; background: #28364b; color: #edf1f7; }
+.textmode-ui .pentests-page[data-setup-step] .setup-back-button:hover { background: #34455f; border-color: #7b8ea9; filter: none; }
+.textmode-ui .pentests-page[data-setup-step] .setup-back-button:focus-visible { outline: 2px solid #adc6ff; outline-offset: 3px; }
+.pentests-page[data-setup-step] .assessment-steps { margin-bottom: 20px; border-radius: 8px; }
+.pentests-page[data-setup-step] .assessment-steps li { padding: 12px 16px; gap: 12px; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-steps .inline { min-height: 24px; height: auto; padding: 0; border: 0; border-radius: 0; text-align: left; }
+.pentests-page[data-setup-step] .setup-back { margin: 16px 0; gap: 12px 20px; }
+.pentests-page[data-setup-step] .setup-back + .assessment-request-summary { margin-top: 0; }
+.pentests-page[data-setup-step] .assessment-request-summary { margin: 0 0 20px; gap: 8px 20px; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-request-summary .status-chip { padding: 0; border: 0; background: none; color: #c6d9f8; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-card { padding: 24px 0; border: 0; border-radius: 0; background: none; box-shadow: none; margin: 0; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-card h2 { font-size: 24px; margin-bottom: 12px; }
+.pentests-page[data-setup-step] .assessment-success { border: 0; border-radius: 0; background: none; align-items: start; gap: 12px; padding: 0; margin: 0 0 16px; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-admin-note { padding: 0 0 0 32px; margin: 0 0 24px; border: 0; background: none; color: var(--muted); font-size: 14px; }
+.pentests-page[data-setup-step] .assessment-setup-body:has(> *) { border-top: 1px solid var(--line); }
+.pentests-page[data-setup-step] .assessment-setup-body > .assessment-card + .assessment-card { border-top: 1px solid var(--line); }
+.pentests-page[data-setup-step] .assessment-permissions > fieldset,
+.pentests-page[data-setup-step] .assessment-test-account { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 32px; }
+.pentests-page[data-setup-step] .assessment-section-intro p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.pentests-page[data-setup-step] .assessment-section-fields > :first-child,
+.pentests-page[data-setup-step] .assessment-test-account form > p:first-child,
+.pentests-page[data-setup-step] .assessment-test-account fieldset > p:first-child { margin-top: 0; }
+.pentests-page[data-setup-step] .assessment-section-fields { min-width: 0; }
+.pentests-page[data-setup-step] .assessment-checkout-summary { display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: start; gap: 16px; margin-bottom: 24px; }
+.pentests-page[data-setup-step] .assessment-checkout-summary > strong { padding-top: 0; }
+.pentests-page[data-setup-step] .assessment-confirm-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, .85fr); gap: 32px; }
+.pentests-page[data-setup-step] .assessment-team-consent,
+.pentests-page[data-setup-step] .assessment-payment { min-width: 0; }
+.pentests-page[data-setup-step] .assessment-payment { border-left: 1px solid var(--line); padding-left: 32px; }
+.pentests-page[data-setup-step] .checkout-handlers { margin: 0 0 20px; gap: 12px 32px; }
+.pentests-page[data-setup-step] .assessment-team { display: block; }
+.pentests-page[data-setup-step] .assessment-team > div { padding: 12px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+.pentests-page[data-setup-step] .assessment-team > div:first-child { border-top: 0; padding-top: 0; }
+.pentests-page[data-setup-step] .assessment-team strong { margin-top: 4px; }
+.pentests-page[data-setup-step] .assessment-team-consent .assessment-footnote { margin: 16px 0; }
+.pentests-page[data-setup-step] .assessment-confirm .assessment-consents { margin: 20px 0 0; }
+.pentests-page[data-setup-step] .assessment-confirm .assessment-checkout { margin-top: 0; }
+.pentests-page[data-setup-step] .assessment-payment .assessment-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding-top: 0; margin-top: 20px; border: 0; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-payment .assessment-actions .primary { width: 100%; min-height: 48px; height: auto; padding: 12px 16px; border-radius: 8px; }
+.pentests-page[data-setup-step] .assessment-payment .assessment-actions .quiet { justify-self: start; }
+.pentests-page[data-setup-step] .assessment-payment .run-expectations { margin: 20px 0; padding: 16px 0; }
+.pentests-page[data-setup-step] .assessment-payment .trial-card { margin: 0 0 20px; padding: 0 0 20px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); }
+.textmode-ui .pentests-page[data-setup-step] .assessment-payment .trial-card h2 { color: var(--ink); font: 500 20px/1.3 var(--body-font); letter-spacing: 0; }
+.textmode-ui .pentests-page[data-setup-step] .assessment-payment .trial-card :is(.fine, .section-kicker) { color: var(--muted); }
+.pentests-page[data-setup-step] .checkout-paused { border-left: 2px solid #8aaaff; padding-left: 20px; }
+.pentests-page[data-setup-step] .request-details { margin-top: 8px; }
+.pentests-page[data-setup-step] .ownership-layout { display: grid; grid-template-columns: 272px minmax(0, 1fr); gap: 32px; align-items: start; }
+.pentests-page[data-setup-step] .ownership-guidance,
+.pentests-page[data-setup-step] .ownership-records { min-width: 0; }
+.pentests-page[data-setup-step] .dns-setup-note { margin: 0 0 24px; padding: 0; border: 0; background: none; font-size: 14px; }
+.pentests-page[data-setup-step] .dns-setup-note p { margin: 8px 0 16px; }
+.pentests-page[data-setup-step] .ownership-guidance > .assessment-footnote { border-top: 1px solid var(--line); padding-top: 20px; margin: 0; }
+.pentests-page[data-setup-step] .dns-instructions { margin-bottom: 20px; padding-left: 20px; font-size: 14px; }
+.pentests-page[data-setup-step] .dns-instructions li { margin: 0 0 8px; padding-left: 4px; }
+.pentests-page[data-setup-step] .dns-record { margin: 0 0 20px; padding: 20px; border-radius: 8px; }
+.pentests-page[data-setup-step] .dns-record-field { padding-top: 16px; }
+.pentests-page[data-setup-step] .dns-record-field > code { margin-top: 8px; font-size: 13px; line-height: 1.6; }
+.pentests-page[data-setup-step] .dns-check-status { margin-top: 20px; padding: 16px; gap: 16px; background: none; }
+.pentests-page[data-setup-step] .ownership-records .assessment-actions { margin-top: 20px; padding-top: 20px; gap: 16px; }
+@container (max-width: 800px) {
+  .pentests-page[data-setup-step] .ownership-layout,
+  .pentests-page[data-setup-step] .assessment-confirm-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .pentests-page[data-setup-step] .assessment-permissions > fieldset,
+  .pentests-page[data-setup-step] .assessment-test-account { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .pentests-page[data-setup-step] .assessment-payment { border-left: 0; border-top: 1px solid var(--line); padding: 24px 0 0; }
+  .pentests-page[data-setup-step] .dns-setup-note { margin-bottom: 20px; }
+}
+@media (max-width: 640px) {
+  .pentests-page[data-setup-step] .assessment-navigation { align-items: start; gap: 12px; }
+  .pentests-page[data-setup-step] .assessment-navigation > div { gap: 8px; flex-wrap: wrap; }
+  .pentests-page[data-setup-step] .assessment-steps li { padding: 12px 8px; gap: 8px; }
+  .textmode-ui .pentests-page[data-setup-step] .assessment-steps .inline { font-size: 12px; }
+  .pentests-page[data-setup-step] .assessment-request-summary { gap: 8px 16px; }
+  .textmode-ui .pentests-page[data-setup-step] .assessment-card h2 { font-size: 22px; }
+  .textmode-ui .pentests-page[data-setup-step] .assessment-admin-note { padding-left: 0; }
+  .pentests-page[data-setup-step] .dns-record { padding: 16px; }
+  .pentests-page[data-setup-step] .assessment-payment .assessment-actions .quiet { justify-self: stretch; }
+}

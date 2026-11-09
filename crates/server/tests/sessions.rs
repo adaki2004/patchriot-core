@@ -1506,6 +1506,90 @@ async fn pairing_recovery_errors_are_specific_without_forwarding_private_dispatc
 }
 
 #[tokio::test]
+async fn preparation_errors_reach_the_browser_without_private_upstream_details() {
+    let payload = Arc::new(Mutex::new((
+        StatusCode::BAD_REQUEST,
+        json!({"error":"testing_context_not_accepted"}),
+    )));
+    let reply = payload.clone();
+    let downstream = Router::new().fallback(move || {
+        let (status, body) = reply.lock().unwrap().clone();
+        async move { (status, Json(body)) }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let (cookie, session) = test.login("member").await;
+    let headers = [
+        ("cookie", cookie.as_str()),
+        ("origin", ORIGIN),
+        ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+    ];
+    let id = Uuid::new_v4();
+    let input = json!({"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":[Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4()],"accepts_operator_access":true,"accepts_provider_access":true},"terms_version":"testing-risk-v1","testing_context":"Inspect the public chat."});
+    for (status, body, expected) in [
+        (
+            StatusCode::BAD_REQUEST,
+            json!({"error":"testing_context_not_accepted","private":"never forward this"}),
+            "testing_context_not_accepted",
+        ),
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            json!({"error":"context_screening_unavailable"}),
+            "context_screening_unavailable",
+        ),
+        (
+            StatusCode::CONFLICT,
+            json!({"error":"confirmation_changed"}),
+            "confirmation_changed",
+        ),
+        (
+            StatusCode::TOO_MANY_REQUESTS,
+            json!({"error":"confirmation_rate_limited"}),
+            "confirmation_rate_limited",
+        ),
+        (
+            StatusCode::BAD_REQUEST,
+            json!({"error":"private provider error"}),
+            "invalid_request",
+        ),
+        (
+            StatusCode::BAD_REQUEST,
+            json!({"error":"testing_context_not_accepted","private":"x".repeat(2048)}),
+            "invalid_request",
+        ),
+        (
+            StatusCode::FORBIDDEN,
+            json!({"error":"testing_context_not_accepted"}),
+            "action_not_allowed",
+        ),
+    ] {
+        *payload.lock().unwrap() = (status, body);
+        let result = test
+            .request(
+                "POST",
+                &format!("/api/pentests/{id}/prepare"),
+                input.clone(),
+                &headers,
+            )
+            .await;
+        assert_eq!(result.0, status);
+        assert_eq!(result.2, json!({"error":expected}));
+    }
+    *payload.lock().unwrap() = (
+        StatusCode::BAD_REQUEST,
+        json!({"error":"testing_context_not_accepted"}),
+    );
+    let unrelated = test
+        .request("GET", &format!("/api/reviews/{id}"), Value::Null, &headers)
+        .await;
+    assert_eq!(unrelated.2, json!({"error":"invalid_request"}));
+    test.finish().await;
+    server.abort();
+}
+
+#[tokio::test]
 async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels() {
     use patchriot_protocol::website_reviews::ReviewPrice;
     use patchriot_protocol::{DeviceIntroduction, DeviceView, ReviewView, RuntimeKind};
