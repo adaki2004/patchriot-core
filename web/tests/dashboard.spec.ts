@@ -111,6 +111,7 @@ test('members can see agent software versions, tools and report counts without h
   await page.route('**/api/agents', route => route.fulfill({ json: [{ id: '00000000-0000-4000-8000-000000000002', reported_os: 'linux', runtime: 'hermes', runtime_version: 'runner-v3', declared_model: 'local-model', state: 'online', last_seen_at: 1793692800, system: { os_name: 'Kali GNU/Linux', os_version: '2026.3', architecture: 'x86_64', relay_version: '0.0.1' }, live_tests: true, live_tools: ['artex_engine_v1'], reports_received: 12, compute_group: 'private-host', operator_name: 'private-operator' }] }));
   await page.goto('/#/agents');
   await expect(page.getByText('Kali GNU/Linux 2026.3', { exact: true })).toBeVisible();
+  await page.getByText('Capabilities & versions', { exact: true }).click();
   await expect(page.getByText('Agentic security checks + standard checks', { exact: true })).toBeVisible();
   await expect(page.getByText('runner-v3', { exact: true })).toBeVisible();
   await expect(page.getByText('0.0.1', { exact: true })).toBeVisible();

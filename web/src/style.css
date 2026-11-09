@@ -53,6 +53,9 @@ h3 { font-size: 18px; margin: 25px 0 10px; letter-spacing: -.35px; font-weight: 
 .pill { background: #dadada; padding: 6px 8px; white-space: nowrap; font-size: 9px; }
 footer { display: flex; justify-content: space-between; padding: 32px 0; margin-top: 55px; border-top: 1px solid var(--line); font-size: 12px; gap: 25px; color: var(--muted); }
 footer > span:first-child { color: var(--ink); font-weight: 700; }footer .subtle { margin-left: 15px; font-weight: 400; }
+.footer-community { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px 24px; }
+.footer-community > div { display: flex; gap: 20px; }
+.footer-community a { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
 .notice { margin: 18px 0; padding: 15px 18px; background: #ebebeb; border: 1px solid #d5d5d5; color: #4c4c4c; border-radius: 5px; font-size: 13px; }
 .notice.error { background: #fff1e6; border-color: #e9c4a4; color: #7c3916; }
 .inline { text-decoration: underline; text-underline-offset: 3px; margin-left: 10px; font-weight: 600; }
@@ -211,6 +214,26 @@ nav > button, .nav-note { flex-shrink: 0; white-space: nowrap; }
 .agent-entry dl { display: grid; grid-template-columns: auto 1fr; gap: .6rem 1rem; font-size: .85rem; }
 .agent-entry dt { color: var(--muted, #666); }
 .agent-entry dd { margin: 0; overflow-wrap: anywhere; }
+.network-agent-panel .agent-directory { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.network-agent-panel .network-agent-row { padding: 26px 0; border: 0; border-top: 1px solid var(--line); }
+.network-agent-panel .network-agent-heading { align-items: center; justify-content: start; gap: 14px; }
+.network-agent-mark { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; background: #20334b; color: #a8c9f0; border-radius: 10px; }
+.network-agent-heading > div { display: grid; gap: 4px; }
+.network-agent-heading strong { font-size: 17px; }
+.network-agent-heading small { font-family: var(--mono); color: var(--muted); font-size: 11px; }
+.network-agent-heading .pill { margin-left: auto; }
+.network-agent-panel .network-agent-facts { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, .6fr) minmax(0, 1fr); margin: 22px 0 18px; gap: 20px; }
+.network-agent-facts > div { min-width: 0; }
+.network-agent-facts dt { font-size: 11px; margin-bottom: 7px; }
+.network-agent-facts dd { line-height: 1.5; }
+.network-agent-panel .network-agent-details { margin: 0; border: 0; padding: 0; background: none; }
+.network-agent-details > summary { cursor: pointer; width: fit-content; color: var(--ink); font-size: 12px; padding: 8px 0; }
+.network-agent-details > summary:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+.network-agent-panel .network-agent-details dl { grid-template-columns: 120px minmax(0, 1fr); max-width: 680px; line-height: 1.5; margin-top: 12px; }
+@media(max-width: 700px) {
+  .network-agent-panel .network-agent-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .network-agent-panel .network-agent-details dl { grid-template-columns: 95px minmax(0, 1fr); gap: 10px; }
+}
 
 /* Public product pages and the signed-in workspace have separate layouts. */
 .brand-mark { object-fit: contain; border-radius: 5px; background: #111; }

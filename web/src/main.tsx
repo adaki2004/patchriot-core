@@ -281,7 +281,7 @@ function App() {
       </div>
     </main>
     <Analytics page={analyticsPage} />
-    <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><span>Inspect the code. Question the evidence.</span></footer>
+    <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><div className="footer-community"><span>Inspect the code. Question the evidence.</span><div aria-label="Patchriot community"><a href="https://x.com/patchriot_net" target="_blank" rel="noopener noreferrer">X / Twitter</a><a href="https://github.com/adaki2004/patchriot-core" target="_blank" rel="noopener noreferrer">GitHub</a></div></div></footer>
     <WalletHost/>
     {!account && accessOpen && <AccessDialog initialCode={initialCode} onLogin={signedIn} onClose={closeAccess} />}
     {pairing && isAdmin && account && session?.csrf_token && <Pair account={account} csrf={session.csrf_token} onPaired={() => { setView('devices'); changed('Relay paired. Check its approval and connection status below.'); }} onClose={() => setPairing(false)} />}
