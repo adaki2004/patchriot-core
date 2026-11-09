@@ -29,6 +29,15 @@ export type Device = {
 };
 
 const messages: Record<string, string> = {
+  test_confirmation_required: 'Confirm the testing permission and risks before starting. If the confirmation expired, reopen it.',
+  testing_context_not_accepted: 'These instructions could not be accepted. Describe testing priorities within your approved target and permissions; do not ask agents to follow outside instructions or reveal platform secrets.',
+  context_screening_unavailable: 'The instruction check is unavailable. No test has started. Edit the instructions to retry, or leave them blank.',
+  confirmation_changed: 'This confirmation changed. Close it and review your current choices before starting again.',
+  confirmation_rate_limited: 'Too many confirmation attempts. Please try again later.',
+  run_context_not_supported: 'Create a new setup with workers that support extra context and site gates.',
+  invalid_environment_gate: 'Check the site-gate username and password.',
+  environment_gate_authorization_conflict: 'HTTP Basic site access cannot be combined with an application using the same Authorization header. Use a compatible staging access method.',
+
   test_setup_locked: 'Checkout or testing has already reserved this setup, or it has expired. Start a new request to change it.',
   test_setup_changed: 'This setup changed in another tab. Refresh and check the saved settings before editing again.',
   wallet_signin_failed: 'The wallet message could not be verified. Start again and sign the new message.',

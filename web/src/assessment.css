@@ -114,3 +114,8 @@
 .login-targets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .login-targets > label:only-child { grid-column: 1 / -1; }
 @media (max-width: 640px) { .login-targets { grid-template-columns: 1fr; gap: 0; } }
+
+.test-start-dialog { max-width: 38rem; max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.test-start-dialog fieldset { display: grid; gap: 1rem; border: 0; padding: 0; margin: 0; }
+.test-start-dialog .check { align-items: start; }
+.test-start-dialog small { display: block; line-height: 1.5; }

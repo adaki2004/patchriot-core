@@ -6,6 +6,12 @@ Give us your website URL. Our hosted agents run an automated web application sec
 
 **[Open Patchriot ↗](https://patchriot.net)** · [How it works](https://patchriot.net/#/docs/workflow) · [Testing FAQ](https://patchriot.net/#/docs/safety)
 
+### Final testing confirmation
+
+Before starting, the requester confirms authority and testing risks. Optional context can prioritize areas inside the saved scope; it is screened through server-side OpenRouter before admission and stays untrusted data for both agents. Screening cannot grant new targets, methods, account permissions or access to platform secrets. Failure or uncertainty blocks nonempty context; an empty context needs no model call.
+
+An optional HTTP Basic site gate is separate from application login. Its credentials are encrypted, delivered only to an assigned worker's active lease and injected by the relay for the exact approved origin. They never enter model prompts. Black-box testing behind that perimeter remains anonymous at the application level. A site gate cannot share the HTTP Authorization header with application Basic/Bearer authentication; that conflict is reported explicitly. Extra context and gates require compatible workers and a new setup advertising `run_context_v1`.
+
 ## URL in. Evidence out.
 
 ```mermaid

@@ -26,3 +26,12 @@ export async function openAuditTool(page: Page, name: string) {
   await page.getByText('Saved material and test examples', { exact: true }).click();
   await page.getByRole('button', { name, exact: true }).click();
 }
+
+// Legacy checkout fixtures explicitly confirm the new final step. Dedicated
+// confirmation tests provide their own preparation success/failure responses.
+export async function completeStartConfirmation(page: Page) {
+  await page.route('**/api/pentests/*/prepare', r => r.fulfill({json:{accepted:true}}));
+  const dialog=page.getByRole('dialog');
+  await dialog.getByRole('checkbox',{name:/I own this system/}).check();
+  await dialog.getByRole('button',{name:'Confirm & start test'}).click();
+}
