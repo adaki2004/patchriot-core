@@ -97,7 +97,8 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
       </section>
       <div className="architecture-link"><span>Evidence returns through the dispatcher</span><span aria-hidden="true">↓</span></div>
       <div className="architecture-box"><strong>Your private report</strong><span>Findings, request evidence and coverage gaps</span></div>
+      <p className="flow-caption">Patchriot-managed today. Public contributors and business-managed fleets planned. NEAR protects inference only.</p>
     </div>
-    <p className="flow-caption">The numbered agents are inference contributors, not fixed review roles. Patchriot operates them today; public contribution is coming soon. Provider order and optional fallback are shown at checkout. This illustrates the architecture, not live activity. <a href={architectureUrl} target="_blank" rel="noreferrer">Open full diagram ↗</a></p>
+    <p className="flow-caption"><a href={architectureUrl} target="_blank" rel="noreferrer">Open full diagram ↗</a></p>
   </div>;
 }
