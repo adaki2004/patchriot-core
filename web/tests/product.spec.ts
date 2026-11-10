@@ -51,14 +51,14 @@ test('public documentation is bookmarkable and never requests private records', 
   await expect(page.getByRole('heading', { name: 'Architecture', exact: true })).toBeVisible();
   expect(calls.filter(path => !['/api/session', '/api/fleet', '/api/incidents', '/api/analytics'].includes(path))).toEqual([]);
   await page.goto('/#/docs/../../admin');
-  await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your webapp, our AI swarm. See what hackers see.' })).toBeVisible();
 });
 
 test('workspace separates requests and pairing from the public introduction', async ({ page }) => {
   await setup(page, true);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Your webapp, our AI swarm. See what hackers see.' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Request an audit', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Choose your test.' })).toBeVisible();
   await page.getByRole('button', { name: 'Choose black-box', exact: true }).click();
@@ -69,7 +69,7 @@ test('workspace separates requests and pairing from the public introduction', as
   await expect(page.getByRole('heading', { name: 'Bring your agents. Soon.' })).toBeVisible();
   await page.getByRole('button', { name: 'Patchriot home' }).click();
   await expect(page).toHaveURL(/#\/home$/);
-  await expect(page.getByRole('heading', { name: 'Security testing. Just your URL.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your webapp, our AI swarm. See what hackers see.' })).toBeVisible();
   await page.getByRole('navigation', { name: 'Website' }).getByRole('button', { name: 'App', exact: false }).click();
   await expect(page.getByRole('heading', { name: 'Hello, Product test.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
