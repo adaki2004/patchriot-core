@@ -286,7 +286,7 @@
 .docs-article details summary { line-height: 1.5; }
 .textmode-ui .tm-inference { display: grid; grid-template-columns: 1fr 1.2fr; gap: 32px; padding: 36px clamp(24px, 4vw, 56px); border-bottom: 1px solid var(--line); background: var(--surface); }
 .tm-inference h2 { font: 400 clamp(28px, 3vw, 40px)/1.15 var(--heading-font); margin: 14px 0; }
-.tm-inference h2 em { color: #a5bcff; }
+.tm-inference h2 em, .textmode-ui .exposure-copy h1 .exposure-swarm { color: #a5bcff; }
 .tm-inference p { max-width: 65ch; line-height: 1.7; }
 .tm-inference .fine { color: var(--muted); }
 .request-ownership { max-width: 72ch; padding-left: 16px; border-left: 2px solid var(--accent); line-height: 1.65; }
