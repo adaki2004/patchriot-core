@@ -209,6 +209,106 @@ async fn ownership_refresh_requires_session_csrf_and_forwards_only_the_authentic
 }
 
 #[tokio::test]
+async fn customer_ownership_approval_forwards_only_the_authenticated_admin() {
+    let id = Uuid::new_v4();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let records = seen.clone();
+    let downstream = Router::new().fallback(move |headers: HeaderMap, uri: axum::http::Uri, Json(body): Json<Value>| {
+        let records = records.clone();
+        async move {
+            records.lock().unwrap().push((headers["x-patchriot-account"].to_str().unwrap().to_owned(), headers["x-patchriot-role"].to_str().unwrap().to_owned(), uri.path().to_owned(), body));
+            Json(json!({"id":id,"request_id":Uuid::new_v4(),"scope":{"origins":["https://customer.example"],"objective":"Owned fixture","methods":["GET"]},"scope_sha256":"a".repeat(64),"permission_note":"Owner permission","state":"approved","created_at":1,"expires_at":9999999999_i64,"decision_note":"Admin approval","can_start":false,"ownership_verified":false,"staff_authorized":true,"private_connection":"never forward"}))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let path = format!("/api/pentests/{id}/authorize");
+    let body = json!({"scope_sha256":"a".repeat(64),"note":"Owner confirmed this exact test."});
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &[("origin", ORIGIN)])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let (member_cookie, member) = test.login("member").await;
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            body.clone(),
+            &[
+                ("cookie", &member_cookie),
+                ("origin", ORIGIN),
+                ("x-csrf-token", member["csrf_token"].as_str().unwrap()),
+                ("x-patchriot-role", "admin")
+            ]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let (cookie, session) = test.login("admin").await;
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            body.clone(),
+            &[("cookie", &cookie), ("origin", ORIGIN)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            body.clone(),
+            &[
+                ("cookie", &cookie),
+                ("origin", "https://other.example"),
+                ("x-csrf-token", session["csrf_token"].as_str().unwrap())
+            ]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert!(seen.lock().unwrap().is_empty());
+    let reply = test
+        .request(
+            "POST",
+            &path,
+            body.clone(),
+            &[
+                ("cookie", &cookie),
+                ("origin", ORIGIN),
+                ("x-csrf-token", session["csrf_token"].as_str().unwrap()),
+                ("x-patchriot-account", "not-the-admin"),
+            ],
+        )
+        .await;
+    assert_eq!(reply.0, StatusCode::OK, "{}", reply.2);
+    assert_eq!(reply.2["staff_authorized"], true);
+    assert_eq!(reply.2["ownership_verified"], false);
+    assert_eq!(reply.2["can_start"], false);
+    assert!(reply.2.get("private_connection").is_none());
+    assert_eq!(
+        *seen.lock().unwrap(),
+        vec![(
+            session["account"]["id"].as_str().unwrap().to_owned(),
+            "admin".to_owned(),
+            format!("/internal/pentests/{id}/authorize"),
+            body
+        )]
+    );
+    server.abort();
+    test.finish().await;
+}
+
+#[tokio::test]
 async fn setup_edit_requires_origin_and_csrf_and_cannot_spoof_the_requester() {
     let id = Uuid::new_v4();
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -324,26 +424,29 @@ async fn live_pilot_requires_session_csrf_and_cannot_bypass_coupon_or_closed_acc
             .0,
             StatusCode::FORBIDDEN
         );
-        let staff_path = format!("/api/pentests/{}/authorize-owned-test", Uuid::new_v4());
-        let grant = json!({"scope_sha256":"a".repeat(64),"note":"member cannot grant permission"});
-        assert_eq!(
-            test.request("POST", &staff_path, grant.clone(), &headers)
+        for action in ["authorize", "authorize-owned-test"] {
+            let staff_path = format!("/api/pentests/{}/{action}", Uuid::new_v4());
+            let grant =
+                json!({"scope_sha256":"a".repeat(64),"note":"member cannot grant permission"});
+            assert_eq!(
+                test.request("POST", &staff_path, grant.clone(), &headers)
+                    .await
+                    .0,
+                StatusCode::FORBIDDEN
+            );
+            let (admin_cookie, _) = test.login("admin").await;
+            assert_eq!(
+                test.request(
+                    "POST",
+                    &staff_path,
+                    grant,
+                    &[("cookie", &admin_cookie), ("origin", ORIGIN)]
+                )
                 .await
                 .0,
-            StatusCode::FORBIDDEN
-        );
-        let (admin_cookie, _) = test.login("admin").await;
-        assert_eq!(
-            test.request(
-                "POST",
-                &staff_path,
-                grant,
-                &[("cookie", &admin_cookie), ("origin", ORIGIN)]
-            )
-            .await
-            .0,
-            StatusCode::FORBIDDEN
-        );
+                StatusCode::FORBIDDEN
+            );
+        }
         test.finish().await;
     }
 }

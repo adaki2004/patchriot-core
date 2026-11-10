@@ -411,6 +411,7 @@ pub fn router(state: AppState) -> Router {
             "/api/pentests/{id}/authorize-owned-test",
             post(pentests::authorize_owned_test),
         )
+        .route("/api/pentests/{id}/authorize", post(pentests::authorize))
         .route("/api/pentests/{id}/review-plan", get(pentests::plan))
         .route("/api/pentest-tools", get(pentests::tools))
         .route("/api/pentests/{id}/review", post(pentests::start))

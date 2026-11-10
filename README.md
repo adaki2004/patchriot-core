@@ -81,6 +81,8 @@ A free-test campaign offers **one requested coupon per account**, with a 24/48-h
 
 Use the hosted product to request a test. The sections below are for running a separate installation or maintaining this one. Secrets, private reports and deployment records do not belong in Git.
 
+**Admin ownership approval:** open **Administration → Audit activity → Needs approval → Review ownership**. If you have independently confirmed the requester's authority for every listed website, record the reason and choose **Approve ownership**. This grants permission for that request without claiming DNS proof. The customer still confirms the test and uses their own payment or coupon. The admin identity, reason and time are recorded; approval expires within 24 hours. Deploy the matching dispatcher `POST /internal/pentests/:id/authorize` route before this UI. No migration or relay update is needed.
+
 <details>
 <summary>Account credit: deployment, accounting and recovery</summary>
 
@@ -266,7 +268,7 @@ Live assessments use the same access policy as snapshot and source reviews: `pil
 
 Deploy matching dispatcher and agent-gateway versions before core. Migrations run at service startup. Use the current adapter **11** image and relay for the managed NEAR route. Each device needs private-work approval, a matching hosted model declaration and the separate `--live-tests` opt-in. The [relay guide](https://github.com/adaki2004/patchriot-relay#opt-in-to-live-website-tests) explains provider configuration. Older requests keep their saved capabilities and review policy; offline local-model modes cannot silently receive live tasks.
 
-The browser uses `/api/pentests`, `/:id/decision`, `/:id/review-plan` and `/:id/review`. Writes require a session, same origin and CSRF; approval is admin-only, while consent and starting a test belong to the requester. Approval expires after 24 hours. Changing origins or the objective requires a new approval. Revocation, cancellation or removed device approval stops new evidence downloads and lease renewals. A request already sent cannot be recalled.
+The browser uses `/api/pentests`, `/:id/decision`, `/:id/review-plan` and `/:id/review`. Writes require a session, same origin and CSRF; approval is admin-only, while consent and starting a test belong to the requester. Approval expires after 24 hours. Changing target origins requires fresh ownership verification or admin approval. Before checkout, the requester can change testing permissions for the same websites with fresh consent. Revocation, cancellation or removed device approval stops new evidence downloads and lease renewals. A request already sent cannot be recalled.
 
 Each live role has one execution attempt. A lost delivery retries the saved result; an interrupted execution is not automatically rerun at the provider's expense. Three devices on one machine or model are labelled accordingly. HTTP observations and container cleanup are reported by the operator, not remotely attested. Reports retain bounded response excerpts in private history; they are separate from the seven-day raw-snapshot retention policy.
 
@@ -610,6 +612,6 @@ Deploy dispatcher and its migration before core. Clients using the previous GET 
 
 ### Editing a website setup
 
-Use **Your website · Edit** to correct a saved setup before checkout. `POST /api/pentests/:id/setup` requires the current `scope_sha256`, the new scope, permission note and explicit consent. Only the requester can edit. Changing origins requires a fresh DNS proof; same-origin changes keep the existing proof and expiry. A changed scope clears saved test credentials and invalidates older consent/quotes. Once any assessment or checkout is admitted, the setup is locked.
+Use **Your website · Edit** to correct a saved setup before checkout. `POST /api/pentests/:id/setup` requires the current `scope_sha256`, the new scope, permission note and explicit consent. Only the requester can edit. Changing origins requires fresh DNS proof or admin approval; same-origin changes keep the existing ownership verification and expiry. This includes admin-approved customers enabling or disabling POST: they stay on step 3 without another approval. A changed scope clears saved test credentials and invalidates older consent/quotes. Once any assessment or checkout is admitted, the setup is locked.
 
 After verification, **Testing permissions** offers a visible POST checkbox. The default remains read-only. POST requires permission to change test data and acknowledgement of disruption risk; staging is recommended. Version `web_active_v2` records this wording without rewriting existing `web_active_v1` scopes. It requires `active_web_v2` agents (relay adapter 12); deploy dispatcher migration 27 before those agents advertise it.

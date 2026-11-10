@@ -12,7 +12,7 @@ test('Exposure shows the selected hero, logo and consistent navigation', async (
   await page.route('**/api/incidents', route => route.fulfill({ json: [] }));
   await page.goto('/#/home');
   await expect(page.locator('html')).toHaveAttribute('data-design', 'collective');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Security testing.Just your URL.');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Your webapp, our AI swarm.See what hackers see.');
   await expect(page.locator('.exposure-copy h1 em')).toHaveCSS('color', 'rgb(243, 140, 126)');
   await expect(page.locator('.exposure-eyebrow')).toHaveText('WEB APPLICATION SECURITY TESTING');
   await expect(page.locator('.exposure-art img')).toHaveAttribute('src', '/brand/exposure-hero.png');
