@@ -39,12 +39,13 @@ export function useAudits(all = false) {
   return { items, ready: !!(runs.data && websites.data && sources.data && live.data), error: runs.error || websites.error || sources.error || live.error, refresh: () => { runs.refresh(); websites.refresh(); sources.refresh(); live.refresh(); } };
 }
 
-export function AuditRows({ items, onOpen }: { items: Audit[]; onOpen: (view: View, id?: string | null) => void }) {
+export function AuditRows({ items, onOpen, admin = false }: { items: Audit[]; onOpen: (view: View, id?: string | null) => void; admin?: boolean }) {
   return <div className="audit-rows">{items.map(item => <article key={item.key} className="audit-row" data-state={item.state}>
     <span className={`audit-kind kind-${item.kind === 'Website' ? 'web' : item.kind === 'Source code' ? 'source' : 'example'}`} aria-hidden="true"><UIIcon name={item.kind === 'Website' ? 'scan' : item.kind === 'Source code' ? 'code' : 'file'} /></span>
     <button className="audit-title" onClick={() => onOpen(item.run ? 'reviews' : item.view, item.run?.id ?? item.id)}><strong>{item.title}</strong><small>{item.assessment ?? item.kind} · {new Date(item.created * 1000).toLocaleDateString()}</small></button>
     <div className="audit-state"><span className={`status-chip state-${item.state}`}>{auditLabel(item.state)}</span>{item.state !== 'completed' && auditReportAvailable(item) && <small>Report available</small>}{item.state === 'queued' && <small className="queue-note">Waiting for agents. Check back later.</small>}{item.run && <span className="role-progress" aria-label={`${item.run.steps.filter(s => s.state === 'completed').length} of ${item.run.steps.length} role reports received`}>{item.run.steps.map((step, index) => <i key={index} data-done={step.state === 'completed'} />)}</span>}</div>
     {item.run && item.view !== 'reviews' && <button className="quiet audit-material" onClick={() => onOpen(item.view, item.id)}>Material</button>}
+    {admin && !item.run && item.view === 'pentests' && item.state === 'awaiting_verification' && <button className="quiet audit-material" onClick={() => onOpen('pentests', item.id)}>Review ownership</button>}
   </article>)}</div>;
 }
 
@@ -52,16 +53,16 @@ export function Audits({ onOpen, admin = false, csrf }: { csrf?: string; onOpen:
   const data = useAudits(admin);
   const [filter, setFilter] = useState('All');
   const [status, setStatus] = useState('All work');
-  const items = data.items.filter(item => (filter === 'All' || item.kind === filter) && (status === 'All work' || (status === 'Queued' ? item.state === 'queued' : ['running', 'collecting'].includes(item.state))));
+  const items = data.items.filter(item => (filter === 'All' || item.kind === filter) && (status === 'All work' || (status === 'Needs approval' ? ['awaiting_verification', 'pending_approval'].includes(item.state) : status === 'Queued' ? item.state === 'queued' : ['running', 'collecting'].includes(item.state))));
   return <section className="audits-page">
     <div className="dashboard-title"><div><p className="eyebrow">{admin ? 'ADMINISTRATION' : 'YOUR WORK'}</p><h1>{admin ? 'Audit activity' : 'Audits'}</h1><p className="subtle">{admin ? 'Queued work, active tests and reports across accounts.' : 'Your requests, saved material and agent reports.'}</p></div><button className="primary" onClick={() => onOpen('request')}>Request an audit</button></div>
     {admin && <AdminStats />}
     <RunExpectations />
     <div className="audit-controls"><div className="segmented" aria-label="Audit type">{['All', 'Website', 'Source code', 'Example'].map(value => <button key={value} aria-pressed={filter === value} onClick={() => setFilter(value)}>{value}</button>)}</div><button className="quiet" onClick={data.refresh}>Refresh audits</button></div>
-    <div className="audit-controls"><div className="segmented" aria-label="Work status">{['All work', 'Queued', 'Running'].map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{value}</button>)}</div></div>
+    <div className="audit-controls"><div className="segmented" aria-label="Work status">{['All work', ...(admin ? ['Needs approval'] : []), 'Queued', 'Running'].map(value => <button key={value} aria-pressed={status === value} onClick={() => setStatus(value)}>{value}</button>)}</div></div>
     {data.error && <p className="notice error" role="alert">Some audits could not refresh. Any entries shown may be out of date.</p>}
     {!data.ready && !data.error && <p role="status">Loading your audits…</p>}
-    <div className="panel">{items.length > 0 ? <AuditRows items={items} onOpen={onOpen} /> : data.ready && !data.error && <div className="dashboard-empty"><h2>{status !== 'All work' ? `No ${status.toLowerCase()} requests.` : filter === 'All' ? 'Your first audit starts here.' : `No ${filter.toLowerCase()} audits yet.`}</h2><p>{status !== 'All work' ? 'Open All work to see your other requests and reports.' : 'Choose a website you own and control.'}</p></div>}</div>
+    <div className="panel">{items.length > 0 ? <AuditRows items={items} onOpen={onOpen} admin={admin} /> : data.ready && !data.error && <div className="dashboard-empty"><h2>{status === 'Needs approval' ? 'No requests need approval.' : status !== 'All work' ? `No ${status.toLowerCase()} requests.` : filter === 'All' ? 'Your first audit starts here.' : `No ${filter.toLowerCase()} audits yet.`}</h2><p>{status !== 'All work' ? 'Open All work to see your other requests and reports.' : 'Choose a website you own and control.'}</p></div>}</div>
     {admin && csrf && <TrialDesk csrf={csrf} />}
     <details className="audit-tools"><summary>Saved material and test examples</summary><div className="review-actions"><button className="quiet" onClick={() => onOpen('pentests')}>Live website tests</button><button className="quiet" onClick={() => onOpen('sites')}>Website snapshots</button><button className="quiet" onClick={() => onOpen('sources')}>Source uploads</button><button className="quiet" onClick={() => onOpen('reviews')}>Reports</button></div><p className="fine">Recent records only. A snapshot is saved evidence; an audit adds the agents’ review. Live tests use a separate approved scope; saved-page approval does not authorize live probes.</p></details>
   </section>;

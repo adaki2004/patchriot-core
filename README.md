@@ -81,6 +81,8 @@ A free-test campaign offers **one requested coupon per account**, with a 24/48-h
 
 Use the hosted product to request a test. The sections below are for running a separate installation or maintaining this one. Secrets, private reports and deployment records do not belong in Git.
 
+**Admin ownership approval:** open **Administration → Audit activity → Needs approval → Review ownership**. If you have independently confirmed the requester's authority for every listed website, record the reason and choose **Approve ownership**. This grants permission for that request without claiming DNS proof. The customer still confirms the test and uses their own payment or coupon. The admin identity, reason and time are recorded; approval expires within 24 hours. Deploy the matching dispatcher `POST /internal/pentests/:id/authorize` route before this UI. No migration or relay update is needed.
+
 <details>
 <summary>Account credit: deployment, accounting and recovery</summary>
 
