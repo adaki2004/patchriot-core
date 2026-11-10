@@ -88,8 +88,11 @@ export function CoordinationMap({ paused }: { privateSwarm?: boolean; paused?: b
       <section className="architecture-core" aria-label="Patchriot Core"><h3>Core</h3><p>Your account · access · checkout</p><div className="architecture-box architecture-dispatcher"><strong>Dispatcher</strong><span>Permission, scheduling and evidence</span><small>Ready roles go to eligible free workers</small></div></section>
       <div className="architecture-link" aria-hidden="true">↓</div>
       <section className="architecture-contributors" aria-label="Inference contributors">
+        <div className="architecture-mesh" role="group" aria-label="Optional mesh network for businesses and enterprise solutions">
         <h3>Inference contributors</h3>
         <div className="architecture-agents">{['1', '2', '…', 'N'].map(number => number === '…' ? <div className="architecture-more" key={number} aria-hidden="true">⋮</div> : <div className="architecture-box" key={number}><strong>Agent {number}</strong><span>Kali Linux® · Hermes · scoped relay</span></div>)}</div>
+        <p className="architecture-mesh-label"><strong>Optional mesh network</strong><span>Businesses / enterprise solutions</span></p>
+        </div>
         <div className="architecture-models"><h4>Approved model routes</h4><div><img src="/brand/near-ai.svg" alt="NEAR AI" width="150" height="29" /><span>Verified TEE inference</span></div><div><img src="/brand/venice.svg" alt="Venice" width="130" height="59" /><span>API inference</span></div></div>
       </section>
       <div className="architecture-link"><span>Evidence returns through the dispatcher</span><span aria-hidden="true">↓</span></div>

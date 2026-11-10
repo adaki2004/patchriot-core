@@ -259,6 +259,9 @@
 .architecture-link { display: grid; justify-items: center; gap: 8px; padding: 12px 0; color: #94b3ee; font-size: 24px; }
 .architecture-link > span:first-child:not(:last-child) { font-size: 12px; text-align: center; }
 .architecture-contributors { padding: 12px 20px; }
+.architecture-mesh { border: 2px dotted #8caddb; border-radius: 10px; padding: 16px; }
+.architecture-mesh-label { display: grid; gap: 3px; margin: 18px 0 0; color: #b5c5df; font-size: 12px; line-height: 1.5; }
+.architecture-mesh-label strong { color: #c6d6ed; font-weight: 500; }
 .architecture-contributors h3, .architecture-models h4 { margin: 0 0 14px; color: #b5c5df; font: 500 13px/1.5 var(--body-font); }
 .architecture-agents { display: grid; gap: 6px; margin-left: 10px; padding-left: 22px; border-left: 1px solid #405675; }
 .architecture-agents .architecture-box { position: relative; padding: 14px 0; border: 0; border-bottom: 1px solid #2b3c51; border-radius: 0; background: none; }
