@@ -12,6 +12,15 @@ export const toolCatalog = {
   'agent-browser': {name:'agent-browser', url:'https://github.com/vercel-labs/agent-browser', license:'Apache-2.0', licenseUrl:'https://github.com/vercel-labs/agent-browser/blob/main/LICENSE', purpose:'Browser controls available to the investigator through the scoped browser.'},
 } as const;
 export type ToolKey = keyof typeof toolCatalog;
+/** Shared names and explanations for setup and the hosted check guide. */
+export const websiteChecks: {id: string; title: string; summary: string; description: string; sources: ToolKey[]; optional?: boolean}[] = [
+  {id:'public_baseline', title:'Headers & configuration', summary:'Browser policies and exposed settings', description:'Inspect response headers, browser security policies and exposed configuration on the approved website.', sources:['patchriot']},
+  {id:'public_mapping', title:'Map routes', summary:'Pages, forms and API paths', description:'Follow public links and identify forms and API paths within the approved origin. Discovering a route does not establish a vulnerability.', sources:['patchriot']},
+  {id:'public_signatures', title:'Known signatures', summary:'Curated vulnerability patterns', description:'Check responses against selected Nuclei HTTP templates. Matches need supporting evidence before becoming findings.', sources:['nuclei']},
+  {id:'public_fingerprints', title:'Web fingerprints', summary:'Technologies and exposed paths', description:'Compare technology hints and exposed paths with normal missing-page responses using ARES-derived signatures.', sources:['ares']},
+  {id:'public_analysis', title:'Web & API checks', summary:'Route discovery and scanner checks', description:'Run bounded route discovery, ZAP checks and API-schema tests. Grey-box runs can include verified account access; no supported API schema means that part is not applicable.', sources:['ffuf','zap','schemathesis','patchriot']},
+  {id:'public_deep', title:'Deep scan', summary:'Extra probes · more requests and time', description:'Add script and route mining, access-control path variations, header/cache probes and observed-input probes. Cross-account comparisons need two verified test accounts and relevant object routes. Even read requests can have side effects.', sources:['patchriot'], optional:true},
+];
 export function ToolLinks({tools}: {tools: readonly ToolKey[]}) {
   return <span className="tool-source-links">{tools.map((id,index)=><span key={id}>{index > 0 && ' · '}<a href={toolCatalog[id].url} target="_blank" rel="noreferrer" title={toolCatalog[id].purpose}>{toolCatalog[id].name}</a></span>)}</span>;
 }

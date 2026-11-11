@@ -25,8 +25,8 @@ test('public documentation is bookmarkable and never requests private records', 
   await expect(page.getByRole('heading', { name: 'Who can see your data', exact: true })).toBeVisible();
   const docs = page.getByRole('navigation', { name: 'Documentation' });
   await expect(docs.locator('strong')).toHaveText(['Get started', 'How it works']);
-  await expect(docs.getByRole('button').nth(4)).toHaveAccessibleName('5. Architecture');
-  await expect(docs.getByRole('button').last()).toHaveAccessibleName('7. Testing & questions');
+  await expect(docs.getByRole('button').nth(5)).toHaveAccessibleName('6. Architecture');
+  await expect(docs.getByRole('button').last()).toHaveAccessibleName('8. Testing & questions');
   await expect(docs.getByRole('button', { name: /Meet the agents/ })).toHaveCount(0);
   for (const [index, section] of docPages.entries()) {
     await docs.getByRole('button', { name: `${index + 1}. ${section.title}`, exact: true }).click();

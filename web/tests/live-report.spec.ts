@@ -880,7 +880,7 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
-  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Deeper public checks']);
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Web & API checks']);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(grey?2:1);
   await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
   if(grey) {
@@ -963,7 +963,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
   await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
-  await activity.getByRole('button',{name:'Deeper public checks: Incomplete',exact:true}).click();
+  await activity.getByRole('button',{name:'Web & API checks: Incomplete',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Reached this tool’s request limit.');
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('6s');
   await expect(activity).toContainText('Agentic security checks');
@@ -1073,7 +1073,7 @@ test('combined engine receipt identifies both access modes without inventing usa
     await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
     await activity.getByRole('button',{name:'Scout Report received'}).click();
     await expect(activity.locator('.workflow-step')).toHaveCount(8);
-    await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true})).toBeVisible();
     await expect(activity.getByRole('button',{name:'Signed-in checks: Recorded',exact:true})).toBeVisible();
     await expect(activity.locator('.workflow-coverage')).toHaveCount(0);
   }
@@ -1130,7 +1130,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
   await page.route(`**/api/reviews/${historicalId}`,route=>route.fulfill({json:{...review,id:historicalId}}));
   await page.goto(`/#/reviews/${historicalId}`);
   await expect(activity.locator('.workflow-step')).toHaveCount(8);
-  await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+  await expect(activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true})).toBeVisible();
   // Paired scope identifies the combined plan even when first opened after ARTEX.
   Object.assign(review.pentest.scope,{account_policy:{allow_password_changes:false}});
   workflow.checks[6].state='incomplete';

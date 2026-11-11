@@ -205,7 +205,23 @@
   .pentests-page[data-setup-step] .assessment-payment .assessment-actions .quiet { justify-self: stretch; }
 }
 
-.check-group-options { border: 0; padding: 0; margin: 1.5rem 0; }
-.check-group-options legend { font-weight: 600; margin-bottom: .75rem; }
-.check-group-options .check { align-items: flex-start; padding: .55rem 0; }
-.check-group-options small { display: block; opacity: .75; margin-top: .2rem; line-height: 1.45; }
+.pentests-page .check-group-options { border: 0; padding: 0; margin: 24px 0; min-width: 0; }
+.check-group-options legend { font-weight: 600; margin-bottom: 12px; }
+.check-group-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; }
+.check-choice { display: flex; align-items: start; position: relative; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); min-width: 0; }
+.pentests-page .check-choice .check { flex: 1; margin: 0; padding: 0; gap: 9px; font-size: 14px; line-height: 1.4; min-width: 0; }
+.check-choice .check > span { min-width: 0; }
+.check-choice strong { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.check-choice em { font-size: 10px; font-weight: 400; font-style: normal; color: var(--muted); }
+.check-choice small { display: block; color: var(--muted); margin-top: 3px; font-size: 12px; line-height: 1.45; }
+.check-help { flex: 0 0 auto; }
+.pentests-page .check-help button { display: grid; place-items: center; width: 28px; height: 28px; min-width: 0; min-height: 0; margin: -4px -4px 0 0; padding: 0; border: 0; background: transparent; color: var(--muted); box-shadow: none; }
+.pentests-page .check-help button:hover, .pentests-page .check-help button:focus-visible { color: var(--text); background: #202a3a; }
+.check-help [role="tooltip"] { position: absolute; z-index: 4; top: 40px; right: 0; width: min(320px, 100%); padding: 12px 14px; border: 1px solid #596b85; border-radius: 6px; background: #1b2535; color: #eef2f9; box-shadow: 0 8px 24px #0006; font-size: 13px; font-weight: 400; line-height: 1.5; }
+.pentests-page .check-guide { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 12px 0 0; font-size: 12px; }
+.pentests-page .check-availability { margin: 8px 0; font-size: 12px; }
+@media (max-width: 640px) {
+  .check-group-grid { grid-template-columns: 1fr; }
+  .check-choice { padding: 10px 0; }
+  .pentests-page .check-help button { width: 36px; height: 36px; }
+}
