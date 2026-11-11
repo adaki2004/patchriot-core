@@ -155,7 +155,7 @@ async fn deliver_claimed(state: &AppState, order: &Order) -> Outcome {
     )
     .await
     {
-        Ok(Json(view)) => view,
+        Ok(view) => view,
         Err(error) if error.status.as_u16() == 404 => {
             return Outcome::Review("cancellation_review_missing");
         }
@@ -165,7 +165,7 @@ async fn deliver_claimed(state: &AppState, order: &Order) -> Outcome {
         return Outcome::Review("cancellation_review_mismatch");
     }
     if terminal(&view.state) {
-        return Outcome::Stopped(view.state);
+        return Outcome::Stopped(view.state.clone());
     }
     if !matches!(
         view.state.as_str(),
@@ -173,6 +173,7 @@ async fn deliver_claimed(state: &AppState, order: &Order) -> Outcome {
     ) {
         return Outcome::Review("cancellation_unknown_review_state");
     }
+    drop(view);
     let view = match gateway::request_review_for_account::<_>(
         state,
         reqwest::Method::POST,
@@ -182,7 +183,7 @@ async fn deliver_claimed(state: &AppState, order: &Order) -> Outcome {
     )
     .await
     {
-        Ok(Json(view)) => view,
+        Ok(view) => view,
         Err(_) => return Outcome::Retry("cancellation_acknowledgment_unavailable"),
     };
     if !matches(&view, order, &terms) {
@@ -191,7 +192,7 @@ async fn deliver_claimed(state: &AppState, order: &Order) -> Outcome {
     if !terminal(&view.state) {
         return Outcome::Retry("cancellation_not_confirmed");
     }
-    Outcome::Stopped(view.state)
+    Outcome::Stopped(view.state.clone())
 }
 
 async fn finish(

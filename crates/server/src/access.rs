@@ -127,22 +127,20 @@ pub(crate) async fn rate(
     used.map(|_| ()).ok_or_else(busy)
 }
 
-// Do not accept a caller-supplied forwarding header as its identity. Behind a
-// proxy this deliberately shares the peer limit; username/global limits remain.
+// Per-client limits use only the configured ingress identity. Password logins
+// also retain their independent username bucket; concurrency is bounded upstream.
 pub(crate) async fn public_rate(
     state: &AppState,
+    headers: &HeaderMap,
     peer: Option<Extension<ConnectInfo<SocketAddr>>>,
     action: &str,
     limit: i32,
     seconds: i32,
 ) -> Result<(), ApiError> {
-    rate(&state.pool, "public-auth", 180, 900).await?;
+    let peer = crate::ingress::client_address(&state.config, headers, peer)?;
     sqlx::query("DELETE FROM auth_attempts WHERE started_at < now() - interval '1 day'")
         .execute(&state.pool)
         .await?;
-    let peer = peer
-        .map(|Extension(ConnectInfo(addr))| addr.ip().to_string())
-        .unwrap_or_else(|| "unknown-peer".into());
     rate(&state.pool, &format!("{action}:{peer}"), limit, seconds).await
 }
 
@@ -168,7 +166,7 @@ pub(crate) async fn login(
 ) -> Result<Response, ApiError> {
     let supplied = Zeroizing::new(input.password);
     auth::origin(&headers, &state.config)?;
-    public_rate(&state, peer, "login", 60, 900).await?;
+    public_rate(&state, &headers, peer, "login", 60, 900).await?;
     let name = username(&input.username).map_err(|_| invalid_login())?;
     if supplied.is_empty() || supplied.len() > 256 {
         return Err(invalid_login());
@@ -217,7 +215,7 @@ pub(crate) async fn activate(
 ) -> Result<Response, ApiError> {
     let supplied = Zeroizing::new(input.password);
     auth::origin(&headers, &state.config)?;
-    public_rate(&state, peer, "activate", 10, 900).await?;
+    public_rate(&state, &headers, peer, "activate", 10, 900).await?;
     let name = username(&input.username)?;
     password(&supplied)?;
     let invalid = || ApiError::bad("invalid_or_expired_invite");
@@ -271,30 +269,17 @@ fn username_error(error: sqlx::Error) -> ApiError {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct AccessRequest {
-    display_name: String,
-    email: String,
-    note: String,
-}
-
+/// New accounts use public SSO/wallet sign-in. Do not accumulate invitation
+/// requests from stale clients; existing setup links remain redeemable.
 pub(crate) async fn request_access(
     State(state): State<AppState>,
-    peer: Option<Extension<ConnectInfo<SocketAddr>>>,
     headers: HeaderMap,
-    Json(input): Json<AccessRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+) -> Result<(), ApiError> {
     auth::origin(&headers, &state.config)?;
-    public_rate(&state, peer, "request-access", 5, 3600).await?;
-    if !text(&input.display_name, 80) || !text(&input.note, 1000) {
-        return Err(ApiError::bad("invalid_request"));
-    }
-    let email = contact(&input.email)?;
-    // A repeat neither reveals an existing account nor replaces a pending note.
-    sqlx::query("INSERT INTO access_requests (id,display_name,email,note) SELECT $1,$2,$3,$4 WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE contact_email = $3) ON CONFLICT DO NOTHING")
-        .bind(Uuid::new_v4()).bind(input.display_name.trim()).bind(email).bind(input.note.trim()).execute(&state.pool).await?;
-    Ok((StatusCode::ACCEPTED, Json(serde_json::json!({"ok": true}))))
+    Err(ApiError::new(
+        StatusCode::GONE,
+        "sign_in_without_invitation",
+    ))
 }
 
 pub(crate) async fn admin(

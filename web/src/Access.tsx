@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from './compone
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { useLive } from './useLive';
+import { CouponRequests } from './Coupons';
 
 type LoginMode = 'password' | 'activate' | 'legacy';
 
@@ -35,7 +36,7 @@ export function AccessPanel({ initialCode = '', onLogin, onBusyChange }: { initi
   function changeBusy(value: boolean) { setBusy(value); onBusyChange?.(value); }
   useEffect(() => {
     let active = true;
-    api<Providers>('/auth/providers').then(value => { if (active) setProviders({ github: value.github === true, google: value.google === true, wallet: value.wallet === true }); }).catch(() => { if (active) { setProviders({ github: false, google: false, wallet: false }); setError('Sign-in providers are unavailable. Existing pilot accounts can still use their password.'); } });
+    api<Providers>('/auth/providers').then(value => { if (active) setProviders({ github: value.github === true, google: value.google === true, wallet: value.wallet === true }); }).catch(() => { if (active) { setProviders({ github: false, google: false, wallet: false }); setError('Sign-in providers are unavailable. Existing password accounts can still use their password.'); } });
     return () => { active = false; };
   }, []);
   const enabled = providers?.github || providers?.google || providers?.wallet;
@@ -60,11 +61,11 @@ export function AccessPanel({ initialCode = '', onLogin, onBusyChange }: { initi
   return <section ref={panel} className="access-panel-inline" id="access" aria-label="Account access">
     <div className="access-form sso-entry">
       <p className="eyebrow">YOUR PRIVATE WORKSPACE</p><h2>Sign in to Patchriot.</h2>
-      <p>Use your account. Verify your web application before any testing starts.</p>
+      <p>Everyone can sign in. Verify your web application before any testing starts.</p>
       {!providers && <p role="status">Loading sign-in options…</p>}
-      {enabled ? <><div className="sso-buttons">{(['github', 'google'] as const).filter(provider => providers?.[provider]).map(provider => <Button className="quiet full" key={provider} disabled={busy} onClick={() => void start(provider)}><ProviderIcon provider={provider} />Continue with {provider === 'github' ? 'GitHub' : 'Google'} <span aria-hidden="true">↗</span></Button>)}{providers?.wallet && <Button className="quiet full" disabled={busy} onClick={() => void walletSignIn()}>{walletAccepted ? 'Open my workspace' : 'Connect wallet'}</Button>}</div><p className="fine">Google/GitHub share your verified profile, not repository access. Wallet sign-in uses a signed message.</p></> : providers && <p className="fine">Google and GitHub sign-in are being configured. Existing pilot accounts can sign in below.</p>}
+      {enabled ? <><div className="sso-buttons">{(['github', 'google'] as const).filter(provider => providers?.[provider]).map(provider => <Button className="quiet full" key={provider} disabled={busy} onClick={() => void start(provider)}><ProviderIcon provider={provider} />Continue with {provider === 'github' ? 'GitHub' : 'Google'} <span aria-hidden="true">↗</span></Button>)}{providers?.wallet && <Button className="quiet full" disabled={busy} onClick={() => void walletSignIn()}>{walletAccepted ? 'Open my workspace' : 'Connect wallet'}</Button>}</div><p className="fine">Google/GitHub share your verified profile, not repository access. Wallet sign-in uses a signed message.</p></> : providers && <p className="fine">Google and GitHub sign-in are being configured. Existing password accounts can sign in below.</p>}
       {error && <p className="notice error" role="alert">{error}</p>}
-      <Button className="text-button legacy-toggle" disabled={busy} aria-expanded={showLegacy} onClick={() => setLegacyOpen(!showLegacy)}>Existing pilot account</Button>
+      <Button className="text-button legacy-toggle" disabled={busy} aria-expanded={showLegacy} onClick={() => setLegacyOpen(!showLegacy)}>Existing password account</Button>
     </div>
     {showLegacy && <fieldset className="legacy-login-fields" disabled={busy}><Login initialCode={initialCode} onLogin={onLogin} onBusy={changeBusy} /></fieldset>}
   </section>;
@@ -83,14 +84,13 @@ export function AccessDialog({ onClose, ...props }: Parameters<typeof AccessPane
 }
 
 function Login({ initialCode = '', onLogin, onBusy }: { initialCode?: string; onLogin: () => Promise<void>; onBusy: (value: boolean) => void }) {
-  const [mode, setMode] = useState<LoginMode>(initialCode ? 'activate' : 'password');
+  const [mode] = useState<LoginMode>(initialCode ? 'activate' : 'password');
   const [code, setCode] = useState(initialCode);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  function changeMode(next: LoginMode) { setMode(next); setError(''); setPassword(''); }
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); onBusy(true); setError(''); sessionChanged();
     try {
@@ -119,12 +119,7 @@ function Login({ initialCode = '', onLogin, onBusy }: { initialCode?: string; on
       {error && <p className="notice error" role="alert">{error}</p>}
       <Button className="primary full" disabled={busy}>{busy ? 'Opening workspace…' : accepted ? 'Retry opening workspace' : mode === 'activate' ? 'Create password and sign in' : 'Open workspace →'}</Button>
     </form>
-    {!accepted && <details className="access-alternatives" open={mode !== 'password'}><summary>Invitation or pilot code?</summary><div className="access-options">
-      {mode !== 'password' && <Button className="text-button" disabled={busy} onClick={() => changeMode('password')}>Use a password</Button>}
-      {mode !== 'activate' && <Button className="text-button" disabled={busy} onClick={() => changeMode('activate')}>I have a setup invitation</Button>}
-      {mode !== 'legacy' && <Button className="text-button" disabled={busy} onClick={() => changeMode('legacy')}>Use a pilot login code</Button>}
-    </div></details>}
-    <p className="fine">Need a password reset? Ask the person who invited you.</p>
+    <p className="fine">Need a password reset? Contact Patchriot support.</p>
   </div>;
 }
 
@@ -151,12 +146,12 @@ function ShareAccess({ secret, onClose }: { secret: Secret; onClose: () => void 
   return <dialog ref={dialog} onCancel={onClose} aria-labelledby="share-title">
     <Button className="close" onClick={onClose} aria-label="Close private access details">×</Button>
     <h2 id="share-title">Share privately</h2>
-    <p>Send this to the intended person. These codes are shown once. They choose their own password.</p>
+    <p>Send this to the intended person. This coupon is shown once. The recipient signs in to their own account.</p>
     <label htmlFor="private-access-details">Private access details</label>
     <textarea id="private-access-details" readOnly rows={8} value={message} spellCheck={false} />
     {error && <p role="alert">{error}</p>}
     <Button className="primary" onClick={() => void copy()}>{copied ? 'Copied' : 'Copy message'}</Button>
-    <p className="fine">Lost the message? Renew the setup link from Users. Issuing a replacement coupon cancels that user’s unused coupons; it does not cancel an existing review.</p>
+    <p className="fine">Issuing a replacement coupon cancels that user’s unused coupons; it does not cancel an existing review.</p>
   </dialog>;
 }
 
@@ -165,7 +160,6 @@ export function AccessDesk({ csrf }: { csrf: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [secret, setSecret] = useState<Secret | null>(null);
-  const [withCoupon, setWithCoupon] = useState(true);
   const [disable, setDisable] = useState<UserRow | null>(null);
   async function act(path: string, body: unknown, kind: 'grant' | 'coupon' | 'none' = 'none') {
     setBusy(true); setError('');
@@ -176,27 +170,11 @@ export function AccessDesk({ csrf }: { csrf: string }) {
       setDisable(null); desk.refresh(); return true;
     } catch (error) { setError((error as Error).message); return false; } finally { setBusy(false); }
   }
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = event.currentTarget; const data = new FormData(form);
-    if (await act('/admin/accounts', { display_name: data.get('name'), email: data.get('email'), with_coupon: data.get('coupon') === 'on' }, 'grant')) form.reset();
-  }
-  const pending = desk.data?.requests.filter(request => request.status === 'pending');
   return <section aria-labelledby="access-desk-title">
-    <div className="section-heading"><div><h1 id="access-desk-title" className="page-title">Access & users</h1><p className="subtle">Approve requests, invite people and sponsor a review.</p></div><Button className="quiet" onClick={desk.refresh}>Refresh</Button></div>
+    <div className="section-heading"><div><h1 id="access-desk-title" className="page-title">Access & users</h1><p className="subtle">Sign-in is open. Manage accounts and approve free audits.</p></div><Button className="quiet" onClick={desk.refresh}>Refresh</Button></div>
     {(error || desk.error) && <p className="notice error" role="alert">{error || desk.error} Check the saved users before repeating a request.</p>}
-    <div className="access-columns">
-      <section className="panel access-panel"><h2>Access requests</h2><p className="fine">Contact details are supplied by the applicant; they are not identity verification.</p>
-        <label className="check"><Input type="checkbox" checked={withCoupon} onChange={e => setWithCoupon(e.target.checked)} disabled={busy} /><span>Include one review coupon when approving</span></label>
-        {!desk.data && <p>Loading requests…</p>}{pending?.length === 0 && <p>No pending requests.</p>}
-        {pending?.map(request => <article className="access-request" key={request.id}><h3>{request.display_name}</h3><p className="subtle">{request.email} · {new Date(request.created_at).toLocaleDateString()}</p><p>{request.note}</p><div className="access-options"><Button className="primary small" disabled={busy} onClick={() => void act(`/admin/access/${request.id}/decision`, { decision: 'approve', with_coupon: withCoupon }, 'grant')}>Approve {request.display_name}</Button><Button className="quiet" disabled={busy} onClick={() => void act(`/admin/access/${request.id}/decision`, { decision: 'decline', with_coupon: false })}>Decline {request.display_name}</Button></div></article>)}
-      </section>
-      <section className="panel access-panel"><h2>Invite someone</h2><p>For a teammate, contributor or judge who hasn’t requested access.</p><form onSubmit={create}>
-        <label>Name<Input name="name" maxLength={80} required disabled={busy} /></label><label>Email<Input name="email" type="email" maxLength={254} required disabled={busy} /></label>
-        <label className="check"><Input name="coupon" type="checkbox" defaultChecked disabled={busy} /><span>Include one review coupon</span></label>
-        <Button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Create invitation'}</Button>
-      </form></section>
-    </div>
-    <section className="panel access-panel access-users"><h2>Users</h2><div className="table-scroll"><table><thead><tr><th>Person</th><th>Login</th><th>Access</th><th>Actions</th></tr></thead><tbody>{desk.data?.accounts.map(user => <tr key={user.id}><td><strong>{user.display_name}</strong><small>{user.contact_email ?? 'No contact email saved'}</small></td><td>{user.username ?? (user.auth_method === 'github' ? 'GitHub' : user.auth_method === 'google' ? 'Google' : user.auth_method === 'wallet' ? 'Wallet' : 'Password not set')}</td><td>{user.disabled ? 'Disabled' : user.role === 'admin' ? 'Administrator' : 'Member'}<small>{user.unused_coupons} unused coupon{user.unused_coupons === 1 ? '' : 's'}</small></td><td className="row-actions">{user.role === 'member' && !user.disabled && <><Button className="quiet" disabled={busy} onClick={() => void act(`/admin/accounts/${user.id}/invite`, {}, 'grant')}>Renew setup link</Button><Button className="quiet" disabled={busy} onClick={() => void act(`/admin/accounts/${user.id}/coupon`, {}, 'coupon')}>Issue coupon</Button><Button className="quiet" disabled={busy} onClick={() => setDisable(user)}>Disable login</Button></>}</td></tr>)}</tbody></table></div><p className="fine">Latest 100 accounts. Renewing a link replaces earlier unused invitations. Completing setup ends that user’s old sessions. Disabling login does not revoke their relays; manage those in Agent approvals.</p></section>
+    <CouponRequests csrf={csrf} />
+    <section className="panel access-panel access-users"><h2>Users</h2><div className="table-scroll"><table><thead><tr><th>Person</th><th>Login</th><th>Access</th><th>Actions</th></tr></thead><tbody>{desk.data?.accounts.map(user => <tr key={user.id}><td><strong>{user.display_name}</strong><small>{user.contact_email ?? 'No contact email saved'}</small></td><td>{user.username ?? (user.auth_method === 'github' ? 'GitHub' : user.auth_method === 'google' ? 'Google' : user.auth_method === 'wallet' ? 'Wallet' : 'Password not set')}</td><td>{user.disabled ? 'Disabled' : user.role === 'admin' ? 'Administrator' : 'Member'}<small>{user.unused_coupons} unused coupon{user.unused_coupons === 1 ? '' : 's'}</small></td><td className="row-actions">{user.role === 'member' && !user.disabled && <><Button className="quiet" disabled={busy} onClick={() => void act(`/admin/accounts/${user.id}/coupon`, {}, 'coupon')}>Issue coupon</Button><Button className="quiet" disabled={busy} onClick={() => setDisable(user)}>Disable login</Button></>}</td></tr>)}</tbody></table></div><p className="fine">Latest 100 accounts. Disabling login ends browser sessions; manage relays separately in Agent approvals.</p></section>
     {disable && <DisableAccount user={disable} busy={busy} onClose={() => setDisable(null)} onConfirm={() => void act(`/admin/accounts/${disable.id}/disable`, {})} />}
     {secret && <ShareAccess secret={secret} onClose={() => setSecret(null)} />}
   </section>;

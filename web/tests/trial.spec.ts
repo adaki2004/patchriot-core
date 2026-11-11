@@ -8,16 +8,16 @@ async function session(page: Page, role = 'member') {
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Example owner', role }, csrf_token: 'test-csrf' } }));
 }
 
-test('welcome coupon comes from the server beside credit and survives reload without storage',async({page},info)=>{
-  await session(page);let ready=false;
+test('granted coupon comes from the server beside credit without automatic grants',async({page},info)=>{
+  await session(page);let grants=0;
   await page.route('**/api/credits',r=>r.fulfill({json:{available_cents:200}}));
-  await page.route('**/api/coupons',r=>r.fulfill({json:ready?[coupon]:[]}));
-  await page.route('**/api/coupons/welcome',r=>{expect(r.request().headers()['x-csrf-token']).toBe('test-csrf');ready=true;return r.fulfill({json:{ok:true}});});
+  await page.route('**/api/coupons',r=>r.fulfill({json:[coupon]}));
+  await page.route('**/api/coupons/welcome',r=>{expect(r.request().headers()['x-csrf-token']).toBe('test-csrf');grants++;return r.fulfill({json:{ok:true}});});
   await page.goto('/#/overview');
   await expect(page.locator('.coupon-balance')).toContainText('1 free audit');
   await expect(page.locator('.workspace-credit-summary')).toContainText('$2.00');
   await page.reload();await expect(page.locator('.coupon-balance')).toContainText('1 free audit');
-  expect(await page.evaluate(()=>JSON.stringify({...localStorage}))).not.toContain(coupon.id);
+  expect(await page.evaluate(()=>JSON.stringify({...localStorage}))).not.toContain(coupon.id); expect(grants).toBe(0);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:info.outputPath('welcome-coupon.png'),fullPage:true});
   await page.getByRole('button',{name:'Use coupon',exact:true}).click();await expect(page).toHaveURL(/#\/request$/);
@@ -81,4 +81,22 @@ test('stage one navigation uses filled controls and saved requests remain reacha
   await expect(saved).toHaveCSS('background-color','rgb(40, 54, 75)');
   await page.screenshot({path:info.outputPath('stage-one-controls.png'),fullPage:true});
   await saved.click();await expect(page.getByRole('heading',{name:'Saved website requests.'})).toBeVisible();
+});
+
+test('free audit request is explicit and stays pending without blocking paid tests',async({page},info)=>{
+  await session(page);let posts=0;let request:unknown=null;
+  await page.route('**/api/coupons/request',route=>{
+    if(route.request().method()==='POST') {posts++;expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');request={id,status:'pending',note:'',created_at:'2026-11-11T00:00:00Z'};}
+    return route.fulfill({json:route.request().method()==='POST'?request:{request}});
+  });
+  await page.goto('/#/overview');
+  await expect(page.getByRole('button',{name:'Request free coupon',exact:true})).toBeEnabled();
+  expect(posts).toBe(0);
+  await page.getByRole('button',{name:'Request free coupon',exact:true}).click();
+  await expect(page.locator('.coupon-balance')).toContainText('Coupon requested');expect(posts).toBe(1);
+  await expect(page.locator('.coupon-balance')).not.toContainText('1 free audit');
+  await page.reload();await expect(page.locator('.coupon-balance')).toContainText('Awaiting approval');expect(posts).toBe(1);
+  await expect(page.getByRole('button',{name:'Request an audit',exact:true})).toBeEnabled();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:info.outputPath('coupon-pending.png'),fullPage:true});
 });

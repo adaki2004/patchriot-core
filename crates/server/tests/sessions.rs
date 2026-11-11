@@ -2138,3 +2138,51 @@ fn public_contact_address_is_explicit_and_validated() {
         Some("contact@example.com")
     );
 }
+
+#[tokio::test]
+async fn private_report_budget_stays_held_until_delivery_or_disconnect() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let count = Arc::new(AtomicUsize::new(0));
+    let calls = count.clone();
+    let id = Uuid::new_v4();
+    let downstream=Router::new().fallback(move || {
+        let calls=calls.clone(); async move {
+            calls.fetch_add(1,Ordering::SeqCst);
+            Json(json!({"id":id,"request_id":id,"scenario":"website_snapshot_v1","mode":"website_agent","state":"completed","created_at":1,"deadline_at":2,"steps":[],"evidence_source":"x".repeat(200_000),"private_connection":"must not escape"}))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let (cookie, _) = test.login("member").await;
+    let path = format!("/api/reviews/{id}");
+    assert_eq!(
+        test.request("GET", &path, Value::Null, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+    let request = || {
+        Request::builder()
+            .uri(&path)
+            .header("cookie", &cookie)
+            .body(Body::empty())
+            .unwrap()
+    };
+    let first = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let denied = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(denied.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    let body = first.into_body().collect().await.unwrap().to_bytes();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert!(json.get("private_connection").is_none());
+    let third = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(third.status(), StatusCode::OK);
+    drop(third); // disconnected reader must release the budget too
+    let fourth = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(fourth.status(), StatusCode::OK);
+    drop(fourth);
+    test.finish().await;
+    server.abort();
+}

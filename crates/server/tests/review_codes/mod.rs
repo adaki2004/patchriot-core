@@ -1019,8 +1019,32 @@ async fn concurrent_trial_accounts_cannot_overrun_the_campaign_and_expiry_closes
     test.finish().await;
 }
 
+async fn request_sponsorship(test: &TestApp, member: &[(&str, &str)]) -> Value {
+    let r = test
+        .request(
+            "POST",
+            "/api/coupons/request",
+            json!({"note":"Owned fixture assessment"}),
+            member,
+        )
+        .await;
+    assert_eq!(r.0, StatusCode::OK, "{}", r.2);
+    r.2
+}
+async fn approve_sponsorship(test: &TestApp, member: &[(&str, &str)], admin: &[(&str, &str)]) {
+    let r = request_sponsorship(test, member).await;
+    let path = format!(
+        "/api/admin/coupons/requests/{}/decision",
+        r["id"].as_str().unwrap()
+    );
+    let r = test
+        .request("POST", &path, json!({"decision":"approve"}), admin)
+        .await;
+    assert_eq!(r.0, StatusCode::OK, "{}", r.2);
+}
+
 #[tokio::test]
-async fn welcome_coupons_are_private_idempotent_and_bound_to_new_members() {
+async fn requested_coupons_require_staff_approval_and_are_private_idempotent() {
     let test = TestApp::with_access("http://127.0.0.1:1", ReviewAccess::Coupons).await;
     let (mc, m) = test.login("member").await;
     let mh = headers(&mc, &m);
@@ -1028,16 +1052,16 @@ async fn welcome_coupons_are_private_idempotent_and_bound_to_new_members() {
     let oh = headers(&oc, &o);
     let (ac, a) = test.login("admin").await;
     let ah = headers(&ac, &a);
-    assert_eq!(
-        test.request("GET", "/api/coupons", Value::Null, &[])
-            .await
-            .0,
-        StatusCode::UNAUTHORIZED
-    );
+    for path in ["/api/coupons", "/api/coupons/request"] {
+        assert_eq!(
+            test.request("GET", path, Value::Null, &[]).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+    }
     assert_eq!(
         test.request(
             "POST",
-            "/api/coupons/welcome",
+            "/api/coupons/request",
             json!({}),
             &[("cookie", &mc)]
         )
@@ -1045,18 +1069,88 @@ async fn welcome_coupons_are_private_idempotent_and_bound_to_new_members() {
         .0,
         StatusCode::FORBIDDEN
     );
-    let (first, second) = tokio::join!(
-        test.request("POST", "/api/coupons/welcome", json!({}), &mh),
-        test.request("POST", "/api/coupons/welcome", json!({}), &mh)
-    );
-    assert_eq!(first.0, StatusCode::OK);
-    assert_eq!(second.0, StatusCode::OK);
     assert_eq!(
-        test.request("POST", "/api/trial", json!({"accepts_trial":true}), &mh)
-            .await
-            .2["error"],
-        "trial_unavailable"
+        test.request(
+            "POST",
+            "/api/coupons/request",
+            json!({"account_id":o["account"]["id"]}),
+            &mh
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
     );
+    assert_eq!(
+        test.request(
+            "POST",
+            "/api/coupons/request",
+            json!({"note":"x".repeat(1001)}),
+            &mh
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    // Stale clients cannot silently obtain automatic grants after the upgrade.
+    test.request("POST", "/api/coupons/welcome", json!({}), &mh)
+        .await;
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &mh)
+            .await
+            .2,
+        json!([])
+    );
+    let (x, y) = tokio::join!(
+        request_sponsorship(&test, &mh),
+        request_sponsorship(&test, &mh)
+    );
+    assert_eq!(x["id"], y["id"]);
+    assert_eq!(x["status"], "pending");
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &mh)
+            .await
+            .2,
+        json!([])
+    );
+    assert_eq!(
+        test.request("GET", "/api/coupons/request", Value::Null, &oh)
+            .await
+            .2["request"],
+        Value::Null
+    );
+    let path = format!(
+        "/api/admin/coupons/requests/{}/decision",
+        x["id"].as_str().unwrap()
+    );
+    assert_eq!(
+        test.request("GET", "/api/admin/coupons/requests", Value::Null, &mh)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request("POST", &path, json!({"decision":"approve"}), &mh)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            &path,
+            json!({"decision":"approve"}),
+            &[("cookie", &ac)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let (x, y) = tokio::join!(
+        test.request("POST", &path, json!({"decision":"approve"}), &ah),
+        test.request("POST", &path, json!({"decision":"approve"}), &ah)
+    );
+    assert_eq!(x.0, StatusCode::OK);
+    assert_eq!(x.2, y.2);
     let list = test
         .request("GET", "/api/coupons", Value::Null, &mh)
         .await
@@ -1069,21 +1163,30 @@ async fn welcome_coupons_are_private_idempotent_and_bound_to_new_members() {
             .2,
         json!([])
     );
-    test.request("POST", "/api/coupons/welcome", json!({}), &ah)
-        .await;
     assert_eq!(
-        test.request("GET", "/api/coupons", Value::Null, &ah)
+        test.request("POST", &path, json!({"decision":"decline"}), &ah)
             .await
-            .2,
-        json!([])
+            .0,
+        StatusCode::CONFLICT
     );
-    sqlx::query("UPDATE accounts SET created_at=now()-interval '1 day' WHERE id=$1")
-        .bind(Uuid::parse_str(o["account"]["id"].as_str().unwrap()).unwrap())
-        .execute(&test.pool)
-        .await
-        .unwrap();
-    test.request("POST", "/api/coupons/welcome", json!({}), &oh)
-        .await;
+    assert_eq!(
+        test.request("POST", "/api/trial", json!({"accepts_trial":true}), &mh)
+            .await
+            .2["error"],
+        "trial_unavailable"
+    );
+    let other = request_sponsorship(&test, &oh).await;
+    let path = format!(
+        "/api/admin/coupons/requests/{}/decision",
+        other["id"].as_str().unwrap()
+    );
+    assert_eq!(
+        test.request("POST", &path, json!({"decision":"decline"}), &ah)
+            .await
+            .2["status"],
+        "declined"
+    );
+    assert_eq!(request_sponsorship(&test, &oh).await["status"], "declined");
     assert_eq!(
         test.request("GET", "/api/coupons", Value::Null, &oh)
             .await
@@ -1094,8 +1197,7 @@ async fn welcome_coupons_are_private_idempotent_and_bound_to_new_members() {
         .execute(&test.pool)
         .await
         .unwrap();
-    test.request("POST", "/api/coupons/welcome", json!({}), &mh)
-        .await;
+    assert_eq!(request_sponsorship(&test, &mh).await["status"], "approved");
     assert_eq!(
         test.request("GET", "/api/coupons", Value::Null, &mh)
             .await
@@ -1113,7 +1215,7 @@ async fn welcome_coupons_are_private_idempotent_and_bound_to_new_members() {
 }
 
 #[tokio::test]
-async fn last_welcome_slot_cannot_be_overrun_and_judges_have_exactly_eight_extra() {
+async fn last_sponsorship_slot_cannot_be_overrun_and_judges_have_eight_extra() {
     let test = TestApp::with_access("http://127.0.0.1:1", ReviewAccess::Coupons).await;
     for slot in 1..=99 {
         let account = Uuid::new_v4();
@@ -1140,12 +1242,33 @@ async fn last_welcome_slot_cannot_be_overrun_and_judges_have_exactly_eight_extra
     let oh = headers(&oc, &o);
     let (ac, a) = test.login("admin").await;
     let ah = headers(&ac, &a);
-    let (x, y) = tokio::join!(
-        test.request("POST", "/api/coupons/welcome", json!({}), &mh),
-        test.request("POST", "/api/coupons/welcome", json!({}), &oh)
+    let (bc, b) = test.login("admin").await;
+    let bh = headers(&bc, &b);
+    let x = request_sponsorship(&test, &mh).await;
+    let y = request_sponsorship(&test, &oh).await;
+    let px = format!(
+        "/api/admin/coupons/requests/{}/decision",
+        x["id"].as_str().unwrap()
     );
-    assert_eq!(x.0, StatusCode::OK);
-    assert_eq!(y.0, StatusCode::OK);
+    let py = format!(
+        "/api/admin/coupons/requests/{}/decision",
+        y["id"].as_str().unwrap()
+    );
+    let (x, y) = tokio::join!(
+        test.request("POST", &px, json!({"decision":"approve"}), &ah),
+        test.request("POST", &py, json!({"decision":"approve"}), &bh)
+    );
+    assert_eq!(
+        [x.0, y.0].iter().filter(|s| **s == StatusCode::OK).count(),
+        1
+    );
+    assert_eq!(
+        [x.0, y.0]
+            .iter()
+            .filter(|s| **s == StatusCode::CONFLICT)
+            .count(),
+        1
+    );
     assert_eq!(
         sqlx::query_scalar::<_, i64>("SELECT count(*) FROM account_coupon_grants")
             .fetch_one(&test.pool)
@@ -1153,21 +1276,17 @@ async fn last_welcome_slot_cannot_be_overrun_and_judges_have_exactly_eight_extra
             .unwrap(),
         100
     );
-    assert_eq!(
-        test.request("POST", "/api/admin/coupons/judges", json!({}), &mh)
-            .await
-            .0,
-        StatusCode::FORBIDDEN
-    );
-    assert_eq!(
-        test.request("GET", "/api/admin/coupons/judges", Value::Null, &mh)
-            .await
-            .0,
-        StatusCode::FORBIDDEN
-    );
+    for method in ["GET", "POST"] {
+        assert_eq!(
+            test.request(method, "/api/admin/coupons/judges", json!({}), &mh)
+                .await
+                .0,
+            StatusCode::FORBIDDEN
+        );
+    }
     let (x, y) = tokio::join!(
         test.request("POST", "/api/admin/coupons/judges", json!({}), &ah),
-        test.request("POST", "/api/admin/coupons/judges", json!({}), &ah)
+        test.request("POST", "/api/admin/coupons/judges", json!({}), &bh)
     );
     assert_eq!(x.0, StatusCode::OK);
     assert_eq!(x.2, y.2);
@@ -1178,13 +1297,6 @@ async fn last_welcome_slot_cannot_be_overrun_and_judges_have_exactly_eight_extra
             .await
             .unwrap(),
         100
-    );
-    assert_eq!(
-        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM judge_coupon_pool")
-            .fetch_one(&test.pool)
-            .await
-            .unwrap(),
-        8
     );
     test.finish().await;
 }
@@ -1199,8 +1311,7 @@ async fn saved_coupon_ids_are_owner_only_and_judge_codes_cannot_stack() {
     let oh = headers(&oc, &o);
     let (ac, a) = test.login("admin").await;
     let ah = headers(&ac, &a);
-    test.request("POST", "/api/coupons/welcome", json!({}), &mh)
-        .await;
+    approve_sponsorship(&test, &mh, &ah).await;
     let list = test
         .request("GET", "/api/coupons", Value::Null, &mh)
         .await

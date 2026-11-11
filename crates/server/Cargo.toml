@@ -19,6 +19,7 @@ chrono = { version = "0.4", features = ["serde"] }
 getrandom = "0.4"
 ed25519-dalek = "2.2"
 hex = "0.4.3"
+http-body = "1"
 patchriot-protocol = { path = "../protocol" }
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "form", "query"] }
 serde = { version = "1.0", features = ["derive"] }

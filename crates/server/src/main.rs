@@ -171,9 +171,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("invalid PATCHRIOT_ANALYTICS_ORIGIN".into()),
     };
+    let client_ip_source = match std::env::var("PATCHRIOT_CLIENT_IP_SOURCE") {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => "peer".into(),
+        Err(_) => return Err("invalid PATCHRIOT_CLIENT_IP_SOURCE".into()),
+    };
     let mut state = AppState::new(
         pool,
         config
+            .with_client_ip_source(&client_ip_source)?
             .with_relay_origin(relay_origin)?
             .with_contact_email(contact_email)?
             .with_ga_measurement_id(ga_measurement_id)?
@@ -223,7 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let mode = match std::env::var("PATCHRIOT_REVIEW_MODE") {
         Ok(mode) => mode,
-        Err(std::env::VarError::NotPresent) => "pilot".into(),
+        Err(std::env::VarError::NotPresent) => "closed".into(),
         Err(_) => return Err("invalid review mode".into()),
     };
     let inline_policy = match std::env::var("PATCHRIOT_CHECKOUT_JSON") {

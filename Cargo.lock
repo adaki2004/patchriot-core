@@ -2083,6 +2083,7 @@ dependencies = [
  "ed25519-dalek 2.2.0",
  "getrandom 0.4.3",
  "hex",
+ "http-body",
  "http-body-util",
  "openidconnect",
  "patchriot-protocol",

@@ -10,9 +10,11 @@ mod coupons;
 mod diagnostics;
 mod gateway;
 mod incidents;
+mod ingress;
 mod login_page;
 pub mod payments;
 mod pentests;
+mod response_budget;
 pub mod review_codes;
 mod review_target;
 mod sites;
@@ -45,6 +47,8 @@ pub struct AppState {
     pub pool: PgPool,
     pub config: Arc<Config>,
     pub client: reqwest::Client,
+    pub(crate) response_slots: Arc<tokio::sync::Semaphore>,
+    pub(crate) public_auth_slots: Arc<tokio::sync::Semaphore>,
     pub(crate) review_access: payments::access::ReviewAccess,
     pub(crate) payouts: Option<Arc<payments::payouts::PayoutService>>,
 }
@@ -63,9 +67,18 @@ pub struct Config {
     pub analytics_origin: Option<String>,
     pub sso: SsoConfig,
     pub wallet_project_id: Option<String>,
+    pub(crate) trust_client_ip_header: bool,
 }
 
 impl Config {
+    pub fn with_client_ip_source(mut self, value: &str) -> Result<Self, &'static str> {
+        self.trust_client_ip_header = match value {
+            "peer" => false,
+            "trusted_x_real_ip" => true,
+            _ => return Err("PATCHRIOT_CLIENT_IP_SOURCE must be peer or trusted_x_real_ip"),
+        };
+        Ok(self)
+    }
     pub fn with_wallet_project_id(mut self, value: Option<String>) -> Result<Self, &'static str> {
         if value
             .as_ref()
@@ -183,6 +196,7 @@ impl Config {
             analytics_origin: None,
             sso: SsoConfig::default(),
             wallet_project_id: None,
+            trust_client_ip_header: false,
             internal_key,
             web_root,
         })
@@ -209,6 +223,8 @@ impl AppState {
             pool,
             config: Arc::new(config),
             client,
+            public_auth_slots: Arc::new(tokio::sync::Semaphore::new(32)),
+            response_slots: Arc::new(tokio::sync::Semaphore::new(1)),
             review_access: payments::access::ReviewAccess::default(),
             payouts: None,
         })
@@ -325,6 +341,15 @@ pub fn router(state: AppState) -> Router {
         .route("/api/trial", get(trials::offer).post(trials::claim))
         .route("/api/coupons", get(coupons::list))
         .route("/api/coupons/welcome", post(coupons::welcome))
+        .route(
+            "/api/coupons/request",
+            get(coupons::request_status).post(coupons::request_coupon),
+        )
+        .route("/api/admin/coupons/requests", get(coupons::requests))
+        .route(
+            "/api/admin/coupons/requests/{id}/decision",
+            post(coupons::decide),
+        )
         .route(
             "/api/admin/coupons/judges",
             get(coupons::judges).post(coupons::reserve_judges),
@@ -472,6 +497,10 @@ pub fn router(state: AppState) -> Router {
     // The analytics frame and explicit wallet page have narrower-purpose policies.
     // The console keeps self-only connections and no third-party scripts.
     routes
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            ingress::public_capacity,
+        ))
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(SetResponseHeaderLayer::overriding(
             header::CACHE_CONTROL,

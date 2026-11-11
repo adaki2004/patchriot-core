@@ -273,7 +273,7 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
     sqlx::query("UPDATE review_codes SET operation_token = $2, operation_until = now() + interval '30 seconds', last_error = NULL, updated_at = now() WHERE id = $1")
         .bind(id).bind(operation).execute(&mut *tx).await?;
     tx.commit().await?;
-    let reply: Result<Json<ReviewView>, ApiError> = gateway::request_review_for_account(
+    let reply = gateway::request_review_for_account(
         state,
         Method::POST,
         &format!("{}/review", target.path()),
@@ -286,7 +286,7 @@ async fn start(state: &AppState, account: Uuid, id: Uuid) -> Result<Started, Api
     )
     .await;
     let result = match reply {
-        Ok(Json(review)) if matches_review(&review, target, &consent) => Ok(review.id),
+        Ok(review) if matches_review(&review, target, &consent) => Ok(review.id),
         Ok(_) => Err(ApiError::new(
             StatusCode::BAD_GATEWAY,
             "invalid_dispatcher_response",

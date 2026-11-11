@@ -33,12 +33,10 @@ pub(crate) async fn create(
     Json(input): Json<Inquiry>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
     auth::origin(&headers, &state.config)?;
-    // Separate from sign-in limits. Forwarded headers are not a trusted identity;
-    // behind a proxy the socket-peer bucket is deliberately shared.
+    // Contact has a separate global inbox budget and the same explicit ingress
+    // identity policy as authentication.
     access::rate(&state.pool, "contact:global", 100, 900).await?;
-    let peer = peer
-        .map(|Extension(ConnectInfo(a))| a.ip().to_string())
-        .unwrap_or_else(|| "unknown-peer".into());
+    let peer = crate::ingress::client_address(&state.config, &headers, peer)?;
     access::rate(&state.pool, &format!("contact:peer:{peer}"), 10, 900).await?;
     let email = access::contact(&input.email)?;
     access::rate(&state.pool, &format!("contact:email:{email}"), 3, 86400).await?;
