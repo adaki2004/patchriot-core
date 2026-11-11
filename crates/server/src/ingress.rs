@@ -7,7 +7,10 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use std::net::{IpAddr, SocketAddr};
+use std::{
+    net::{IpAddr, SocketAddr},
+    time::Duration,
+};
 
 /// Header mode is an operator assertion that every path to this listener passes
 /// through a trusted ingress which overwrites X-Real-IP. It is never inferred
@@ -57,7 +60,15 @@ pub(crate) async fn public_capacity(
     let Ok(_permit) = state.public_auth_slots.try_acquire() else {
         return ApiError::new(StatusCode::TOO_MANY_REQUESTS, "try_again_later").into_response();
     };
-    next.run(request).await
+    // Includes body extraction: an unfinished upload must not hold one of the
+    // shared slots indefinitely. Human interaction happens between requests,
+    // not inside the bounded OAuth callback or password submission.
+    match tokio::time::timeout(Duration::from_secs(30), next.run(request)).await {
+        Ok(response) => response,
+        Err(_) => {
+            ApiError::new(StatusCode::REQUEST_TIMEOUT, "auth_request_timeout").into_response()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -199,6 +210,65 @@ mod capacity_tests {
         let _ = running.await;
         assert_eq!(slots.available_permits(), 1);
         drop(held);
+        assert_eq!(slots.available_permits(), 32);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn unfinished_auth_body_times_out_and_releases_capacity() {
+        struct StalledBody;
+        impl http_body::Body for StalledBody {
+            type Data = axum::body::Bytes;
+            type Error = std::io::Error;
+            fn poll_frame(
+                self: std::pin::Pin<&mut Self>,
+                _: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>>
+            {
+                std::task::Poll::Pending
+            }
+        }
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .connect_lazy("postgres://localhost/unused")
+            .unwrap();
+        let config = Config::new(
+            "https://example.com".into(),
+            "http://localhost:7411".into(),
+            "k".repeat(32),
+            None,
+        )
+        .unwrap();
+        let state = AppState::new(pool, config).unwrap();
+        let slots = state.public_auth_slots.clone();
+        let app = Router::new()
+            .route(
+                "/api/auth/fixture",
+                axum::routing::post(|_: axum::body::Bytes| async { "done" }),
+            )
+            .layer(axum::middleware::from_fn_with_state(state, public_capacity));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/fixture")
+                    .body(Body::new(StalledBody))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+        assert_eq!(slots.available_permits(), 32);
+        let next = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/fixture")
+                    .body(Body::from("small complete request"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(next.status(), StatusCode::OK);
         assert_eq!(slots.available_permits(), 32);
     }
 }
