@@ -34,11 +34,11 @@ export function Analytics({ page }: { page: 'dashboard' | 'audits' | 'setup' | '
   const frameOrigin = isolatedOrigin(config.data?.frame_origin);
   if (!page || config.error || !config.data?.enabled || !frameOrigin) return null;
   return <>
-    {choice === 'allow' && <iframe key={page} title="Optional workspace page counts" className="analytics-frame" src={frameOrigin + '/api/analytics/frame/' + page} sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" aria-hidden="true" tabIndex={-1} onLoad={event => event.currentTarget.contentWindow?.postMessage('patchriot-workspace-page-count-v1', frameOrigin)} />}
+    {choice !== 'decline' && <iframe key={page} title="Optional workspace page counts" className="analytics-frame" src={frameOrigin + '/api/analytics/frame/' + page} sandbox="allow-scripts allow-same-origin" referrerPolicy="no-referrer" aria-hidden="true" tabIndex={-1} onLoad={event => event.currentTarget.contentWindow?.postMessage('patchriot-workspace-page-count-v1', frameOrigin)} />}
     <button className="quiet analytics-choice" onClick={() => setSettings(value => !value)}>Privacy choices</button>
-    {(choice === null || settings) && <aside className="analytics-consent" aria-label="Optional analytics">
-      <div><strong>Help us improve your workspace?</strong><p>Optional Google Analytics counts signed-in workspace screens. Google receives your IP and basic browser information. We send screen categories, never target URLs, account details, reports, coupon codes or payment values. Public pages are excluded. No analytics cookies are used.</p></div>
-      <div className="analytics-actions"><button className="quiet" onClick={() => choose('decline')}>No thanks</button><button className="primary" onClick={() => choose('allow')}>Allow page counts</button></div>
+    {settings && <aside className="analytics-consent" aria-label="Page count settings">
+      <div><strong>Workspace page counts are {choice === 'decline' ? 'off' : 'on'}</strong><p>Google Analytics counts signed-in workspace screens without analytics cookies. Google receives your IP and basic browser information. We send screen categories, never target URLs, account details, reports, coupon codes or payment values. Public pages are excluded.</p></div>
+      <div className="analytics-actions"><button className="quiet" onClick={() => setSettings(false)}>Close</button><button className="primary" onClick={() => choose(choice === 'decline' ? 'allow' : 'decline')}>{choice === 'decline' ? 'Turn on page counts' : 'Turn off page counts'}</button></div>
     </aside>}
   </>;
 }

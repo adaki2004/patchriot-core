@@ -25,20 +25,44 @@ async function workspace(page: Page, enabled = true) {
   });
 }
 
-test('analytics is absent until consent and declining persists without Google requests', async ({ page }, testInfo) => {
+test('page counts start without a questionnaire and a manual opt-out persists', async ({ page }, testInfo) => {
   await workspace(page);
+  const google: string[] = [];
+  await page.route('https://www.googletagmanager.com/**', r => {
+    google.push(r.request().url());
+    return r.fulfill({ contentType: 'text/javascript', body: '' });
+  });
+  await page.goto('/#/overview');
+  await expect(page.locator('iframe')).toHaveCount(1);
+  await expect.poll(() => google.length).toBe(1);
+  await expect(page.getByLabel('Page count settings')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Allow page counts' })).toHaveCount(0);
+  await page.screenshot({ path: `test-results/analytics-automatic-${testInfo.project.name}.png` });
+  await page.getByRole('button', { name: 'Privacy choices' }).click();
+  await expect(page.getByText('Workspace page counts are on')).toBeVisible();
+  await page.getByRole('button', { name: 'Turn off page counts' }).click();
+  await expect(page.locator('iframe')).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Privacy choices' })).toBeVisible();
+  await expect(page.getByLabel('Page count settings')).toHaveCount(0);
+  await expect(page.locator('iframe')).toHaveCount(0);
+  expect(google).toHaveLength(1);
+  await page.getByRole('button', { name: 'Privacy choices' }).click();
+  await expect(page.getByText('Workspace page counts are off')).toBeVisible();
+  await page.getByRole('button', { name: 'Turn on page counts' }).click();
+  await expect(page.locator('iframe')).toHaveCount(1);
+  await expect.poll(() => google.length).toBe(2);
+});
+
+test('a previously saved decline is respected before any Google request', async ({ page }) => {
+  await workspace(page);
+  await page.addInitScript(key => localStorage.setItem(key, JSON.stringify({ choice: 'decline', expires: Date.now() + 86400000 })), consentKey);
   const google: string[] = [];
   page.on('request', r => { if (r.url().includes('google')) google.push(r.url()); });
   await page.goto('/#/overview');
-  await expect(page.getByLabel('Optional analytics')).toBeVisible();
-  await page.screenshot({ path: `test-results/analytics-consent-${testInfo.project.name}.png` });
-  await expect(page.locator('iframe')).toHaveCount(0);
-  expect(google).toEqual([]);
-  await page.getByRole('button', { name: 'No thanks' }).click();
-  await page.reload();
   await expect(page.getByRole('button', { name: 'Privacy choices' })).toBeVisible();
-  await expect(page.getByLabel('Optional analytics')).toHaveCount(0);
   await expect(page.locator('iframe')).toHaveCount(0);
+  await expect(page.getByLabel('Page count settings')).toHaveCount(0);
   expect(google).toEqual([]);
 });
 
@@ -61,13 +85,14 @@ test('the shipped bridge cannot read private DOM, cookies, storage or APIs and s
       window.commands = window.dataLayer.map(v => Array.from(v));
     ` });
   });
-  await page.goto('/?email=PRIVATE_EMAIL&token=PRIVATE_TOKEN#/overview');
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     localStorage.setItem('private-test', 'PRIVATE_REPORT');
     document.cookie = 'private-test=PRIVATE_SESSION; SameSite=Strict; Path=/';
-    const marker = document.createElement('div'); marker.textContent = 'PRIVATE_REPORT'; document.body.append(marker);
+    document.addEventListener('DOMContentLoaded', () => {
+      const marker = document.createElement('div'); marker.textContent = 'PRIVATE_REPORT'; document.body.append(marker);
+    });
   });
-  await page.getByRole('button', { name: 'Allow page counts' }).click();
+  await page.goto('/?email=PRIVATE_EMAIL&token=PRIVATE_TOKEN#/overview');
   await expect.poll(() => google.length).toBe(1);
   const frame = page.frames().find(f => f.url().includes('/api/analytics/frame/dashboard'))!;
   await expect.poll(() => frame.evaluate(() => (window as any).probe?.api)).toBe('blocked');
@@ -81,12 +106,12 @@ test('the shipped bridge cannot read private DOM, cookies, storage or APIs and s
   expect(commands).toContainEqual(['event', 'page_view', { page_location: 'http://127.0.0.1:5174/workspace/dashboard', page_title: 'Patchriot workspace', page_referrer: '' }]);
   expect(commands[0]).toEqual(['consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied' }]);
   await page.getByRole('button', { name: 'Privacy choices' }).click();
-  await page.getByRole('button', { name: 'No thanks' }).click();
+  await page.getByRole('button', { name: 'Turn off page counts' }).click();
   await expect(page.locator('iframe')).toHaveCount(0);
   expect(google.length).toBe(1);
 });
 
-test('public navigation and sign-out remove the frame even after consent',async({page})=>{
+test('public navigation and sign-out remove automatic page counts',async({page})=>{
   await workspace(page);
   await page.addInitScript(key=>localStorage.setItem(key,JSON.stringify({choice:'allow',expires:Date.now()+86400000})),consentKey);
   await page.route('https://www.googletagmanager.com/**',r=>r.fulfill({contentType:'text/javascript',body:''}));

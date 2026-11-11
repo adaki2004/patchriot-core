@@ -1,4 +1,4 @@
-/* Embedded with a nonce in the sandboxed workspace frame, after consent. */
+/* Embedded with a nonce in the sandboxed workspace frame; storage stays denied. */
 (() => {
   const config = document.currentScript.dataset;
   let started = false;
