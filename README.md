@@ -63,7 +63,9 @@ The numbered agents are inference contributors, not fixed review roles. Each app
 3. Confirm the named team and providers. Use a coupon or your account credit. Add credit from Account before starting.
 4. Follow progress, inspect the findings and download the report. Cancel from the app if needed.
 
-A free-test campaign offers **one requested coupon per account**, with a 24/48-hour claim window and an administrator-set total limit. Claiming does not start work. Coupons last seven days and do not create cash or funded operator rewards. Different sign-ins can represent one person, so the campaign cap is essential.
+New member accounts created after the v0.0.22 migration receive **one welcome coupon**, allocated on their first workspace visit, until 100 lifetime places are taken. It covers one black-box or grey-box audit and lasts 30 days. Coupons appear beside credit and in the checkout selector; the server checks ownership, expiry and one-use reservation again when starting. Expiry does not replenish the pool. Existing account-bound coupons also appear in the selector.
+
+Staff can reserve **eight additional judge codes** from Administration → Audit activity → Judge coupons and copy individual DM messages. Repeating this action returns the same batch. Each code is single-use, expires after 30 days and only one judge code can be redeemed per account; a welcome coupon does not consume that judge allowance. These codes do not reduce the public 100. All coupon responses are authenticated and `no-store`; welcome coupons are selected by account-bound ID without exposing a bearer code. Coupons do not create cash or funded operator rewards. Separate sign-ins can represent one person, so this enforces one per account, not verified human identity. Legacy trial claims remain recoverable; their old campaign UI is retired.
 
 > **DON’T TRUST! VERIFY!** Inspect the public source—or have your own security agent inspect it. Test only systems you own or have explicit permission from their owner to assess. This is an automated assessment with evidence, not a security certificate. Prefer staging and disposable data; even read requests can have side effects.
 
@@ -101,9 +103,9 @@ The payment policy can retain Base USDC inside NEAR Intents or deliver it on Bas
 </details>
 
 <details>
-<summary>Free-trial operations and deployment order</summary>
+<summary>Legacy free-trial operations</summary>
 
-Apply core migration `0017_trial_campaign.sql`, deploy the dispatcher’s `/internal/admin/review-stats` route, then deploy core. Campaigns start closed. In **Administration → Audit activity**, choose 24 or 48 hours and a maximum number of sponsored assessments. Stop closes new claims; already issued coupons retain their original expiry.
+The v0.0.22 migration `0019_welcome_coupons.sql` stops any open legacy trial campaign and replaces its administration UI with the eight-code judge pool. Already issued coupons retain their expiry and remain usable. The earlier campaign API is retained for compatibility; a member cannot claim both a legacy trial and a welcome coupon.
 
 `GET /api/trial` reads the signed-in account’s offer. `POST /api/trial` with `{ "accepts_trial": true }` claims it, using the normal session, Origin and CSRF checks. Concurrent/repeated claims return one account-bound code. The existing `/api/pentests/:id/review-code` route still verifies scope and consent before reserving work. A trial cannot be used for legacy snapshot/source reviews. Admin campaign controls are under `/api/admin/trial` and activity totals under `/api/admin/review-stats`.
 
@@ -135,8 +137,8 @@ Set these through your **private environment**:
 | `PATCHRIOT_PUBLIC_ORIGIN` | `http://127.0.0.1:7410` |
 | `PATCHRIOT_DISPATCHER_URL` | `http://127.0.0.1:7411` |
 | `PATCHRIOT_CONTACT_EMAIL` | Optional public email; leave unset until configured |
-| `PATCHRIOT_GA_MEASUREMENT_ID` | Optional public GA4 measurement ID; unset disables analytics |
-| `PATCHRIOT_ANALYTICS_ENABLED` | Defaults to `false`; must be `true` to enable the configured public-page analytics |
+| `PATCHRIOT_GA_MEASUREMENT_ID` | Public GA4 measurement ID; defaults to `G-Y3HKPCZH4E` when analytics is explicitly enabled |
+| `PATCHRIOT_ANALYTICS_ENABLED` | Defaults to `false`; must be `true` to enable the configured signed-in workspace analytics |
 | `PATCHRIOT_ANALYTICS_ORIGIN` | Separate HTTPS hostname for analytics, routed to core; required with the measurement ID |
 | `PATCHRIOT_RELAY_ORIGIN` | Relay-facing URL; locally `http://127.0.0.1:7411` |
 | `PATCHRIOT_WEB_ROOT` | `web/dist` |
@@ -588,13 +590,13 @@ The wallet sends only the saved quote's exact USDC/USDT transfer on Ethereum or 
 </details>
 
 <details>
-<summary>Optional public page counts</summary>
+<summary>Optional signed-in workspace page counts</summary>
 
-**Off by default.** Set `PATCHRIOT_ANALYTICS_ENABLED=true`, `PATCHRIOT_GA_MEASUREMENT_ID` and `PATCHRIOT_ANALYTICS_ORIGIN` to offer opt-in Google Analytics. Old measurement settings alone do not enable it. Leave the switch unset or set it to `false` to disable all analytics routes and delivery. Job, payment and service metrics do not require Google Analytics.
+**Off by default.** Set `PATCHRIOT_ANALYTICS_ENABLED=true`, `PATCHRIOT_GA_MEASUREMENT_ID=G-Y3HKPCZH4E` and `PATCHRIOT_ANALYTICS_ORIGIN` to offer opt-in Google Analytics. Old measurement settings alone do not enable it. Leave the switch unset or set it to `false` to disable all analytics routes and delivery. Job, payment and service metrics do not require Google Analytics.
 
-The analytics origin must use a different hostname, routed to this same core service; it serves only the analytics frame, with all app and account routes blocked. A different port on the app hostname is insufficient. Only signed-out visits to Home, Docs and Recent events qualify; opening sign-in or private work removes the frame. **Privacy choices** lets visitors decline or withdraw consent. The choice stays in local storage for 180 days, without a user identifier.
+The analytics origin must use a different hostname, routed to this same core service; it serves only the analytics frame, with all app and account routes blocked. A different port on the app hostname is insufficient. Only signed-in workspace screens qualify. Public Home, Docs, Recent events and Contact pages never load analytics, even when signed in. Sign-out removes the frame. Counts use fixed categories for dashboard, audits, test setup, reports, account, orders and agents; no customer or request IDs enter those categories. **Privacy choices** lets visitors decline or withdraw consent. The choice stays in local storage for 180 days, without a user identifier.
 
-Google's script runs in a sandbox on that separate hostname. It cannot read the app document, host-only login cookie, storage or account API. Google needs this real origin even with cookie storage denied; a fully opaque frame loads its library but does not produce page counts. The frame receives a fixed public page name, never the actual URL, query, fragment, referrer, report or account. Advertising personalization and Google Signals are disabled. Google still receives the visitor's IP and basic browser information after opt-in. A measurement ID is public, not a credential or permission to read Analytics reports; forged traffic can still pollute counts. Disable Enhanced Measurement and advertising integrations in the Analytics property for simple page counts. This is optional traffic measurement, not a security monitor.
+Google's script runs in a sandbox on that separate hostname. It cannot read the app document, host-only login cookie, storage or account API. Google needs this real origin even with cookie storage denied; a fully opaque frame loads its library but does not produce page counts. The frame receives a fixed workspace category, never the actual URL, query, fragment, referrer, report, account, payment value or coupon code. The app retains its self-only script policy; the Google tag is not inserted into the private app DOM. Advertising personalization and Google Signals are disabled. Google still receives the visitor's IP and basic browser information after opt-in. A measurement ID is public, not a credential or permission to read Analytics reports; forged traffic can still pollute counts. Disable Enhanced Measurement and advertising integrations in the Analytics property for simple page counts. This is optional traffic measurement, not a security monitor.
 
 </details>
 

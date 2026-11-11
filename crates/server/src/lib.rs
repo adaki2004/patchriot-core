@@ -6,6 +6,7 @@ mod access;
 mod analytics;
 mod auth;
 mod contact;
+mod coupons;
 mod diagnostics;
 mod gateway;
 mod incidents;
@@ -322,6 +323,12 @@ pub fn router(state: AppState) -> Router {
             post(payments::credits::create_purchase),
         )
         .route("/api/trial", get(trials::offer).post(trials::claim))
+        .route("/api/coupons", get(coupons::list))
+        .route("/api/coupons/welcome", post(coupons::welcome))
+        .route(
+            "/api/admin/coupons/judges",
+            get(coupons::judges).post(coupons::reserve_judges),
+        )
         .route(
             "/api/admin/trial",
             get(trials::desk).post(trials::configure),

@@ -1,6 +1,6 @@
-//! Optional public page counts. Third-party code runs on a separate hostname,
+//! Optional workspace page counts. Third-party code runs on a separate hostname,
 //! never in the application document that holds accounts and private reports.
-use crate::{ApiError, AppState};
+use crate::{ApiError, AppState, auth};
 use axum::{
     Json,
     extract::{Path, State},
@@ -43,10 +43,14 @@ pub(crate) async fn host_boundary(
     next.run(request).await
 }
 
-pub(crate) async fn settings(State(state): State<AppState>) -> Json<serde_json::Value> {
-    Json(
+pub(crate) async fn settings(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    auth::require_session(&headers, &state).await?;
+    Ok(Json(
         serde_json::json!({"enabled":state.config.ga_measurement_id.is_some() && state.config.analytics_origin.is_some(), "frame_origin":state.config.analytics_origin}),
-    )
+    ))
 }
 
 pub(crate) async fn frame(
@@ -65,9 +69,13 @@ pub(crate) async fn frame(
         .as_deref()
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "not_found"))?;
     let (path, title) = match page.as_str() {
-        "home" => ("/", "Patchriot"),
-        "docs" => ("/docs", "Patchriot documentation"),
-        "events" => ("/events", "Patchriot recent events"),
+        "dashboard" => ("/workspace/dashboard", "Patchriot workspace"),
+        "audits" => ("/workspace/audits", "Patchriot audits"),
+        "setup" => ("/workspace/setup", "Patchriot test setup"),
+        "report" => ("/workspace/report", "Patchriot report"),
+        "account" => ("/workspace/account", "Patchriot account"),
+        "orders" => ("/workspace/orders", "Patchriot orders"),
+        "agents" => ("/workspace/agents", "Patchriot agents"),
         _ => return Err(ApiError::new(StatusCode::NOT_FOUND, "not_found")),
     };
     let nonce = uuid::Uuid::new_v4().simple().to_string();
@@ -79,7 +87,7 @@ pub(crate) async fn frame(
             .replace('>', "&gt;")
     };
     let html = format!(
-        "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"referrer\" content=\"no-referrer\"><title>Optional public page counts</title></head><body><script nonce=\"{nonce}\" data-measurement-id=\"{id}\" data-parent-origin=\"{}\" data-page-location=\"{}{path}\" data-page-title=\"{title}\">{}</script></body></html>",
+        "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"referrer\" content=\"no-referrer\"><title>Optional workspace page counts</title></head><body><script nonce=\"{nonce}\" data-measurement-id=\"{id}\" data-parent-origin=\"{}\" data-page-location=\"{}{path}\" data-page-title=\"{title}\">{}</script></body></html>",
         escape(origin),
         escape(origin),
         include_str!("analytics.js")
@@ -132,7 +140,7 @@ mod tests {
                 .unwrap();
             assert_eq!(reply.status(), StatusCode::NOT_FOUND);
         }
-        for page in ["reviews", "orders", "activate", "auth", "customer-id"] {
+        for page in ["home", "docs", "events", "activate", "auth", "customer-id"] {
             let reply = app(Some("G-EXAMPLE123"))
                 .oneshot(
                     Request::builder()
@@ -164,15 +172,12 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(
-            reply.into_body().collect().await.unwrap().to_bytes(),
-            "{\"enabled\":false,\"frame_origin\":null}"
-        );
+        assert_eq!(reply.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
     async fn only_the_separate_frame_can_load_google_and_it_never_uses_incoming_urls_or_headers() {
-        for page in ["home", "docs", "events"] {
+        for page in ["dashboard", "setup", "report"] {
             let reply = app(Some("G-EXAMPLE123"))
                 .oneshot(
                     Request::builder()

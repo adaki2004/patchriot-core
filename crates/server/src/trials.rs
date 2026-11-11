@@ -55,12 +55,19 @@ pub(crate) async fn offer(
         .bind(session.id)
         .fetch_optional(&state.pool)
         .await?;
+    let welcome_granted: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM account_coupon_grants WHERE account_id=$1)",
+    )
+    .bind(session.id)
+    .fetch_one(&state.pool)
+    .await?;
     let campaign = sqlx::query_as::<_, Campaign>("SELECT * FROM trial_campaign")
         .fetch_optional(&state.pool)
         .await?;
     Ok(Json(Offer {
         available: review_codes::available(&state).is_ok()
             && claim.is_none()
+            && !welcome_granted
             && campaign.as_ref().is_some_and(Campaign::open),
         ends_at: campaign.map(|c| c.ends_at),
         claim,
@@ -99,6 +106,15 @@ pub(crate) async fn claim(
         .await?
     {
         return Ok(Json(saved));
+    }
+    let welcome_granted: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM account_coupon_grants WHERE account_id=$1)",
+    )
+    .bind(session.id)
+    .fetch_one(&mut *tx)
+    .await?;
+    if welcome_granted {
+        return Err(ApiError::new(StatusCode::CONFLICT, "trial_unavailable"));
     }
     let campaign = sqlx::query_as::<_, Campaign>("SELECT * FROM trial_campaign FOR UPDATE")
         .fetch_optional(&mut *tx)

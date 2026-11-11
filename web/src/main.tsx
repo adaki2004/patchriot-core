@@ -208,8 +208,9 @@ function App() {
   }
   const access = <AccessPanel initialCode={initialCode} onLogin={signedIn} />;
   const auditView = ['audits', 'sites', 'pentests', 'sources', 'reviews', 'request'].includes(view);
-  const publicPage = view === 'home' || (view === 'overview' && ['', '#/', '#/overview'].includes(window.location.hash)) ? 'home' : view === 'docs' ? 'docs' : view === 'incidents' ? 'events' : null;
-  const analyticsPage = session && !account && !accessOpen && !initialCode && window.location.pathname === '/' ? publicPage : null;
+  const analyticsPage = account && !accessOpen && !initialCode && window.location.pathname === '/' ? (
+    view==='overview' ? 'dashboard' : view==='audits' ? 'audits' : ['request','pentests'].includes(view) ? 'setup' : view==='reviews' ? 'report' : view==='account' ? 'account' : view==='orders' ? 'orders' : view==='agents' ? 'agents' : null
+  ) : null;
   // OAuth returns to overview before the session request resolves. Keep the
   // handoff neutral until we know whether to resume a draft or open the app.
   const openingWorkspace = (!session && !sessionError && (view === 'overview' || resumeWebsiteDraft.current))

@@ -1,9 +1,9 @@
-/* Embedded with a nonce in the sandboxed public-page frame, after consent. */
+/* Embedded with a nonce in the sandboxed workspace frame, after consent. */
 (() => {
   const config = document.currentScript.dataset;
   let started = false;
   window.addEventListener('message', event => {
-    if (started || window.parent === window || event.source !== window.parent || event.origin !== config.parentOrigin || event.data !== 'patchriot-public-page-count-v1') return;
+    if (started || window.parent === window || event.source !== window.parent || event.origin !== config.parentOrigin || event.data !== 'patchriot-workspace-page-count-v1') return;
     started = true;
     window.dataLayer = [];
     function gtag() { window.dataLayer.push(arguments); }
