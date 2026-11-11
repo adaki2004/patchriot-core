@@ -762,7 +762,7 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   const baseline = await activity.getByRole('region',{name:'Scoped tools'}).boundingBox();
   const analysis = await activity.locator('[data-check=public_analysis]').boundingBox();
   if (info.project.name === 'mobile') expect(baseline!.y + baseline!.height).toBeLessThanOrEqual(analysis!.y);
-  await expect(branch.getByRole('button',{name:'API schema checks: Not applicable',exact:true})).toBeVisible();
+  await expect(branch.getByRole('button',{name:'Schemathesis · API checks: Not applicable',exact:true})).toBeVisible();
   await expect(branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true})).toBeVisible();
   await branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true}).click();
   const detail = activity.getByRole('region',{name:'Selected workflow step'});
@@ -819,6 +819,17 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await expect(branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true})).toBeVisible();
   await activity.locator('.workflow-map').screenshot({path:info.outputPath('follow-up-warning.png')});
 
+  for (const tool of tools.slice(0, 4)) tool.arguments = ['scoped', '--discovery-suite'];
+  await page.reload();
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  const deeper = activity.getByRole('region', {name: 'Deeper-check tools'});
+  await expect(deeper.getByRole('button')).toHaveCount(5);
+  await expect(activity.getByRole('region', {name: 'Scoped tools', exact: true})).toHaveCount(0);
+  await deeper.getByRole('button', {name: 'ZAP web scanner: Recorded', exact: true}).click();
+  await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','true');
+  await expect(activity.locator('[data-check=public_baseline]')).toHaveAttribute('data-related','false');
+  await activity.locator('.workflow-map').screenshot({path:info.outputPath('named-discovery-tools.png')});
+
   await activity.getByRole('button',{name:'Recon Working'}).click();
   await expect(branch).toHaveCount(0);
 });
@@ -831,6 +842,30 @@ function structuredWorkflow(grey: boolean, state: 'running' | 'recorded' = 'runn
     {id:'evidence_review',state:'pending',evidence_count:0},
   ]};
 }
+
+test('deep-check evidence belongs to the opted-in workflow stage', async ({page}) => {
+  await setup(page, false, false, true);
+  const review = await page.evaluate(async reviewId => (await fetch(`/api/reviews/${reviewId}`)).json(), id);
+  const workflow = structuredWorkflow(false, 'recorded');
+  workflow.version = 2;
+  workflow.checks.splice(5, 0, {id:'public_deep', state:'recorded', evidence_count:3});
+  review.steps[0].result = {...result, workflow, tool_runs:[{
+    ...result.tool_runs![0], tool:'patchriot-surface', arguments:['scoped', '--deep-suite'],
+    output_excerpt:JSON.stringify({coverage_complete:true, evidence_count:3}),
+  }]};
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  const activity = page.getByRole('region',{name:'Recorded assessment activity'});
+  await activity.getByRole('button',{name:'Scout Report received'}).click();
+  await expect(activity.locator('[data-check=public_deep]')).toHaveCount(1);
+  const branch = activity.getByRole('region',{name:'Deep-check evidence',exact:true});
+  await expect(branch).toHaveAttribute('data-parents','public_deep');
+  await expect(branch.getByRole('button')).toHaveCount(1);
+  await branch.getByRole('button').click();
+  await expect(activity.locator('[data-check=public_deep]')).toHaveAttribute('data-related','true');
+  await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','false');
+});
 
 for(const grey of [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}`, async ({page},info)=>{
   await emptyDashboard(page);

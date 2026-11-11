@@ -204,3 +204,8 @@
   .pentests-page[data-setup-step] .dns-record { padding: 16px; }
   .pentests-page[data-setup-step] .assessment-payment .assessment-actions .quiet { justify-self: stretch; }
 }
+
+.check-group-options { border: 0; padding: 0; margin: 1.5rem 0; }
+.check-group-options legend { font-weight: 600; margin-bottom: .75rem; }
+.check-group-options .check { align-items: flex-start; padding: .55rem 0; }
+.check-group-options small { display: block; opacity: .75; margin-top: .2rem; line-height: 1.45; }

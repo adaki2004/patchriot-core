@@ -224,7 +224,7 @@ test('paid review shows the price before an exact network-specific deposit and n
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
   await instructions.getByRole('button', { name: 'Send to an address', exact: false }).click();
   await expect(instructions).toContainText('0.01% provider app fee is included in the displayed amount');
-  await expect(instructions.getByRole('heading', { name: 'Send 1.000000000000000000000001 NEAR', exact: true })).toBeVisible();
+  await expect(instructions.getByRole('heading', { name: 'Send 1.000000000000000000000001 NEAR Exact transfer amount warning', exact: true })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { (window as Window & { copiedAmount?: string }).copiedAmount = value; } } }));
   await instructions.getByRole('button', { name: 'Copy exact amount', exact: true }).click();
   expect(await page.evaluate(() => (window as Window & { copiedAmount?: string }).copiedAmount)).toBe('1.000000000000000000000001');
@@ -257,7 +257,7 @@ for (const blockchain of ['eth', 'sol']) for (const symbol of ['USDC', 'USDT']) 
   await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
   await instructions.getByRole('button', { name: 'Send to an address', exact: false }).click();
-  await expect(instructions.getByRole('heading', { name: `Send 1.000123 ${symbol}`, exact: true })).toBeVisible();
+  await expect(instructions.getByRole('heading', { name: `Send 1.000123 ${symbol} Exact transfer amount warning`, exact: true })).toBeVisible();
   await expect(instructions).toContainText(network);
   await expect(instructions).toContainText('1 USDC');
   expect(state.submissions[0].origin_asset).toBe(selected.asset_id);
@@ -287,7 +287,7 @@ test('a delayed checkout reply cannot open the old order after another account s
     await pending;
     await route.fulfill({ json: state.quote });
   });
-  await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
+  await page.route('**/api/auth/login', route => route.fulfill({ json: { ok: true } }));
   let oldOrderReads = 0;
   try {
     await prepare(page);
@@ -299,9 +299,9 @@ test('a delayed checkout reply cannot open the old order after another account s
     await page.route('**/api/orders', route => route.fulfill({ json: [] }));
     await page.route(`**/api/orders/${orderId}`, route => { oldOrderReads++; return route.fulfill({ status: 404, json: { error: 'not_found' } }); });
     await page.getByRole('button', { name: 'App', exact: true }).click();
-    await page.getByText('Invitation or pilot code?', { exact: true }).click();
-    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
-    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    if (!await page.getByLabel('Username', { exact: true }).isVisible()) await page.getByText('Existing password account', { exact: true }).click();
+    await page.getByLabel('Username', { exact: true }).fill('fixture-user');
+    await page.getByLabel('Password', { exact: true }).fill('fixture-password');
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect(page.getByRole('banner').getByText('New customer', { exact: true })).toHaveText('New customer');
     await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeVisible();

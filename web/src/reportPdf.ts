@@ -196,7 +196,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);
     const workflow = s.result ? s.result.workflow : s.progress?.progress.workflow;
-    if (workflow?.version === 1) {
+    if ((workflow?.version ?? 0) >= 1) {
       p.paragraph('Structured checklist', 10, blue);
       for (const line of workflowRecordLines(workflow)) p.paragraph(line, 9);
     } else p.paragraph(workflowAbsent, 9, muted);

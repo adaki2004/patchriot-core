@@ -224,7 +224,7 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
       ? { state: 'paired', device_id: '00000000-0000-4000-8000-000000000002' }
       : { error: 'sign_in_required' } });
   });
-  await page.route('**/api/auth/redeem', route => route.fulfill({ json: { ok: true } }));
+  await page.route('**/api/auth/login', route => route.fulfill({ json: { ok: true } }));
   try {
     await page.goto('/');
     await page.getByRole('button', { name: 'Agent approvals', exact: true }).click();
@@ -240,9 +240,9 @@ for (const status of [200, 401]) test(`a late ${status} from an expired login do
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await page.route('**/api/session', route => route.fulfill({ json: { account: { ...account, id: 'new-account', display_name: 'Another member' }, csrf_token: 'new-csrf' } }));
     await page.getByRole('button', { name: 'App', exact: true }).click();
-    await page.getByText('Invitation or pilot code?', { exact: true }).click();
-    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
-    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    if (!await page.getByLabel('Username', { exact: true }).isVisible()) await page.getByText('Existing password account', { exact: true }).click();
+    await page.getByLabel('Username', { exact: true }).fill('fixture-user');
+    await page.getByLabel('Password', { exact: true }).fill('fixture-password');
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect(page.getByRole('banner').getByText('Another member', { exact: true })).toHaveText('Another member');
     const staleReply = page.waitForResponse('**/api/pairings/claim');
@@ -270,22 +270,22 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
     }
     return route.fulfill({ json: { account, csrf_token: 'test-csrf' } });
   });
-  await page.route('**/api/auth/redeem', async route => {
+  await page.route('**/api/auth/login', async route => {
     loginStarted = true; await login; authenticated = true;
     return route.fulfill({ json: { ok: true } });
   });
   try {
     await page.goto('/');
     await page.getByRole('button', { name: 'App', exact: true }).click();
-    await page.getByText('Invitation or pilot code?', { exact: true }).click();
-    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
-    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    if (!await page.getByLabel('Username', { exact: true }).isVisible()) await page.getByText('Existing password account', { exact: true }).click();
+    await page.getByLabel('Username', { exact: true }).fill('fixture-user');
+    await page.getByLabel('Password', { exact: true }).fill('fixture-password');
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     await expect.poll(() => loginStarted).toBe(true);
     await page.keyboard.press('Escape');
     await expect(page.getByRole('region', { name: 'Account access' })).toBeVisible();
-    await expect(page.getByRole('dialog').getByRole('button', { name: 'Existing pilot account', exact: true })).toBeDisabled();
-    await expect(page.getByLabel('Invitation code', { exact: true })).toBeDisabled();
+    await expect(page.getByRole('dialog').getByRole('button', { name: 'Existing password account', exact: true })).toBeDisabled();
+    await expect(page.getByLabel('Password', { exact: true })).toBeDisabled();
     const startupReply = page.waitForResponse(response => response.url().endsWith('/api/session') && response.headers()['x-fixture-startup'] === 'true');
     if (startupFirst) {
       releaseStartup(); await (await startupReply).finished();
@@ -304,12 +304,12 @@ for (const startupFirst of [true, false]) test(`sign-in survives a delayed start
   } finally { releaseStartup(); releaseLogin(); }
 });
 
-test('an accepted invitation can retry loading the workspace without redeeming the code again', async ({ page }) => {
+test('an accepted login can retry loading the workspace without authenticating again', async ({ page }) => {
   await setup(page);
   let redemptions = 0, sessionReads = 0, retryStarted = false;
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/api/auth/redeem', route => {
+  await page.route('**/api/auth/login', route => {
     redemptions++;
     return route.fulfill(redemptions === 1 ? { json: { ok: true } } : { status: 400, json: { error: 'invalid_or_expired_invite' } });
   });
@@ -322,17 +322,17 @@ test('an accepted invitation can retry loading the workspace without redeeming t
   try {
     await page.goto('/');
     await page.getByRole('button', { name: 'App', exact: true }).click();
-    await page.getByText('Invitation or pilot code?', { exact: true }).click();
-    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
-    await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+    if (!await page.getByLabel('Username', { exact: true }).isVisible()) await page.getByText('Existing password account', { exact: true }).click();
+    await page.getByLabel('Username', { exact: true }).fill('fixture-user');
+    await page.getByLabel('Password', { exact: true }).fill('fixture-password');
     await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
     const dialog = page.getByRole('region', { name: 'Account access' });
     await expect(dialog.getByRole('alert')).toContainText('Account storage is unavailable');
     await expect(dialog.getByRole('button', { name: 'Retry opening workspace', exact: true })).toBeVisible();
     await dialog.getByRole('button', { name: 'Retry opening workspace', exact: true }).click();
     await expect.poll(() => retryStarted).toBe(true);
-    await expect(dialog.getByLabel('Invitation code', { exact: true })).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Existing pilot account', exact: true })).toBeDisabled();
+    await expect(dialog.getByLabel('Password', { exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Existing password account', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     release();

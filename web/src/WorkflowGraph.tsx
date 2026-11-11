@@ -16,6 +16,7 @@ export type WorkflowNode = {
   source_role?: string;
   summary_counts?: {shown: number; omitted: number};
   state_label?: string;
+  parent_check?: string;
 };
 type WorkflowEdge = { from: string; to: string; path: string };
 type WorkflowBranch = { group: string; path: string; anchors: {x: number; y: number}[] };
@@ -106,10 +107,13 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   const label = (node: WorkflowNode) => node.state_label ?? (node.status === 'limited' ? 'Limits recorded' : node.status === 'running' && !live ? 'Last reported running' : statusText[node.status]);
   const route = [...publicNodes, ...accessNodes, reportNode];
   const investigationIndex = route.findIndex(node => node.id === 'public_analysis');
-  const scopedTools = toolNodes.filter(node => !['tool-zap-discoveries', 'tool-patchriot-coverage'].includes(node.id));
+  const deepIndex = route.findIndex(node => node.id === 'public_deep');
+  const discoveryTools = toolNodes.filter(node => node.id === 'tool-zap-discoveries' || node.parent_check === 'public_analysis');
+  const deepTools = toolNodes.filter(node => node.parent_check === 'public_deep');
+  const scopedTools = toolNodes.filter(node => !discoveryTools.includes(node) && !deepTools.includes(node) && node.id !== 'tool-patchriot-coverage');
   const baselineIds = route.slice(0, investigationIndex > 0 ? investigationIndex : 4).map(node => node.id);
-  const parentIds: Record<string, string[]> = {baseline: baselineIds, 'follow-up': ['public_analysis'], coverage: [reportNode.id]};
-  const groupFor = (id: string) => id === 'tool-zap-discoveries' ? 'follow-up' : id === 'tool-patchriot-coverage' ? 'coverage' : scopedTools.some(node => node.id === id) ? 'baseline' : null;
+  const parentIds: Record<string, string[]> = {baseline: baselineIds, 'follow-up': ['public_analysis'], deep: ['public_deep'], coverage: [reportNode.id]};
+  const groupFor = (id: string) => deepTools.some(node=>node.id===id) ? 'deep' : discoveryTools.some(node=>node.id===id) ? 'follow-up' : id === 'tool-patchriot-coverage' ? 'coverage' : scopedTools.some(node => node.id === id) ? 'baseline' : null;
   const activeGroup = hoveredGroup ?? groupFor(selected.id);
   const related = (id: string) => !!activeGroup && parentIds[activeGroup].includes(id);
   function inspectTool(id: string) {
@@ -156,7 +160,8 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
         <ol aria-label="Report workflow">{nodeButton(reportNode, publicNodes.length + accessNodes.length, 'file')}</ol>
       </div>
       {toolCluster('Scoped tools', scopedTools, `1 / span ${baselineIds.length}`, baselineIds.length * 10 + 5, 'baseline')}
-      {toolCluster('Discovery follow-up', toolNodes.filter(node => node.id === 'tool-zap-discoveries'), String(investigationIndex + 1), (investigationIndex + 1) * 10 + 5, 'follow-up')}
+      {toolCluster(discoveryTools.some(node=>node.parent_check) ? 'Deeper-check tools' : 'Discovery follow-up', discoveryTools, String(investigationIndex + 1), (investigationIndex + 1) * 10 + 5, 'follow-up')}
+      {deepIndex >= 0 && toolCluster('Deep-check evidence', deepTools, String(deepIndex + 1), (deepIndex + 1) * 10 + 5, 'deep')}
       {toolCluster('Coverage summary', toolNodes.filter(node => node.id === 'tool-patchriot-coverage'), '-2 / -1', route.length * 10 + 5, 'coverage')}
     </div>
     <p className="workflow-status-help"><strong>Recorded = saved work.</strong> {toolNodes.length ? 'Dashed branches show tool evidence for this agent. Select a step or tool to inspect it.' : 'Select a step to inspect its evidence.'}</p>

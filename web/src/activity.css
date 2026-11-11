@@ -335,3 +335,7 @@
 @container(max-width:760px) { .workflow-tool-tree { margin-inline: 0; } }
 
 .workflow-tool-tree .tool-record-open { display: none; }
+
+@container(min-width:761px) {
+  .workflow-tool-cluster[data-cluster=follow-up] { width: 220px; justify-self: center; }
+}

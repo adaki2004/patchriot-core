@@ -19,7 +19,7 @@ async function setup(page: Page, signedIn = true, permitted = true) {
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname;
     (route.request().method() === 'GET' ? reads : writes).push(path);
-    if (path === '/api/auth/redeem') { signedIn = true; return route.fulfill({ json: { ok: true } }); }
+    if (path === '/api/auth/login') { signedIn = true; return route.fulfill({ json: { ok: true } }); }
     if (path === '/api/auth/logout') { signedIn = false; return route.fulfill({ json: { ok: true } }); }
     if (path === '/api/session') return route.fulfill({ json: { account: signedIn ? account : null, csrf_token: signedIn ? 'fixture-csrf' : null } });
     if (path === '/api/fleet') return route.fulfill({ json: { online_devices: 0, online_operators: 0, online_compute_groups: 0 } });
@@ -88,13 +88,13 @@ test('an anonymous bookmark waits for sign-in and a denied read exposes no repor
   await expect(page.getByRole('heading', { name: 'Sign in to continue.', exact: true })).toBeVisible();
   expect(calls.reads.some(path => path.startsWith('/api/reviews'))).toBe(false);
   await expect(page.getByRole('region', { name: 'Account access' })).toBeVisible();
-  await page.getByText('Invitation or pilot code?', { exact: true }).click();
-    await page.getByRole('button', { name: 'Use a pilot login code', exact: true }).click();
-  await page.getByLabel('Invitation code', { exact: true }).fill('a'.repeat(64));
+  if (!await page.getByLabel('Username', { exact: true }).isVisible()) await page.getByText('Existing password account', { exact: true }).click();
+      await page.getByLabel('Username', { exact: true }).fill('fixture-user');
+    await page.getByLabel('Password', { exact: true }).fill('fixture-password');
   await page.getByRole('button', { name: 'Open workspace →', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Review report' }).getByRole('heading', { name: 'Needs review', exact: true })).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`#/reviews/${reviewId}$`));
-  expect(calls.writes).toEqual(['/api/auth/redeem']);
+  expect(calls.writes).toEqual(['/api/auth/login']);
 
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/#\/overview$/);
@@ -138,6 +138,6 @@ test('invalid paths cannot become API paths and member links cannot open admin d
     await page.goto(`/#/${view}`);
     await expect(page.getByRole('heading', { name: 'Administrator access required.', exact: true })).toBeVisible();
   }
-  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/withdrawals', '/api/agents', '/api/pentests', '/api/trial'].includes(path))).toBe(true);
+  expect(calls.reads.every(path => ['/api/session', '/api/fleet', '/api/devices', '/api/incidents', '/api/reviews', '/api/site-checks', '/api/sources', '/api/orders', '/api/review-codes', '/api/withdrawals', '/api/agents', '/api/pentests', '/api/trial', '/api/credits', '/api/coupons/request', '/api/coupons', '/api/analytics'].includes(path))).toBe(true);
   expect(calls.writes).toEqual([]);
 });

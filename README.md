@@ -6,6 +6,12 @@ Give us your website URL. Our hosted agents run an automated web application sec
 
 **[Open Patchriot ↗](https://patchriot.net)** · [How it works](https://patchriot.net/#/docs/workflow) · [Testing FAQ](https://patchriot.net/#/docs/safety)
 
+### Choose the tools
+
+New website requests offer five selectable groups: Patchriot headers/configuration, route mapping, Nuclei signatures, ARES-derived fingerprints, and deeper checks with ffuf, ZAP, Schemathesis and Patchriot route discovery. Users explicitly authorize their selected checks before submitting. The selection is part of the signed scope; omitted groups are not scheduled and incompatible tool receipts are rejected. Grey-box adds verified account contexts to the anonymous checks. A missing or expired login remains a coverage gap.
+
+Reports name the tools that actually ran and retain versions, evidence references and limitations. Hermes performs investigation and validation; browser access uses Chromium, Playwright and agent-browser. The relay README documents official sources and the image's full dependency inventory. Existing signed reports keep their original identifiers.
+
 ### Final testing confirmation
 
 Before starting, the requester confirms authority and testing risks. Optional context can prioritize areas inside the saved scope; it is screened through server-side OpenRouter before admission and stays untrusted data for both agents. Screening cannot grant new targets, methods, account permissions or access to platform secrets. Failure or uncertainty blocks nonempty context; an empty context needs no model call.
@@ -535,6 +541,8 @@ Choose **Grey box**, select username/password, a bearer token, HTTP Basic or EVM
 Execution receipts retain optional provider-reported costs and token/cache usage separately from the conservative uncached spending estimate. USD and DIEM remain separate, missing responses are counted, and these observations are not settled invoices.
 
 The activity graph progresses from simple checks to deeper investigation, with selectable tool details, evidence counts and earlier-role sources. Reports and Markdown/PDF exports retain recorded, incomplete and reused stages. “Recorded” establishes observed work, not safety or full coverage; signed-in requests do not prove every authorization, session or input-validation test was performed. Old reports without this checklist show that it was not recorded. New terminal statuses are derived from retained receipts and anonymous HTTP evidence; reuse is checked against the dispatcher's saved earlier reports. A completed engine receipt can retain individual response-capture or transport gaps. The checklist keeps those records available for review and requires successful anonymous evidence. Missing records or an incomplete engine receipt keep the stage incomplete. A verified login cannot complete missing public work.
+
+**Opt-in deep scan:** a requester can additionally tick a deep group that is never scheduled by omission. It adds five bounded read-only families behind the same relay: script and route mining with a missing-path control, access-control path and method mutations, injected header and cache probes, observed or common GET-parameter probes, and object-access comparisons using verified accounts in grey-box. Workers must advertise `deep_checks_v1` with adapter 25. It sends materially more requests and takes longer; GET endpoints can still have side effects, so the checkbox carries the disclosure and the signed permission note records the choice. Unticked groups become `not_applicable`, an interrupted family stays `incomplete`, and its rows are leads needing a control. Older saved scopes and workflows without the group keep their original eight stages and stay readable.
 
 Deploy matching core, dispatcher/gateway and relay binaries before enabling the adapter 16 image. Old readers reject the new optional workflow field; old reports continue to round-trip without it. This source update has local fixture/browser validation, not a new live-model benchmark.
 

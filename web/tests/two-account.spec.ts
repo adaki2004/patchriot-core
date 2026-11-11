@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { emptyDashboard } from './helpers';
 
 const id = '00000000-0000-4000-8000-000000000002';
-const capabilities = ['artex_engine_v1', 'authenticated_http_v1', 'browser_login_v1', 'active_web_v2', 'multi_account_v1'];
+const capabilities = ['scoped_discovery_v1', 'authenticated_http_v1', 'browser_login_v1', 'active_web_v2', 'multi_account_v1'];
 
 async function setup(page: Page, available = true) {
   await emptyDashboard(page);
@@ -65,7 +65,7 @@ for (const available of [true, false]) test(`second account setup follows capabi
     await expect(page.getByText('Two-account testing is currently unavailable.')).toBeVisible();
   }
   await expect(page.locator('input[type=password]')).toHaveCount(0);
-  await page.getByLabel(/I own this website or have explicit permission/).check();
+  await page.getByLabel(/I own this website or have explicit written permission/).check();
   await page.getByRole('button', { name: 'Continue to verification' }).click();
   await expect.poll(() => !!submitted).toBe(true);
   expect(submitted?.scope.account_policy).toEqual(available ? { allow_password_changes: false } : undefined);
@@ -148,7 +148,7 @@ test('editing two account setup preserves the saved password permission and scop
   await expect(page.getByRole('checkbox', { name: 'Add a second test account for access comparisons' })).toBeChecked();
   await page.getByLabel('Website URL').fill('https://updated.example');
   await page.getByLabel(/I authorize form and API submissions/).check();
-  await page.getByLabel(/I own this website or have explicit permission/).check();
+  await page.getByLabel(/I own this website or have explicit written permission/).check();
   await page.getByRole('button', { name: 'Save website settings' }).click();
   await expect.poll(() => saved?.scope_sha256).toBe(target.scope_sha256);
   expect(saved?.scope.account_policy).toEqual({ allow_password_changes: true });
