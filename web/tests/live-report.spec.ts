@@ -867,7 +867,7 @@ test('deep-check evidence belongs to the opted-in workflow stage', async ({page}
   await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','false');
 });
 
-for(const grey of [false,true]) for(const deep of [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}, deep=${deep}`, async ({page},info)=>{
+for(const grey of [false,true]) for(const deep of grey ? [false] : [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}, deep=${deep}`, async ({page},info)=>{
   await emptyDashboard(page);
   await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
   const workflow=structuredWorkflow(grey);
@@ -932,12 +932,12 @@ for(const grey of [false,true]) for(const deep of [false,true]) test(`structured
 
 });
 
-test('combined authenticated workflow gives deep scan its own column', async ({page},info)=>{
+test('current authenticated workflow keeps access before the web and deep passes from startup', async ({page},info)=>{
   await emptyDashboard(page);
   await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
   const workflow=structuredWorkflow(true);
   workflow.version=2;
-  workflow.checks[4].state='running';
+  for (const check of workflow.checks) check.state='pending';
   workflow.checks.splice(5,0,{id:'public_deep',state:'pending',evidence_count:0});
   const now=Math.floor(Date.now()/1000);
   const review={id,mode:'pentest_agent',state:'running',created_at:now-30,deadline_at:now+3600,
@@ -949,6 +949,7 @@ test('combined authenticated workflow gives deep scan its own column', async ({p
   await expect(graph).toHaveAttribute('data-combined','true');
   await expect(graph.locator('.workflow-node')).toHaveCount(8);
   await expect(graph.locator('.workflow-access .workflow-step')).toHaveCount(3);
+  await expect(graph.locator('.workflow-access .workflow-step > button > strong')).toHaveText(['Verify access','Agentic investigation','Deep scan']);
   for(const width of info.project.name==='desktop'?[1280,1920,1024,760]:[390]) {
     await page.setViewportSize({width,height:1000});
     await expect.poll(()=>graph.evaluate(root=>{

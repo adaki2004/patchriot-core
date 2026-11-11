@@ -103,7 +103,9 @@ export function AssessmentActivity({ steps, state, authenticatedScope = false, p
   const stale = !!progress && now - progress.received_at * 1000 > 90_000;
   const tools = selected.result?.tool_runs ?? [];
   const workflow = selected.result ? selected.result.workflow : progress?.progress.workflow;
-  const combinedInvestigation = authenticatedScope && (pairedScope || tools.some(tool => !!combinedEngineAccess(tool)) ||
+  // Current runners establish access before the web/API and deep passes.
+  // Keep that layout from the first snapshot, rather than moving nodes mid-run.
+  const combinedInvestigation = authenticatedScope && ((workflow?.version ?? 0) >= 2 || pairedScope || tools.some(tool => !!combinedEngineAccess(tool)) ||
     !selected.result && (reportsCombinedInvestigation(selected) || observedCombined.current.has(selected.role)));
   const awaitingRecords = !workflow && !selected.result && ['queued', 'leased', 'running'].includes(selected.state)
     && ['awaiting_payment', 'queued', 'running'].includes(state);

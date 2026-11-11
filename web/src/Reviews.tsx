@@ -9,6 +9,8 @@ import { LiveEvidence, LiveProgress, LiveStatus, LiveReportDownloads, PdfReportD
 import type { LiveActivity, LiveResult, LiveStep, LiveTiming } from './LiveReport';
 import type { PentestContext } from './Pentests';
 import { VulnerabilityReport } from './VulnerabilityReport';
+import { ExposureMap } from './ExposureMap';
+import { exposureData } from './exposure';
 import { ReportCheck } from './ReportCheck';
 import { reviewMethod, type ReportInput } from './report';
 import { SponsoredReviews } from './ReviewCodes';
@@ -165,6 +167,7 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
       <div className="report-export-bar"><PdfReportDownload report={report} loadReport={loadReport} disabled={!canExport} />{retentionNotice}</div>
       <div className="review-actions report-controls">{['failed', 'cancelled'].includes(review.state) && <a className="text-button" href="#/pentests">Test a web application ↗</a>}<button className="quiet" onClick={detail.refresh}>Refresh report ↻</button>{!review.payment && ['queued', 'running'].includes(review.state) && <button className="quiet" onClick={() => void cancel()} disabled={busy}>Cancel test</button>}{review.payment && <a className="quiet" href="#/account">Manage credit purchase →</a>}{review.payment && onOpenOrders && <button className="quiet" onClick={onOpenOrders}>Manage order →</button>}</div>
       <details className="report-method"><summary>Review method</summary><p className="fine" aria-label="Review method">{reviewMethod(report)}</p></details>
+      <ExposureMap key={`exposure-${review.id}`} data={exposureData(liveSteps, report.origins)} pending={['queued', 'running', 'awaiting_payment'].includes(review.state)} />
       <VulnerabilityReport report={report} />
       {['completed', 'needs_review'].includes(review.state) && <ReportCheck key={id} id={id} csrf={csrf} beforeExport={exportReview} />}
       <details className="assessment-disclosure report-technical"><summary>Other downloads & test details</summary>
