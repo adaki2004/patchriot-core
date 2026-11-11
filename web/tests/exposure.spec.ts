@@ -41,7 +41,7 @@ test('exposure never imports query values, credentials, fragments, response bodi
   const data = exposureData([step(records)], [origin]);
   expect(data.requests).toBe(1);
   expect(data.excluded).toBe(5);
-  expect(data.routes[0]).toMatchObject({ path: '/login', queryNames: ['return', 'token'], contexts: ['Sign-in step'], stages: ['access'] });
+  expect(data.routes[0]).toMatchObject({ path: '/login', queryNames: ['return', 'token'], contexts: ['Public', 'Sign-in step'], stages: ['access'] });
   const serialized = JSON.stringify(data);
   for (const secret of ['secret-value', 'private-value', 'private-fragment', 'private-header', 'Private body', '127.0.0.1', 'outside.example']) expect(serialized).not.toContain(secret);
 });
@@ -72,12 +72,12 @@ test('deep component receipts belong to deep scan and an empty result is not a s
   expect(data.stages.map(s => s.id)).toEqual(['deep']);
 });
 
-test('audit exports a bounded exposure snapshot with zero findings and no target requests', async ({ page }, info) => {
+test('audit exports the retained exposure inventory with zero findings and no target requests', async ({ page }, info) => {
   await emptyDashboard(page);
   await page.goto('/');
   const records = Array.from({ length: 45 }, (_, i) => record(i + 1, {
     url: origin + `/routes/${String(i).padStart(2, '0')}` + (i === 0 ? '?token=private-query-value' : ''),
-    authenticated: i % 2 === 0, status: i % 3 === 0 ? 401 : 200,
+    authenticated: i % 2 === 0, method: i % 7 === 0 ? 'POST' : 'GET', status: i % 3 === 0 ? 401 : 200,
   }));
   records.push(record(46, { url: 'http://127.0.0.1:1234/scanner-secret' }));
   const steps = [step(records, [tool('patchriot-discovery', [1, 2]), tool('patchriot-deep', [3, 4]), tool('ares-web-surface', [1], { output_excerpt: JSON.stringify({ root_evidence_id: 1, technology_hints: ['nginx'] }) })])];
@@ -105,7 +105,7 @@ test('exposure map works with zero findings, traces stages, filters contexts and
   const id = '00000000-0000-4000-8000-000000000003';
   await page.route('**/api/session', r => r.fulfill({ json: { account: { id, display_name: 'Fixture owner', role: 'member' }, csrf_token: 'fixture-csrf' } }));
   await page.route('**/api/reviews/*/consistency-check', r => r.fulfill({ json: { state: 'not_started' } }));
-  const records = [record(1, { url: origin + '/' }), record(2, { status: 401 }), record(3, { authenticated: true }), record(4, { url: origin + '/admin', status: 404 }), record(5, { url: origin + '/api/search?q=private-search-value' }), ...Array.from({ length: 9 }, (_, i) => record(i + 6, { url: origin + '/pages/' + i }))];
+  const records = [record(1, { url: origin + '/' }), record(2, { status: 401 }), record(3, { authenticated: true }), record(4, { url: origin + '/admin', status: 404 }), record(5, { url: origin + '/api/search?q=private-search-value' }), ...Array.from({ length: 9 }, (_, i) => record(i + 6, { url: origin + '/pages/' + i })), record(15, { method: 'POST', url: origin + '/sign-in', login: true }), record(16, { method: 'POST', url: origin + '/api/form', status: 422 }), record(17, { method: 'POST', url: origin + '/api/form', authenticated: true }), record(18, { method: 'POST', url: origin + '/api/form', authenticated: true, status: 403 })];
   const tools = [tool('patchriot-baseline', [1]), tool('patchriot-crawl', [1, 6, 7, 8, 9, 10, 11, 12, 13, 14]), tool('patchriot-discovery', [2, 3, 4]), tool('patchriot-deep', [4, 5]), tool('ares-web-surface', [1], { output_excerpt: JSON.stringify({ root_evidence_id: 1, technology_hints: ['nginx'] }) })];
   const review = { id, mode: 'pentest_agent', state: 'completed', created_at: 1, deadline_at: 3600, pentest: { scope: { origins: [origin], methods: ['GET'], authentication: 'session' }, review_policy: 'investigate_validate_v1', reviewers: [], provider: 'fixture' }, steps: [step(records, tools), step([record(1, { url: origin + '/', authenticated: true })], [], 'reproducer')] };
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
@@ -123,23 +123,55 @@ test('exposure map works with zero findings, traces stages, filters contexts and
   await map.getByRole('button', { name: /GET.*\/api\/search/ }).click();
   await expect(map.getByLabel('Selected route details')).toContainText('Values are hidden');
   await expect(map).not.toContainText('private-search-value');
-  await map.getByRole('button', { name: /Show request references/ }).click();
+  await map.getByRole('button', { name: /Show all .* recorded requests?/ }).click();
   await expect(map.getByLabel('Selected route details')).toContainText('Scout #5');
   await expect(map.locator('.exposure-stage[data-related=true] strong')).toHaveText(['Deep scan']);
   await map.screenshot({ path: info.outputPath('exposure-selected.png') });
   await map.getByRole('button', { name: /Assessment target/ }).click();
-  await map.getByLabel('Filter request context').selectOption('Signed-in');
-  await expect(map.getByRole('group', { name: 'Observed routes' }).getByRole('button')).toHaveCount(2);
-  await map.getByLabel('Filter request context').selectOption('all');
-  await map.getByLabel('Filter observed responses').selectOption('missing');
+  await map.getByRole('group', { name: 'Filter request access' }).getByRole('button', { name: 'Signed in', exact: true }).click();
+  await expect(map.getByRole('group', { name: 'Observed routes' }).getByRole('button')).toHaveCount(3);
+  await map.getByRole('group', { name: 'Filter request access' }).getByRole('button', { name: 'All', exact: true }).click();
+  await map.getByRole('group', { name: 'Filter observed responses' }).getByRole('button', { name: 'Not found', exact: true }).click();
   await expect(map.getByRole('group', { name: 'Observed routes' }).getByRole('button')).toHaveCount(1);
-  await map.getByLabel('Filter observed responses').selectOption('all');
+  await map.getByRole('group', { name: 'Filter observed responses' }).getByRole('button', { name: 'All', exact: true }).click();
   await map.getByRole('button', { name: 'Next observed routes' }).click();
   await expect(map).toContainText('8–');
   await map.getByRole('button', { name: 'Previous observed routes' }).click();
   await map.getByLabel('Search observed routes').fill('/api/');
-  await expect(map.getByRole('group', { name: 'Observed routes' }).getByRole('button')).toHaveCount(2);
+  await expect(map.getByRole('group', { name: 'Observed routes' }).getByRole('button')).toHaveCount(3);
   await map.getByLabel('Search observed routes').fill('');
+  const methods = map.getByRole('group', { name: 'Filter by HTTP method' });
+  const access = map.getByRole('group', { name: 'Filter request access' });
+  const responses = map.getByRole('group', { name: 'Filter observed responses' });
+  const paths = map.getByRole('group', { name: 'Observed routes' });
+  await methods.getByRole('button', { name: 'POST', exact: true }).click();
+  await expect(paths.getByRole('button')).toHaveCount(2);
+  await expect(map.locator('.exposure-route-heading')).toContainText('4 requests');
+  await paths.getByRole('button', { name: /POST.*\/api\/form/ }).click();
+  await map.getByRole('button', { name: 'Show all 3 recorded requests' }).click();
+  await expect(map.getByLabel('Recorded requests for this route').getByRole('listitem')).toHaveCount(3);
+  await access.getByRole('button', { name: 'Public', exact: true }).click();
+  await expect(paths.getByRole('button')).toHaveCount(2);
+  await expect(map.locator('.exposure-route-heading')).toContainText('2 requests');
+  await access.getByRole('button', { name: 'Login only', exact: true }).click();
+  await expect(paths.getByRole('button')).toHaveCount(1);
+  await expect(paths).toContainText('/sign-in');
+  await expect(paths).toContainText('Public / Login');
+  await access.getByRole('button', { name: 'Signed in', exact: true }).click();
+  await expect(paths.getByRole('button')).toHaveCount(0);
+  await access.getByRole('button', { name: 'Login only', exact: true }).click();
+  await responses.getByRole('button', { name: 'Denied', exact: true }).click();
+  await expect(paths.getByRole('button')).toHaveCount(1);
+  await expect(map.locator('.exposure-route-heading')).toContainText('1 request');
+  await paths.getByRole('button').click();
+  await map.getByRole('button', { name: 'Show all 1 recorded request', exact: true }).click();
+  await expect(map.getByLabel('Recorded requests for this route')).toContainText('Scout #18');
+  await expect(map.getByLabel('Recorded requests for this route')).not.toContainText('Scout #16');
+  // A public 422 and a signed-in 403 on one path cannot become a public 403.
+  await access.getByRole('button', { name: 'Public', exact: true }).click();
+  await expect(paths.getByRole('button')).toHaveCount(0);
+  await map.getByRole('button', { name: 'Clear filters', exact: true }).click();
+  await expect(map.getByRole('combobox')).toHaveCount(0);
   for (const width of info.project.name === 'desktop' ? [1440, 1024] : [390]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

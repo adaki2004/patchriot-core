@@ -45,13 +45,21 @@
 .textmode-ui .exposure-route-heading h4 { margin: 5px 0 0; font: 500 17px/1.4 var(--body-font); }
 .exposure-route-heading > span { color: var(--exposure-muted); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .exposure-stage-source { color: var(--exposure-muted); font: 10px/1.6 var(--mono-font); overflow-wrap: anywhere; margin: 8px 0 0; }
-.exposure-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 20px 0 12px; }
-.exposure-filters .exposure-search { grid-column: 1 / -1; }
+.exposure-filters { display: block; margin: 20px 0 12px; }
+.exposure-route-key { margin: 8px 0 0; color: var(--exposure-muted); font-size: 11px; line-height: 1.6; }
 .exposure-filters label { margin: 0; min-width: 0; }
 .exposure-search { position: relative; display: block; }
 .exposure-search > .ui-icon { position: absolute; left: 10px; top: 11px; width: 16px; height: 16px; color: var(--exposure-muted); }
 .textmode-ui .exposure-filters input, .textmode-ui .exposure-filters select { height: 38px; min-height: 38px; width: 100%; border: 1px solid var(--exposure-line); border-radius: 5px; background: #0d121a; color: var(--exposure-ink); font: 400 11px/1.4 var(--body-font); margin: 0; padding: 8px 10px; }
 .textmode-ui .exposure-filters input { padding-left: 34px; }
+.exposure-filter-row { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 8px; align-items: start; margin-top: 10px; }
+.exposure-filter-row > span { padding-top: 7px; color: var(--exposure-muted); font-size: 11px; }
+.exposure-filter-row > div { display: flex; flex-wrap: wrap; gap: 5px; }
+.textmode-ui .exposure-filter-row button { min-height: 30px; padding: 5px 8px; border: 1px solid var(--exposure-line); border-radius: 5px; background: transparent; color: #becbe0; font-size: 11px; line-height: 1.5; }
+.textmode-ui .exposure-filter-row button[aria-pressed=true] { border-color: #819bd0; background: #24334d; color: #e7efff; }
+.textmode-ui .exposure-filter-row .exposure-login-filter { margin-left: 5px; border-style: dashed; }
+.textmode-ui .exposure-reset { display: block; margin: 10px 0 0 auto; border: 0; padding: 4px 0; background: transparent; color: var(--exposure-blue); font-size: 11px; }
+.exposure-route-heading > span { text-align: right; line-height: 1.6; }
 .exposure-route-list { border-block: 1px solid var(--exposure-line); min-height: 72px; }
 .textmode-ui .exposure-route { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 12px 8px; border: 0; border-bottom: 1px solid #293343; border-radius: 0; background: transparent; color: var(--exposure-ink); }
 .textmode-ui .exposure-route:last-child { border-bottom: 0; }
@@ -78,6 +86,11 @@
 .exposure-inspector dd small { display: block; color: var(--exposure-muted); }
 .textmode-ui .exposure-ref-toggle { padding: 4px 0; border: 0; background: transparent; font-size: 11px; color: var(--exposure-blue); }
 .exposure-reference-list { font: 10px/1.8 var(--mono-font); color: #b7c9e6; overflow-wrap: anywhere; max-height: 120px; overflow: auto; margin: 8px 0 0; }
+.exposure-request-list { list-style: none; padding: 0; margin: 8px 0 0; max-height: 300px; overflow: auto; }
+.exposure-request-list li { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid #34465e; padding: 9px 0; color: #c9d6e8; font: 11px/1.5 var(--body-font); }
+.exposure-request-list li > span:last-child { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.exposure-request-list strong { font-weight: 500; }
+.exposure-request-list small { display: block; color: var(--exposure-muted); font-size: 10px; }
 .exposure-detail-note { font-size: 10px; line-height: 1.7; color: var(--exposure-muted); margin: 14px 0 0; }
 .exposure-no-matches { padding: 16px 8px; margin: 0; font-size: 12px; color: var(--exposure-muted); }
 .exposure-signals { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); border-top: 1px solid var(--exposure-line); }

@@ -92,7 +92,7 @@ async function asset(path: string) {
 /** A printable snapshot of the same recorded observations as the interactive map.
  * Keep this separate from findings: visibility and header presence are not verdicts. */
 function exposureSnapshot(p: Pages, data: ExposureData) {
-  p.begin('03 / What your site exposes');
+  p.begin('05 / What your site exposes');
   p.paragraph('Observed, not necessarily vulnerable. This snapshot uses the same saved requests as the interactive map. It does not make new requests or infer unseen services.');
   if (!data.requests) {
     p.paragraph('No in-scope HTTP observations were retained. This is not evidence that the website has no exposed routes or vulnerabilities.');
@@ -114,7 +114,7 @@ function exposureSnapshot(p: Pages, data: ExposureData) {
     p.page.drawText(`${stage.routeKeys.length} routes / ${stage.requests} requests`, { x: x + 14, y: y - 17, size: 9, font: p.font, color: muted });
     const sample = data.routes.find(r => r.key === stage.routeKeys[0]);
     if (sample) {
-      let path = p.text(`${sample.method} ${sample.path}`);
+      let path = p.text(`Example: ${sample.method} ${sample.path}`);
       while (p.font.widthOfTextAtSize(path, 9) > cardWidth - 44) path = path.slice(0, -4) + '...';
       p.page.drawText(path, { x: x + 14, y: y - 34, size: 9, font: p.font, color: blue });
     }
@@ -124,10 +124,11 @@ function exposureSnapshot(p: Pages, data: ExposureData) {
   if (data.firstObserved || data.lastObserved) p.paragraph(`Observation window: ${data.firstObserved ? new Date(data.firstObserved * 1000).toISOString() : 'unknown'} to ${data.lastObserved ? new Date(data.lastObserved * 1000).toISOString() : 'unknown'}`, 9, muted);
   if (data.excluded) p.paragraph(`${data.excluded} records with invalid, credential-bearing or out-of-scope URLs were excluded from this snapshot.`, 9, muted);
 
-  p.newPage('03 / What your site exposes');
+  p.newPage('05 / What your site exposes');
   p.heading('Services & response signals', 1);
   p.heading('Access seen in the evidence');
   p.paragraph(['Public', 'Signed-in', 'Sign-in step'].map(context => `${context}: ${data.routes.filter(r => r.contexts.includes(context)).length} route + method pairs`).join('\n'), 10);
+  p.paragraph('Login is an activity, not a separate access level. Anonymous login submissions also count as public requests; the categories overlap.', 9, muted);
   p.paragraph('The same route can appear in several access contexts. A 200 response may be a generic application page; it does not prove private data was accessible.', 9, muted);
   p.heading('Observed web services');
   if (!data.services.length) p.paragraph('No successful HTTP transport was recorded. Failed attempts do not establish an open service.');
@@ -141,12 +142,11 @@ function exposureSnapshot(p: Pages, data: ExposureData) {
   p.paragraph(data.headers.map(header => `${header.name}: present in ${header.present} of ${header.responses} retained HTTP responses`).join('\n'), 9);
   p.paragraph('Presence only. Header values and policy strength are not assessed here. Missing headers are not automatically vulnerabilities, and retained evidence may omit fields.', 9, muted);
 
-  p.newPage('03 / What your site exposes');
+  p.newPage('05 / What your site exposes');
   p.heading('Observed routes', 1);
-  // Bound the printable inventory; do not turn thousands of crawl paths into an
-  // unusable PDF. The private map and endpoint export retain the full inventory.
-  const printed = data.routes.slice(0, 40);
-  p.paragraph(`${printed.length} of ${data.routes.length} route + method pairs, sorted by origin and path. ${data.routes.length > printed.length ? 'The remaining routes are available in the private interactive map and the observed-endpoint export.' : 'All retained route + method pairs are listed below.'}`, 10);
+  const printed = data.routes;
+  p.paragraph(`All ${printed.length} retained route + method pairs, sorted by origin and path. Missing paths and failed attempts are included; a listed path is not necessarily an implemented API.`, 10);
+  p.paragraph('Across the full retained inventory: ' + [...new Set(data.routes.map(r => r.method))].sort().map(method => `${method} ${data.routes.filter(r => r.method === method).length}`).join(' / ') + '. These are observed paths, not a complete API specification.', 10, blue);
   p.paragraph('References are specific to the named agent. Query names are shown without values; credentials, request bodies and response bodies are excluded from this inventory.', 9, muted);
   for (const route of printed) {
     p.ensure(115);
@@ -155,6 +155,17 @@ function exposureSnapshot(p: Pages, data: ExposureData) {
     p.paragraph(`Recorded by: ${route.stages.map(id => data.stages.find(s => s.id === id)?.label ?? id).join(', ')}`, 9);
     if (route.queryNames.length) p.paragraph(`Query names: ${route.queryNames.join(', ')}`, 9, muted);
     p.paragraph(`References: ${route.refs.slice(0, 6).join(', ')}${route.refs.length > 6 ? ` / ${route.refs.length - 6} more in the interactive map` : ''}`, 8, muted);
+  }
+  const posts = data.routes.filter(route => route.method === 'POST');
+  if (posts.length) {
+    p.newPage('05 / What your site exposes');
+    p.heading('Recorded POST requests', 1);
+    p.paragraph(`${posts.reduce((sum, route) => sum + route.records.length, 0)} retained POST requests across ${posts.length} paths. Every retained POST record is listed below, including rejected requests and login submissions. Request bodies, credentials and query values are omitted.`, 10);
+    for (const route of posts) {
+      p.ensure(100);
+      p.heading(`POST ${route.origin}${route.path}`);
+      p.paragraph(route.records.map(record => `${record.ref} / ${record.status === null ? 'No response' : `HTTP ${record.status}`} / ${record.context}${record.login ? ' / Login' : ''}${record.account ? ` / Account ${record.account === 'reference' ? '2' : '1'}` : ''}${record.failed ? ' / Request error' : ''}`).join('\n'), 9);
+    }
   }
 }
 
@@ -214,9 +225,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.paragraph(teamDescription(input));
   p.paragraph('Evidence is reported by the operators. This document does not attest their honesty, independently verify a model’s identity or demonstrate that a suggested fix works.');
 
-  exposureSnapshot(p, exposureData(input.steps, input.origins));
-
-  p.begin('04 / Agent contributions');
+  p.begin('03 / Agent contributions');
   for (const s of input.steps) {
     p.ensure(200);
     p.heading(`${reportRoles[s.role]} — ${roleOutcome(s).label}`);
@@ -231,10 +240,10 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     if (refs.length) p.paragraph(`Observations: ${refs.join(', ')}`, 10, blue);
   }
 
-  p.begin('05 / Findings');
+  p.begin('04 / Findings');
   if (!summary.findings.length) p.paragraph('No findings are available in the saved assessments. Read the execution and coverage limitations before interpreting this result.');
   summary.findings.forEach((row, i) => {
-    if (i) p.newPage('05 / Findings');
+    if (i) p.newPage('04 / Findings');
     const f = row.finding;
     p.paragraph(`${row.id} / ${f.severity.toUpperCase()} / ${reportRoles[row.role].toUpperCase()}`, 10, blue);
     p.heading(f.title, 1);
@@ -262,6 +271,8 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     }
     p.paragraph('Response excerpts, headers and tool transcripts are available in the private report’s Technical evidence view and the separate evidence JSON download. References are scoped to their agent.', 9, muted);
   });
+
+  exposureSnapshot(p, exposureData(input.steps, input.origins));
 
   p.begin('06 / Coverage & limitations');
   p.paragraph(workflowCaveat, 9, muted);

@@ -1,6 +1,7 @@
 import type { LiveRole, LiveStep, LiveToolRun } from './LiveReport';
 
-export type ExposureRoute = { key: string; origin: string; path: string; method: string; queryNames: string[]; statuses: number[]; contexts: string[]; refs: string[]; stages: string[]; requests: number; failed: number };
+export type ExposureRequest = { ref: string; status: number | null; context: 'Public' | 'Signed-in'; login: boolean; account?: 'testing' | 'reference'; stages: string[]; failed: boolean };
+export type ExposureRoute = { key: string; origin: string; path: string; method: string; queryNames: string[]; statuses: number[]; contexts: string[]; refs: string[]; stages: string[]; requests: number; failed: number; records: ExposureRequest[] };
 export type ExposureStage = { id: string; label: string; tools: string[]; routeKeys: string[]; requests: number; roles: string[] };
 export type ExposureData = {
   origins: string[]; routes: ExposureRoute[]; stages: ExposureStage[];
@@ -55,14 +56,17 @@ export function exposureData(steps: LiveStep[], origins: string[]): ExposureData
       included.set(record.id, ref);
       const method = /^[A-Z]{1,12}$/.test(record.method) ? record.method : 'OTHER';
       const key = JSON.stringify([url.origin, url.pathname, method]);
-      const row = routes.get(key) ?? { key, origin: url.origin, path: url.pathname, method, queryNames: [], statuses: [], contexts: [], refs: [], stages: [], requests: 0, failed: 0 };
+      const row = routes.get(key) ?? { key, origin: url.origin, path: url.pathname, method, queryNames: [], statuses: [], contexts: [], refs: [], stages: [], requests: 0, failed: 0, records: [] };
       row.requests++;
       row.refs.push(ref);
       const status = record.status !== null && Number.isInteger(record.status) && record.status >= 100 && record.status <= 599 ? record.status : undefined;
       if (status !== undefined) row.statuses = [...new Set([...row.statuses, status])];
       if (record.error || status === undefined) row.failed++;
       row.queryNames = [...new Set([...row.queryNames, ...url.searchParams.keys()])].sort();
-      row.contexts = [...new Set([...row.contexts, record.login ? 'Sign-in step' : record.authenticated ? 'Signed-in' : 'Public'])];
+      const context = record.authenticated ? 'Signed-in' : 'Public';
+      // Login is an activity, not a third authentication state. Anonymous
+      // credential submissions still belong in the Public filter.
+      row.contexts = [...new Set([...row.contexts, context, ...(record.login ? ['Sign-in step'] : [])])];
       const tools = byEvidence.get(record.id) ?? [];
       const groups = new Set(tools.map(stageOf));
       if (record.login) groups.add('access');
@@ -76,6 +80,7 @@ export function exposureData(steps: LiveStep[], origins: string[]): ExposureData
         stages.set(id, stage);
         row.stages = [...new Set([...row.stages, id])];
       }
+      row.records.push({ ref, status: status ?? null, context, login: record.login === true, account: record.account, stages: [...groups], failed: Boolean(record.error || status === undefined) });
       routes.set(key, row);
       if (record.observed_at && Number.isFinite(record.observed_at)) {
         firstObserved = Math.min(firstObserved ?? record.observed_at, record.observed_at);

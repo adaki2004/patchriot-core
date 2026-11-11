@@ -8,10 +8,10 @@ const pageSize = 7;
 const stageOrder = ['baseline', 'mapping', 'signatures', 'fingerprints', 'access', 'discovery', 'deep', 'agent'];
 const stageIcons = { baseline: 'shield', mapping: 'globe', signatures: 'scan', fingerprints: 'code', discovery: 'scan', deep: 'grid', access: 'lock', agent: 'agent' } as const;
 const roleNames: Record<string, string> = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' };
-const contextNames: Record<string, string> = { Public: 'Public', 'Signed-in': 'Signed in', 'Sign-in step': 'Login flow' };
+const contextNames: Record<string, string> = { Public: 'Public', 'Signed-in': 'Signed in', 'Sign-in step': 'Login' };
 const count = (n: number) => n.toLocaleString();
 const host = (origin: string) => { try { return new URL(origin).host; } catch { return origin; } };
-type AccessFilter = 'all' | 'Public' | 'Signed-in' | 'Sign-in step';
+type AccessFilter = 'all' | 'Public' | 'Signed-in';
 type ResponseFilter = 'all' | 'response' | 'denied' | 'missing' | 'none';
 function responseLabel(route: ExposureRoute) {
   if (!route.statuses.length) return 'No response';
@@ -32,8 +32,8 @@ function RouteDetails({ route, stages }: { route: ExposureRoute; stages: Exposur
       <div><dt>Observed by</dt><dd>{stages.filter(s => route.stages.includes(s.id)).map(s => s.label).join(' · ') || 'Agent request records'}</dd></div>
       {route.queryNames.length > 0 && <div><dt>Query parameter names</dt><dd>{route.queryNames.join(', ')}<small>Values are hidden.</small></dd></div>}
     </dl>
-    <button type="button" className="exposure-ref-toggle" aria-expanded={showReferences} onClick={() => setShowReferences(value => !value)}>{showReferences ? 'Hide' : 'Show'} request references · {count(route.refs.length)}</button>
-    {showReferences && <p className="exposure-reference-list">{route.refs.join(' · ')}</p>}
+    <button type="button" className="exposure-ref-toggle" aria-expanded={showReferences} onClick={() => setShowReferences(value => !value)}>{showReferences ? 'Hide' : 'Show'} all {count(route.records.length)} recorded request{route.records.length === 1 ? '' : 's'}</button>
+    {showReferences && <ol className="exposure-request-list" aria-label="Recorded requests for this route">{route.records.map(record => <li key={record.ref}><span><strong>{record.ref}</strong><small>{contextNames[record.context]}{record.login ? ' · Login' : ''}{record.account ? ` · Account ${record.account === 'reference' ? '2' : '1'}` : ''}</small></span><span>{record.status === null ? 'No response' : `HTTP ${record.status}`}{record.failed && <small>Request error</small>}</span></li>)}</ol>}
     <p className="exposure-detail-note">An HTTP response records behavior, not a vulnerability. A successful status can also be a shared app shell or error page.</p>
   </div>;
 }
@@ -43,27 +43,39 @@ export function ExposureMap({ data, pending }: { data: ExposureData; pending: bo
   const [stageId, setStageId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [access, setAccess] = useState<AccessFilter>('all');
+  const [method, setMethod] = useState('all');
+  const [loginOnly, setLoginOnly] = useState(false);
   const [response, setResponse] = useState<ResponseFilter>('all');
   const [page, setPage] = useState(0);
   const [routeKey, setRouteKey] = useState<string | null>(null);
   const stages = useMemo(() => [...data.stages].sort((a, b) => stageOrder.indexOf(a.id) - stageOrder.indexOf(b.id)), [data.stages]);
   const selectedStage = stages.find(stage => stage.id === stageId);
-  const routes = useMemo(() => data.routes.filter(route => (!selectedStage || route.stages.includes(selectedStage.id))
-    && (access === 'all' || route.contexts.includes(access))
-    && (response === 'all' || response === 'response' && route.statuses.length > 0 || response === 'denied' && route.statuses.some(status => status === 401 || status === 403) || response === 'missing' && route.statuses.some(status => status === 404 || status === 410) || response === 'none' && route.failed > 0)
-    && (!query.trim() || `${route.origin} ${route.path} ${route.method} ${route.queryNames.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase()))), [data.routes, selectedStage, access, response, query]);
+  const routes = useMemo(() => data.routes.flatMap(route => {
+    if (method !== 'all' && route.method !== method || query.trim() && !`${route.origin} ${route.path} ${route.method} ${route.queryNames.join(' ')}`.toLowerCase().includes(query.trim().toLowerCase())) return [];
+    // Apply every filter to the same request. A route's public 401 and signed-in
+    // 200 must never combine into an invented public 200 observation.
+    const records = route.records.filter(record => (!selectedStage || record.stages.includes(selectedStage.id))
+      && (access === 'all' || record.context === access) && (!loginOnly || record.login)
+      && (response === 'all' || response === 'response' && record.status !== null || response === 'denied' && [401, 403].includes(record.status ?? 0) || response === 'missing' && [404, 410].includes(record.status ?? 0) || response === 'none' && record.failed));
+    if (!records.length) return [];
+    return [{ ...route, records, requests: records.length, refs: records.map(r => r.ref), failed: records.filter(r => r.failed).length,
+      statuses: [...new Set(records.flatMap(r => r.status === null ? [] : [r.status]))],
+      contexts: [...new Set(records.flatMap(r => [r.context, ...(r.login ? ['Sign-in step'] : [])]))], stages: [...new Set(records.flatMap(r => r.stages))] }];
+  }), [data.routes, selectedStage, method, access, loginOnly, response, query]);
   const pages = Math.max(1, Math.ceil(routes.length / pageSize));
   const currentPage = Math.min(page, pages - 1);
   const visibleRoutes = routes.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
   const selectedRoute = routes.find(route => route.key === routeKey);
+  const filteredRequests = routes.reduce((sum, route) => sum + route.requests, 0);
   const hasData = data.routes.length > 0;
   function chooseStage(id: string | null) { setStageId(id); setPage(0); setRouteKey(null); }
+  function resetPage() { setPage(0); setRouteKey(null); }
 
   return <section className="exposure-map" aria-labelledby="exposure-map-title">
     <header className="exposure-heading"><div><span className="exposure-eyebrow">See what hackers see</span><h3 id="exposure-map-title">What your site exposes</h3><p>A map of what the assessment observed. Separate from vulnerabilities.</p></div><span className="exposure-record-label"><UIIcon name="scan" />{pending ? 'Saved observations so far' : 'Recorded observations'}</span></header>
     {!hasData ? <div className="exposure-empty"><UIIcon name="globe" /><div><strong>{pending ? 'The map fills in when an agent returns its records.' : 'No route observations were retained.'}</strong><p>{pending ? 'Progress above shows current work. This view needs saved request evidence.' : 'That does not mean the website has no exposed surface. Check the assessment’s coverage limits.'}</p></div></div> : <>
       <div className="exposure-metrics" aria-label="Observed surface summary">
-        <div><strong>{count(data.routes.length)}</strong><span>Paths & methods checked</span></div>
+        <div><strong>{count(data.routes.length)}</strong><span>Routes checked</span></div>
         <div><strong>{count(data.requests)}</strong><span>Recorded requests</span></div>
         <div><strong>{count(data.services.length)}</strong><span>HTTP services observed</span></div>
         <div><strong>{count(data.technologies.length)}</strong><span>Technology hints</span></div>
@@ -75,9 +87,16 @@ export function ExposureMap({ data, pending }: { data: ExposureData; pending: bo
           <p className="exposure-map-key"><span aria-hidden="true" />Select a check to trace its observations.<br />Connections show source, not execution order. Counts can overlap.</p>
         </div>
         <div className="exposure-route-panel">
-          <div className="exposure-route-heading"><div><span className="exposure-eyebrow">{selectedStage ? 'Selected branch' : 'Surface inventory'}</span><h4>{selectedStage?.label ?? 'Paths checked'}</h4></div><span>{count(routes.length)} path / method pairs</span></div>
+          <div className="exposure-route-heading"><div><span className="exposure-eyebrow">{selectedStage ? 'Selected branch' : 'Surface inventory'}</span><h4>{selectedStage?.label ?? 'Routes checked'}</h4></div><span>{count(routes.length)} route{routes.length === 1 ? '' : 's'}<br />{count(filteredRequests)} request{filteredRequests === 1 ? '' : 's'}</span></div>
+          <p className="exposure-route-key">One row per method and path. Repeated requests are grouped together.</p>
           {selectedStage && <p className="exposure-stage-source">{selectedStage.tools.join(' · ')}</p>}
-          <div className="exposure-filters"><label className="exposure-search"><UIIcon name="scan" /><span className="exposure-sr-only">Search observed routes</span><input type="search" value={query} placeholder="Search paths or methods" onChange={event => { setQuery(event.target.value); setPage(0); setRouteKey(null); }} /></label><label><span className="exposure-sr-only">Filter request context</span><select value={access} onChange={event => { setAccess(event.target.value as AccessFilter); setPage(0); setRouteKey(null); }}><option value="all">All contexts</option><option value="Public">Public requests</option><option value="Signed-in">Signed-in requests</option><option value="Sign-in step">Login flow</option></select></label><label><span className="exposure-sr-only">Filter observed responses</span><select value={response} onChange={event => { setResponse(event.target.value as ResponseFilter); setPage(0); setRouteKey(null); }}><option value="all">All responses</option><option value="response">HTTP responses</option><option value="denied">401 / 403 denied</option><option value="missing">404 / 410 not found</option><option value="none">Request errors</option></select></label></div>
+          <div className="exposure-filters">
+            <label className="exposure-search"><UIIcon name="scan" /><span className="exposure-sr-only">Search observed routes</span><input type="search" value={query} placeholder="Search paths or methods" onChange={event => { setQuery(event.target.value); resetPage(); }} /></label>
+            <div className="exposure-filter-row" role="group" aria-label="Filter by HTTP method"><span>Method</span><div>{['all', ...new Set(data.routes.map(route => route.method).sort())].map(value => <button type="button" key={value} aria-pressed={method === value} onClick={() => { setMethod(value); resetPage(); }}>{value === 'all' ? 'All' : value}</button>)}</div></div>
+            <div className="exposure-filter-row" role="group" aria-label="Filter request access"><span>Access</span><div>{(['all', 'Public', 'Signed-in'] as const).map(value => <button type="button" key={value} aria-pressed={access === value} onClick={() => { setAccess(value); resetPage(); }}>{value === 'all' ? 'All' : contextNames[value]}</button>)}<button type="button" className="exposure-login-filter" aria-pressed={loginOnly} title="Only requests used to sign in. Anonymous login requests are public." onClick={() => { setLoginOnly(!loginOnly); resetPage(); }}>Login only</button></div></div>
+            <div className="exposure-filter-row" role="group" aria-label="Filter observed responses"><span>Response</span><div>{([['all', 'All'], ['response', 'HTTP reply'], ['denied', 'Denied'], ['missing', 'Not found'], ['none', 'Request error']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={response === value} title={value === 'denied' ? 'HTTP 401 or 403' : value === 'missing' ? 'HTTP 404 or 410' : undefined} onClick={() => { setResponse(value); resetPage(); }}>{label}</button>)}</div></div>
+            {(method !== 'all' || access !== 'all' || response !== 'all' || loginOnly || query) && <button type="button" className="exposure-reset" onClick={() => { setMethod('all'); setAccess('all'); setResponse('all'); setLoginOnly(false); setQuery(''); resetPage(); }}>Clear filters</button>}
+          </div>
           <div className="exposure-route-list" role="group" aria-label="Observed routes">{visibleRoutes.length ? visibleRoutes.map(route => <button type="button" key={route.key} className="exposure-route" aria-pressed={routeKey === route.key} onClick={() => setRouteKey(routeKey === route.key ? null : route.key)}><span className="exposure-route-method">{route.method}</span><span className="exposure-route-path"><code>{route.path}</code><small>{data.origins.length > 1 ? `${host(route.origin)} · ` : ''}{route.contexts.map(context => contextNames[context] ?? context).join(' / ') || 'Context not recorded'}{route.queryNames.length > 0 ? ` · ${route.queryNames.length} parameter name${route.queryNames.length === 1 ? '' : 's'}` : ''}</small></span><span className="exposure-response" data-denied={route.statuses.some(status => status === 401 || status === 403)}>{route.statuses.length ? route.statuses.slice(0, 3).join(' / ') : 'No reply'}{route.statuses.length > 3 ? '…' : ''}<small>{responseLabel(route)}</small></span></button>) : <p className="exposure-no-matches">No retained routes match these filters.</p>}</div>
           <div className="exposure-pagination"><span>{routes.length ? `${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, routes.length)} of ${count(routes.length)}` : '0 observations'}</span><div><button type="button" aria-label="Previous observed routes" disabled={currentPage === 0} onClick={() => { setPage(currentPage - 1); setRouteKey(null); }}>Previous</button><button type="button" aria-label="Next observed routes" disabled={currentPage + 1 >= pages} onClick={() => { setPage(currentPage + 1); setRouteKey(null); }}>Next</button></div></div>
           {selectedRoute ? <RouteDetails key={selectedRoute.key} route={selectedRoute} stages={stages} /> : <p className="exposure-inspect-hint"><UIIcon name="arrow" />Select a route to see its source, request contexts and references.</p>}
