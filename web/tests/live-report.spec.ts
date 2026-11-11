@@ -88,7 +88,7 @@ async function setup(page: import('@playwright/test').Page, failed = false, stop
 
 for (const mode of ['verified', 'gap'] as const) test(`browser access ${mode} is explicit in the report and exports`, async ({page}) => {
   await setup(page, false, false, true, mode);
-  await page.getByRole('button', {name:'Agent reports', exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   // A gap remains visible even when a model returned a plausible report.
   const expected = mode === 'verified' ? 'Signed-in access verified:' : 'Signed-in access was not verified.';
   await expect(page.getByText(expected, {exact:false}).first()).toBeVisible();
@@ -130,10 +130,10 @@ test('paired account proofs and evidence remain labelled in the report and expor
   await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
   await mockExport(page,review);
   await page.reload();
-  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   await expect(page.getByText('Account 1 (testing) signed-in access verified:',{exact:false})).toBeVisible();
   await expect(page.getByText('Account 2 (reference) signed-in access verified:',{exact:false})).toBeVisible();
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Request evidence (4)',{exact:true}).click();
   await expect(page.locator('.request-evidence').filter({hasText:'HTTP #1'})).toContainText('Account 1 (testing)');
   await expect(page.locator('.request-evidence').filter({hasText:'HTTP #3'})).toContainText('Account 2 (reference)');
@@ -393,7 +393,7 @@ test('a refused export never saves stale evidence from an open page', async ({ p
 test('raw tool output is hidden until requested and never interpreted as HTML', async ({ page }) => {
   await setup(page);
   await expect(page.getByText('<script>window.toolExecuted=true</script>', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Technical evidence', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Tools run (1)', { exact: true }).click();
   await expect(page.getByText('nuclei · 3.11.1', { exact: true })).toBeVisible();
   await expect(page.getByText('<script>window.toolExecuted=true</script>', { exact: true })).not.toBeVisible();
@@ -407,8 +407,8 @@ test('raw tool output is hidden until requested and never interpreted as HTML', 
 test('a missing assessment is explained as unfinished work, not zero vulnerabilities', async ({ page }) => {
   await setup(page, true);
   await expect(page.getByText('No agent has returned a usable assessment.', { exact: false })).toBeVisible();
-  await expect(page.locator('.report-counts div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
-  await page.getByRole('button', { name: 'Agent reports', exact: true }).click();
+  await expect(page.locator('.report-counts div').filter({ hasText: 'Findings' }).locator('dd')).toHaveText('—');
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   await expect(page.getByText('No assessment', { exact: true })).toBeVisible();
   await expect(page.locator('.report-agent').first().locator('dl div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
   await expect(page.getByText(/The agent reached its allowed AI usage budget/)).toBeVisible();
@@ -432,11 +432,11 @@ test('requested discovery without a receipt is unconfirmed and summary waits sta
   await page.reload();
   await page.getByText('Latest activity', {exact:true}).click();
   await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
-  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   await expect(page.getByText('Agentic security checks was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
   recovered = true;
   await page.reload();
-  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   await expect(page.getByText('Agentic security checks was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
   await expect(page.getByRole('row').filter({hasText:'Agentic security checks'})).toContainText('Recon');
 });
@@ -573,7 +573,7 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await mockExport(page, review);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Findings (2)', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Findings (2)', exact: true })).toBeVisible();
   await expect(page.getByText(/Roles differ — review needed/)).toBeVisible();
   await page.locator('.report-finding > summary').first().click();
   await expect(page.locator('.report-finding').first().getByText(/Different request examples/)).toBeVisible();
@@ -651,7 +651,7 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toContainText('providers, verification and completed replies');
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await expect(page.getByRole('status').filter({hasText:'Venice fallback:'})).toContainText('4 completed replies');
   await page.getByText('Other downloads & test details', {exact:true}).click();
   const download=page.waitForEvent('download');
@@ -675,7 +675,7 @@ test('NEAR recovery reports the actual backup and retains Venice primary attempt
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toBeVisible();
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await expect(page.getByRole('status').filter({hasText:'NEAR AI fallback:'})).toContainText('2 Venice attempts');
   await page.getByText('Other downloads & test details',{exact:true}).click();
   const download=page.waitForEvent('download');
@@ -716,7 +716,7 @@ test('historical activity keeps unknown checklist states and retained tool evide
 
 for (const stopped of [false, true, 'cancelled'] as const) test(`ended assessment keeps recorded activity inspectable: stopped=${stopped}`, async ({page}) => {
   await setup(page,false,stopped,!stopped);
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity).toBeVisible();
   await expect(activity.locator('[data-live=true]')).toHaveCount(0);
@@ -855,7 +855,7 @@ test('deep-check evidence belongs to the opted-in workflow stage', async ({page}
   }]};
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const activity = page.getByRole('region',{name:'Recorded assessment activity'});
   await activity.getByRole('button',{name:'Scout Report received'}).click();
   await expect(activity.locator('[data-check=public_deep]')).toHaveCount(1);
@@ -989,7 +989,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('explicit coverage gap');
   await expect(activity.getByRole('button',{name:'Known signatures: Not recorded',exact:true})).toBeVisible();
   finished=true;await page.getByRole('button',{name:'Refresh report',exact:false}).click();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.getByRole('button',{name:'Map routes: Incomplete',exact:true})).toBeVisible();
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
@@ -1042,7 +1042,7 @@ test('provider observations keep partial USD, DIEM and cache coverage distinct',
   };
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   await page.getByText('Inference usage & cost',{exact:true}).first().click();
   const usage = page.locator('.inference-usage[open]').first();
   const venice = usage.getByRole('region',{name:'venice usage'});
@@ -1059,7 +1059,7 @@ test('provider observations keep partial USD, DIEM and cache coverage distinct',
   await expect(usage).toContainText('1.8 USD');
   await expect(usage).not.toContainText('1.8123');
   await usage.screenshot({path:info.outputPath('inference-observations.png')});
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Inference usage & cost',{exact:true}).click();
   await expect(page.getByRole('region',{name:'venice usage'})).toContainText('0.0123 USD');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -1074,7 +1074,7 @@ test('combined engine receipt identifies both access modes without inventing usa
   review.steps[0].result.tool_runs.push({...result.tool_runs![0],tool:'patchriot-probes'});
   await page.route(`**/api/reviews/${id}`, route=>route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await activity.getByRole('button',{name:'Scout Report received'}).click();
   await activity.getByRole('button',{name:'Agentic investigation: Recorded',exact:true}).click();
@@ -1096,13 +1096,13 @@ test('combined engine receipt identifies both access modes without inventing usa
   await expect(selected).toContainText('Signed-in coverage');
   await expect(selected).toContainText('4');
   await activity.screenshot({path:info.outputPath('combined-engine.png')});
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Inference usage & cost',{exact:true}).click();
   await expect(page.locator('.inference-usage')).toContainText('Provider usage and response costs were not recorded.');
   for(const receipt of [{receipt_schema:1,access_mode:'anonymous',anonymous_evidence_count:1,authenticated_evidence_count:0},{receipt_schema:1}]) {
     review.steps[0].result.tool_runs[0].output_excerpt=JSON.stringify(receipt);
     await page.getByRole('button',{name:'Refresh report',exact:false}).click();
-    await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+    await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
     await activity.getByRole('button',{name:'Scout Report received'}).click();
     await expect(activity.locator('.workflow-step')).toHaveCount(8);
     await expect(activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true})).toBeVisible();
@@ -1208,9 +1208,9 @@ test('ZAP names its recorded handoff and preserves an inapplicable scan in both 
   review.steps[0].result.tool_runs=[{...result.tool_runs![0],tool:'zap',arguments:['scoped','--engine-discoveries'],output_truncated:false,evidence_ids:[],output_excerpt:JSON.stringify({phase:'engine_discoveries',state:'inapplicable',reason:'no_new_recorded_get_inputs'})}];
   await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   await expect(page.getByRole('row').filter({hasText:'ZAP · discovered inputs'})).toContainText('No new inputs');
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Tools run (1)',{exact:true}).click();
   await expect(page.locator('.tool-evidence .request-evidence')).toContainText('ZAP · discovered inputs');
   await expect(page.locator('.tool-evidence .request-evidence')).toContainText('No new inputs');
@@ -1228,7 +1228,7 @@ test('coverage limitations and recorded URLs wrap within the report on narrow sc
   review.steps[0].result.tool_runs=[{...result.tool_runs![0],tool:'patchriot-coverage',output_truncated:false,output_excerpt:JSON.stringify({version:1,units:[{id:'c'.repeat(64),url:longUrl,method:'GET',account:'anonymous',class:'http_observation',state:'deferred',reason:'No further requests were made.',evidence_ids:[1]}]})}];
   await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const limits=page.locator('.report-limitations');
   await expect(limits).toContainText(longIdentifier);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -1257,7 +1257,7 @@ for (const scenario of ['discovery', 'investigating', 'finishing', 'stale', 'que
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
-  if(scenario==='saved') await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  if(scenario==='saved') await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const node=activity.locator('[data-check=evidence_review]');
   await expect(node).toHaveAttribute('data-status',reviewing?'running':scenario==='gap'?'incomplete':'pending');
   await expect(node).toHaveAttribute('data-live',String(reviewing&&scenario!=='stale'));
