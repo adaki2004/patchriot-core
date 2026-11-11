@@ -37,7 +37,7 @@ flowchart LR
 
 New live-test checkout discloses an approved worker pool. Each ready role is assigned to an available eligible worker in FIFO order; a different device validates the investigation. Pool size does not change the number of roles or the assessment price. Existing requests keep their saved assignments. The audits list labels each saved live test as black-box or grey-box.
 
-Scout runs the full scoped investigation and hands its findings and evidence to Recon. Recon validates those claims with fresh controls. New requests use these two agents, with no automatic third role. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
+Scout runs the full scoped investigation and hands its findings and evidence to Recon. Recon validates those claims with fresh controls and investigates up to three promising leads Scout may have missed. New observations are distinguished from independently reproduced claims. New requests use these two agents, with no automatic third role. The report shows which tools actually ran, what each agent contributed and what remains uncertain. Three agents sharing a machine or model are not three independent reviewers.
 
 Reports also retain scoped scanner receipts and an evidence-indexed coverage ledger with account context and unresolved areas.
 
@@ -574,7 +574,7 @@ The NEAR route uses its [Private TEE model](https://near.ai/models/deepseek-ai/D
 <details>
 <summary>Conditional live review</summary>
 
-New live checkout uses `investigate_validate_v1`: one full scoped investigation followed by one targeted validator. The second agent receives the first report and evidence, uses fresh controls for its claims and does not repeat broad discovery. There is no automatic third agent. Coverage gaps and disputed claims remain visible. Saved `investigate_verify_v1` requests retain conditional escalation; legacy requests retain three required roles.
+New live checkout uses `investigate_validate_v1`: one full scoped investigation followed by one targeted validator. The second agent receives the first report and evidence, uses fresh controls for its claims and up to three untested leads from the saved evidence, and does not repeat broad discovery. There is no automatic third agent. Coverage gaps and disputed claims remain visible. Saved `investigate_verify_v1` requests retain conditional escalation; legacy requests retain three required roles.
 
 Checkout binds the two named devices and their providers. Existing orders retain their original team and policy. Deploy the compatible protocol and dispatcher/gateway (including migration 0031 for explicitly configured longer runs), core, then the matching relay and adapter 18. Operators must configure the longer allowance on both dispatcher and relay; defaults and saved deadlines remain unchanged.
 
