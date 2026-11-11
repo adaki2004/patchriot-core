@@ -1,5 +1,5 @@
 import { AdminStats } from './AdminStats';
-import { TrialDesk } from './Trial';
+import { JudgeCoupons } from './Coupons';
 import { RunExpectations } from './RunExpectations';
 import { UIIcon } from './UIIcon';
 import { useState } from 'react';
@@ -63,7 +63,7 @@ export function Audits({ onOpen, admin = false, csrf }: { csrf?: string; onOpen:
     {data.error && <p className="notice error" role="alert">Some audits could not refresh. Any entries shown may be out of date.</p>}
     {!data.ready && !data.error && <p role="status">Loading your audits…</p>}
     <div className="panel">{items.length > 0 ? <AuditRows items={items} onOpen={onOpen} admin={admin} /> : data.ready && !data.error && <div className="dashboard-empty"><h2>{status === 'Needs approval' ? 'No requests need approval.' : status !== 'All work' ? `No ${status.toLowerCase()} requests.` : filter === 'All' ? 'Your first audit starts here.' : `No ${filter.toLowerCase()} audits yet.`}</h2><p>{status !== 'All work' ? 'Open All work to see your other requests and reports.' : 'Choose a website you own and control.'}</p></div>}</div>
-    {admin && csrf && <TrialDesk csrf={csrf} />}
+    {admin && csrf && <JudgeCoupons csrf={csrf} />}
     <details className="audit-tools"><summary>Saved material and test examples</summary><div className="review-actions"><button className="quiet" onClick={() => onOpen('pentests')}>Live website tests</button><button className="quiet" onClick={() => onOpen('sites')}>Website snapshots</button><button className="quiet" onClick={() => onOpen('sources')}>Source uploads</button><button className="quiet" onClick={() => onOpen('reviews')}>Reports</button></div><p className="fine">Recent records only. A snapshot is saved evidence; an audit adds the agents’ review. Live tests use a separate approved scope; saved-page approval does not authorize live probes.</p></details>
   </section>;
 }

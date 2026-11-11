@@ -126,9 +126,9 @@
 .pentests-page[data-setup-step] .assessment-heading { margin: 24px 0; }
 .textmode-ui .pentests-page[data-setup-step] .assessment-heading h1 { font-size: clamp(28px, 3vw, 36px); }
 .textmode-ui .pentests-page[data-setup-step] .assessment-navigation .quiet { min-height: 44px; height: auto; padding: 8px 12px; border-radius: 8px; }
-.textmode-ui .pentests-page[data-setup-step] .setup-back-button { min-height: 44px; height: auto; padding: 10px 16px; border-radius: 8px; border: 1px solid #5b6a83; background: #28364b; color: #edf1f7; }
-.textmode-ui .pentests-page[data-setup-step] .setup-back-button:hover { background: #34455f; border-color: #7b8ea9; filter: none; }
-.textmode-ui .pentests-page[data-setup-step] .setup-back-button:focus-visible { outline: 2px solid #adc6ff; outline-offset: 3px; }
+.textmode-ui .pentests-page .setup-back-button { min-height: 44px; height: auto; padding: 10px 16px; border-radius: 8px; border: 1px solid #5b6a83; background: #28364b; color: #edf1f7; }
+.textmode-ui .pentests-page .setup-back-button:hover { background: #34455f; border-color: #7b8ea9; filter: none; }
+.textmode-ui .pentests-page .setup-back-button:focus-visible { outline: 2px solid #adc6ff; outline-offset: 3px; }
 .pentests-page[data-setup-step] .assessment-steps { margin-bottom: 20px; border-radius: 8px; }
 .pentests-page[data-setup-step] .assessment-steps li { padding: 12px 16px; gap: 12px; }
 .textmode-ui .pentests-page[data-setup-step] .assessment-steps .inline { min-height: 24px; height: auto; padding: 0; border: 0; border-radius: 0; text-align: left; }

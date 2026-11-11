@@ -3,7 +3,7 @@ import { openWallet } from './wallet';
 import { useLive } from './useLive';
 import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
-import { ArrowUpRight, Copy, Wallet } from 'lucide-react';
+import { ArrowUpRight, Copy, Wallet, CircleAlert } from 'lucide-react';
 
 export type PaymentToken = { asset_id: string; symbol: string; decimals: number; blockchain: string };
 export type CheckoutOffer = { id: string; price: { asset: string; amount: string }; destination: PaymentToken; inputs: PaymentToken[]; payment_window_seconds: number };
@@ -89,7 +89,7 @@ export function DepositInstructions({ quote, onSent }: { quote: Deposit; onSent:
     {walletRequested ? <div className="notice"><p>A wallet payment was already requested. Check its status before sending again.</p><Button onClick={onSent}>Check payment status</Button></div> : <>
     {!method ? <><h3>How would you like to pay?</h3><div className="payment-methods"><Button variant="outline" className="payment-method direct" disabled={expired} onClick={() => setMethod('direct')}><span className="payment-method-art"><Copy size={30}/><ArrowUpRight size={20}/></span><strong>Send to an address</strong><span>Copy the details and send from your wallet or exchange. No connection needed.</span></Button><Button variant="outline" className="payment-method connected" disabled={expired || !wallet.data?.enabled || !['eth','sol'].includes(quote.input.token.blockchain)} onClick={() => setMethod('wallet')}><span className="payment-method-art"><Wallet size={32}/><ArrowUpRight size={20}/></span><strong>Connect a wallet</strong><span>Review the exact transfer and approve it in your wallet.</span></Button></div>{(!wallet.data?.enabled || !['eth','sol'].includes(quote.input.token.blockchain)) && <p className="fine">Use direct transfer for this token and network. Wallet connection is unavailable here.</p>}</> : <>
     <Button variant="ghost" size="sm" disabled={walletBusy} onClick={() => { setMethod(null); setWalletError(''); }}>← Payment methods</Button>
-    <h3>Send {amount}</h3><div className="payment-chain"><span>ONLY THIS TOKEN<strong>{quote.input.token.symbol}</strong></span><span>ONLY THIS NETWORK<strong>{chainName(quote.input.token.blockchain)}</strong></span></div>
+    <h3 className="deposit-amount">Send {amount}<span className="payment-warning"><button type="button" aria-label="Exact transfer amount warning" aria-describedby="exact-payment-warning"><CircleAlert size={17}/></button><span role="tooltip" id="exact-payment-warning">Send this exact amount to the address below. A different token or network may not be recoverable.</span></span></h3><div className="payment-chain"><span>ONLY THIS TOKEN<strong>{quote.input.token.symbol}</strong></span><span>ONLY THIS NETWORK<strong>{chainName(quote.input.token.blockchain)}</strong></span></div>
     {method === 'wallet' && <Button className="primary" disabled={walletBusy || expired} onClick={() => void payWithWallet()}>{walletBusy ? 'Wallet open…' : 'Pay with wallet'}</Button>}
     {walletError && <p className="notice error" role="alert">{walletError}</p>}
     {method === 'direct' && <>

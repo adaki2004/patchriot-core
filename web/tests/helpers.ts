@@ -4,7 +4,10 @@ import type { Page } from '@playwright/test';
 export async function emptyDashboard(page: Page) {
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
+    if (path === '/api/coupons/welcome') return route.fulfill({json:{ok:true}});
     if (route.request().method() === 'GET') {
+      if (path === '/api/credits') return route.fulfill({json:{available_cents:0,history:[],purchases:[],topups:[],topup_offer:null,prices:{black:200,grey:500,white:1000}}});
+      if (path === '/api/coupons' || path === '/api/admin/coupons/judges') return route.fulfill({json:[]});
       if (path === '/api/auth/providers') return route.fulfill({ json: { github: false, google: false } });
       if (path === '/api/wallet/config') return route.fulfill({ json: { enabled: false } });
       if (path === '/api/trial') return route.fulfill({ json: { available: false, ends_at: null, claim: null } });

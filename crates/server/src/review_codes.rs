@@ -78,7 +78,10 @@ pub(crate) async fn rate(pool: &PgPool, account: Uuid) -> Result<(), ApiError> {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RedeemCode {
-    code: String,
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    coupon_id: Option<Uuid>,
     consent: CreateWebsiteReview,
 }
 
@@ -136,13 +139,27 @@ async fn reserve(
     target: ReviewTarget,
     input: RedeemCode,
 ) -> Result<Uuid, ApiError> {
-    let code = input.code.trim().to_ascii_lowercase();
-    if code.len() != 67
-        || !code.starts_with("pr-")
-        || !code[3..].bytes().all(|b| b.is_ascii_hexdigit())
-    {
-        return Err(unavailable());
-    }
+    let code_hash = match (&input.code, input.coupon_id) {
+        (Some(code), None) => {
+            let code = code.trim().to_ascii_lowercase();
+            if code.len() != 67
+                || !code.starts_with("pr-")
+                || !code[3..].bytes().all(|b| b.is_ascii_hexdigit())
+            {
+                return Err(unavailable());
+            }
+            hash(&code)
+        }
+        (None, Some(id)) => sqlx::query_scalar::<_, String>(
+            "SELECT code_hash FROM review_codes WHERE id=$1 AND issued_to=$2",
+        )
+        .bind(id)
+        .bind(account)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(unavailable)?,
+        _ => return Err(unavailable()),
+    };
     let consent = &input.consent;
     if (target.pentest_id().is_some() && !consent.accepts_provider_access)
         || (target.pentest_id().is_none()
@@ -173,14 +190,19 @@ async fn reserve(
         return Err(ApiError::denied());
     }
     let saved: Saved = sqlx::query_as("SELECT id,issued_to,expires_at,revoked_at,account_id,site_check_id,source_id,pentest_id,consent,review_id,operation_until FROM review_codes WHERE code_hash = $1 FOR UPDATE")
-        .bind(hash(&code)).fetch_optional(&mut *tx).await?.ok_or_else(unavailable)?;
+        .bind(code_hash).fetch_optional(&mut *tx).await?.ok_or_else(unavailable)?;
     let is_trial: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM trial_claims WHERE code_id=$1)")
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM trial_claims WHERE code_id=$1) OR EXISTS(SELECT 1 FROM account_coupon_grants WHERE code_id=$1) OR EXISTS(SELECT 1 FROM judge_coupon_pool WHERE code_id=$1)")
             .bind(saved.id)
             .fetch_one(&mut *tx)
             .await?;
     if is_trial && target.pentest_id().is_none() {
         return Err(ApiError::bad("trial_requires_live_assessment"));
+    }
+    let duplicate_judge:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM judge_coupon_pool WHERE code_id=$1) AND EXISTS(SELECT 1 FROM judge_coupon_pool j JOIN review_codes r ON r.id=j.code_id WHERE r.account_id=$2 AND r.id<>$1)")
+        .bind(saved.id).bind(account).fetch_one(&mut *tx).await?;
+    if duplicate_judge {
+        return Err(unavailable());
     }
     if saved
         .issued_to
@@ -323,7 +345,10 @@ pub(crate) async fn redeem_source(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RedeemLiveCode {
-    code: String,
+    #[serde(default)]
+    code: Option<String>,
+    #[serde(default)]
+    coupon_id: Option<Uuid>,
     consent: patchriot_protocol::pentests::StartPentest,
 }
 
@@ -378,6 +403,7 @@ pub(crate) async fn redeem_pentest(
         target,
         RedeemCode {
             code: input.code,
+            coupon_id: input.coupon_id,
             consent,
         },
     )

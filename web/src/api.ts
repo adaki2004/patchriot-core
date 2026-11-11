@@ -149,6 +149,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   let body;
   try {
     response = await fetch(`/api${path}`, {
+      cache: 'no-store',
       credentials: 'same-origin',
       ...options,
       signal,

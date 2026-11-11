@@ -1,0 +1,12 @@
+.coupon-balance { display:flex; align-items:center; gap:12px; padding:14px 16px; border:1px solid #61768e; border-radius:10px; background:#1c2b3c; color:#e4edf8; }
+.coupon-balance > svg { color:#e8c478; flex-shrink:0; }
+.coupon-balance > div { flex:1; }
+.coupon-balance small { display:block; margin-top:4px; color:#bac8db; }
+.balance-card .coupon-balance { margin:18px 0; }
+.workspace-credit-summary { display:flex; align-items:center; justify-content:space-between; gap:20px; margin:20px 0; flex-wrap:wrap; }
+.workspace-credit-summary > button { display:flex; gap:12px; align-items:center; }
+.coupon-select { display:grid; gap:10px; margin:18px 0; }
+.coupon-select select { width:100%; min-height:48px; border:1px solid #61768e; border-radius:8px; background:#1c2b3c; color:#eef3fa; padding:12px; }
+.coupon-select small { color:var(--muted); }
+.judge-coupon { display:flex; align-items:center; gap:16px; padding:12px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.judge-coupon code { overflow-wrap:anywhere; flex:1; min-width:180px; }

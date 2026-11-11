@@ -4,7 +4,9 @@ import { AuditRows, auditActive, auditReportAvailable, useAudits } from './Audit
 import { AgentList } from './Pairing';
 import { orderLabel, paymentLabel } from './Orders';
 import { useOrderHistory } from './orderHistory';
-import { Trial } from './Trial';
+import { CouponBalance } from './Coupons';
+import { useLive } from './useLive';
+import { dollars } from './AccountPage';
 import { UIIcon } from './UIIcon';
 
 
@@ -13,6 +15,7 @@ const needsAction = (state: string) => ['needs_review', 'failed', 'awaiting_paym
 const workPriority = (state: string) => ['running', 'collecting'].includes(state) ? 0 : state === 'queued' ? 1 : needsAction(state) ? 2 : auditActive(state) ? 3 : state === 'completed' ? 4 : 5;
 
 export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: string; fleet?: Fleet | null; onOpen: (view: View, id?: string | null) => void }) {
+  const balance=useLive<{available_cents:number}>('/credits');
   const audits = useAudits();
   const history = useOrderHistory();
   const { orders, coupons } = history;
@@ -28,7 +31,7 @@ export function Dashboard({ name, fleet, onOpen, csrf }: { name: string; csrf: s
       <img className="workspace-art" src="/brand/workspace-globe-detailed.png" alt="" width="1536" height="1024" />
       <div className="workspace-welcome"><p className="section-kicker">Your proactive defense workspace</p><h1>Hello, {name}.</h1><p>Your systems. More eyes on the weak points.</p><button className="primary" onClick={() => onOpen('request')}><UIIcon name="plus" />Request an audit</button></div>
     </div>
-    <Trial csrf={csrf} onStart={() => onOpen('request')} />
+    <div className="workspace-credit-summary"><button onClick={()=>onOpen('account')}><span>Available credit</span><strong>{balance.data ? dollars(balance.data.available_cents) : '—'}</strong></button><CouponBalance csrf={csrf} onUse={()=>onOpen('request')}/></div>
     <div className="workspace-metrics" aria-label="Workspace summary">
       <div className="metric-attention"><strong>{ready ? attention : '—'}</strong><span>Need attention</span></div>
       <div><strong>{ready ? queued : '—'}</strong><span>Queued</span></div>

@@ -292,3 +292,9 @@ header { min-height: 86px; }
 .analytics-consent p { color: #c4cbd3; font-size: .85rem; line-height: 1.5; margin: .5rem 0 0; }
 .analytics-actions { display: flex; align-items: center; gap: .75rem; flex-shrink: 0; }
 @media (max-width: 700px) { .analytics-consent { flex-direction: column; align-items: stretch; gap: 1rem; } .analytics-actions { justify-content: space-between; flex-wrap: wrap; } }
+
+.deposit-amount { position:relative; display:flex; align-items:center; gap:9px; }
+.payment-warning { position:static; display:inline-flex; }
+.payment-warning > button { display:inline-flex; padding:4px; color:#eac46a; border:0; background:transparent; min-height:0; }
+.payment-warning > [role=tooltip] { position:absolute; bottom:calc(100% + 8px); left:0; width:260px; max-width:100%; padding:12px; font-size:13px; line-height:1.5; font-weight:400; color:#f7e8c3; background:#332c20; border:1px solid #a98b4e; border-radius:8px; z-index:10; visibility:hidden; }
+.payment-warning:hover > [role=tooltip], .payment-warning:focus-within > [role=tooltip] { visibility:visible; }

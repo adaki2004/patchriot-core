@@ -47,6 +47,11 @@ test('account top-up waits for server credit and keeps manual payment details re
   await expect(dialog.getByText('0x'+'2'.repeat(40),{exact:true})).toHaveCount(0);
   await dialog.getByRole('button',{name:'Send to an address',exact:false}).click();
   await expect(dialog.getByRole('heading',{name:'Send 5.02 USDC'})).toBeVisible();
+  await dialog.getByRole('button',{name:'Exact transfer amount warning'}).focus();
+  await expect(dialog.getByRole('tooltip')).toBeVisible();
+  const tooltipBox=await dialog.getByRole('tooltip').boundingBox();
+  expect(tooltipBox!.x).toBeGreaterThanOrEqual(0);expect(tooltipBox!.x+tooltipBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+  await expect(dialog.getByRole('tooltip')).toHaveText('Send this exact amount to the address below. A different token or network may not be recoverable.');
   await expect(dialog.getByText('NEAR Intents 1Click',{exact:false})).toBeVisible();
   await dialog.screenshot({path:info.outputPath('topup-direct.png')});
   await dialog.getByRole('button',{name:'I’ve sent it',exact:true}).click();

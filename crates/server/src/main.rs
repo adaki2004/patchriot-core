@@ -153,8 +153,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("invalid PATCHRIOT_CONTACT_EMAIL".into()),
     };
-    // Public-page analytics is an explicit deployment opt-in, separate from each
-    // visitor's consent. Old measurement settings alone must not turn it on.
+    // Workspace analytics is an explicit deployment opt-in, separate from each
+    // user's consent. Old measurement settings alone must not turn it on.
     let analytics_enabled = std::env::var("PATCHRIOT_ANALYTICS_ENABLED")
         .unwrap_or_else(|_| "false".into())
         .parse::<bool>()
@@ -162,7 +162,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ga_measurement_id = match std::env::var("PATCHRIOT_GA_MEASUREMENT_ID") {
         _ if !analytics_enabled => None,
         Ok(value) => Some(value),
-        Err(std::env::VarError::NotPresent) => None,
+        Err(std::env::VarError::NotPresent) => Some("G-Y3HKPCZH4E".into()),
         Err(_) => return Err("invalid PATCHRIOT_GA_MEASUREMENT_ID".into()),
     };
     let analytics_origin = match std::env::var("PATCHRIOT_ANALYTICS_ORIGIN") {

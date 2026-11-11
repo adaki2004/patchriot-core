@@ -1018,3 +1018,242 @@ async fn concurrent_trial_accounts_cannot_overrun_the_campaign_and_expiry_closes
     );
     test.finish().await;
 }
+
+#[tokio::test]
+async fn welcome_coupons_are_private_idempotent_and_bound_to_new_members() {
+    let test = TestApp::with_access("http://127.0.0.1:1", ReviewAccess::Coupons).await;
+    let (mc, m) = test.login("member").await;
+    let mh = headers(&mc, &m);
+    let (oc, o) = test.login("member").await;
+    let oh = headers(&oc, &o);
+    let (ac, a) = test.login("admin").await;
+    let ah = headers(&ac, &a);
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &[])
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        test.request(
+            "POST",
+            "/api/coupons/welcome",
+            json!({}),
+            &[("cookie", &mc)]
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let (first, second) = tokio::join!(
+        test.request("POST", "/api/coupons/welcome", json!({}), &mh),
+        test.request("POST", "/api/coupons/welcome", json!({}), &mh)
+    );
+    assert_eq!(first.0, StatusCode::OK);
+    assert_eq!(second.0, StatusCode::OK);
+    assert_eq!(
+        test.request("POST", "/api/trial", json!({"accepts_trial":true}), &mh)
+            .await
+            .2["error"],
+        "trial_unavailable"
+    );
+    let list = test
+        .request("GET", "/api/coupons", Value::Null, &mh)
+        .await
+        .2;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert!(list[0].get("code").is_none());
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &oh)
+            .await
+            .2,
+        json!([])
+    );
+    test.request("POST", "/api/coupons/welcome", json!({}), &ah)
+        .await;
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &ah)
+            .await
+            .2,
+        json!([])
+    );
+    sqlx::query("UPDATE accounts SET created_at=now()-interval '1 day' WHERE id=$1")
+        .bind(Uuid::parse_str(o["account"]["id"].as_str().unwrap()).unwrap())
+        .execute(&test.pool)
+        .await
+        .unwrap();
+    test.request("POST", "/api/coupons/welcome", json!({}), &oh)
+        .await;
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &oh)
+            .await
+            .2,
+        json!([])
+    );
+    sqlx::query("UPDATE review_codes SET expires_at=now()-interval '1 second'")
+        .execute(&test.pool)
+        .await
+        .unwrap();
+    test.request("POST", "/api/coupons/welcome", json!({}), &mh)
+        .await;
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &mh)
+            .await
+            .2,
+        json!([])
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM account_coupon_grants")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap(),
+        1
+    );
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn last_welcome_slot_cannot_be_overrun_and_judges_have_exactly_eight_extra() {
+    let test = TestApp::with_access("http://127.0.0.1:1", ReviewAccess::Coupons).await;
+    for slot in 1..=99 {
+        let account = Uuid::new_v4();
+        let code = Uuid::new_v4();
+        sqlx::query("INSERT INTO accounts(id,display_name,role) VALUES($1,'Cap fixture','member')")
+            .bind(account)
+            .execute(&test.pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO review_codes(id,code_hash,label,expires_at,issued_to) VALUES($1,$2,'Fixture',now()+interval '1 day',$3)").bind(code).bind(format!("{:064}",slot)).bind(account).execute(&test.pool).await.unwrap();
+        sqlx::query(
+            "INSERT INTO account_coupon_grants(account_id,code_id,public_slot) VALUES($1,$2,$3)",
+        )
+        .bind(account)
+        .bind(code)
+        .bind(slot)
+        .execute(&test.pool)
+        .await
+        .unwrap();
+    }
+    let (mc, m) = test.login("member").await;
+    let mh = headers(&mc, &m);
+    let (oc, o) = test.login("member").await;
+    let oh = headers(&oc, &o);
+    let (ac, a) = test.login("admin").await;
+    let ah = headers(&ac, &a);
+    let (x, y) = tokio::join!(
+        test.request("POST", "/api/coupons/welcome", json!({}), &mh),
+        test.request("POST", "/api/coupons/welcome", json!({}), &oh)
+    );
+    assert_eq!(x.0, StatusCode::OK);
+    assert_eq!(y.0, StatusCode::OK);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM account_coupon_grants")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap(),
+        100
+    );
+    assert_eq!(
+        test.request("POST", "/api/admin/coupons/judges", json!({}), &mh)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        test.request("GET", "/api/admin/coupons/judges", Value::Null, &mh)
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let (x, y) = tokio::join!(
+        test.request("POST", "/api/admin/coupons/judges", json!({}), &ah),
+        test.request("POST", "/api/admin/coupons/judges", json!({}), &ah)
+    );
+    assert_eq!(x.0, StatusCode::OK);
+    assert_eq!(x.2, y.2);
+    assert_eq!(x.2.as_array().unwrap().len(), 8);
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM account_coupon_grants")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap(),
+        100
+    );
+    assert_eq!(
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM judge_coupon_pool")
+            .fetch_one(&test.pool)
+            .await
+            .unwrap(),
+        8
+    );
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn saved_coupon_ids_are_owner_only_and_judge_codes_cannot_stack() {
+    let network = Network::for_kind(false, true).await;
+    let test = TestApp::with_access(&network.origin, ReviewAccess::Coupons).await;
+    let (mc, m) = test.login("member").await;
+    let mh = headers(&mc, &m);
+    let (oc, o) = test.login("member").await;
+    let oh = headers(&oc, &o);
+    let (ac, a) = test.login("admin").await;
+    let ah = headers(&ac, &a);
+    test.request("POST", "/api/coupons/welcome", json!({}), &mh)
+        .await;
+    let list = test
+        .request("GET", "/api/coupons", Value::Null, &mh)
+        .await
+        .2;
+    let path = format!("/api/pentests/{}/review-code", Uuid::new_v4());
+    let body = json!({"coupon_id":list[0]["id"],"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":network.live_devices,"accepts_operator_access":true,"accepts_provider_access":true}});
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &oh).await.2["error"],
+        "invalid_or_used_review_code"
+    );
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &ah).await.2["error"],
+        "invalid_or_used_review_code"
+    );
+    let started = test.request("POST", &path, body.clone(), &mh).await;
+    assert_eq!(started.0, StatusCode::OK, "{}", started.2);
+    assert_eq!(
+        test.request("POST", &path, body.clone(), &mh).await.2,
+        started.2
+    );
+    assert_eq!(
+        test.request("GET", "/api/coupons", Value::Null, &mh)
+            .await
+            .2,
+        json!([])
+    );
+    let judges = test
+        .request("POST", "/api/admin/coupons/judges", json!({}), &ah)
+        .await
+        .2;
+    let mut judge_body = body;
+    judge_body.as_object_mut().unwrap().remove("coupon_id");
+    judge_body["code"] = judges[0]["code"].clone();
+    judge_body["consent"]["request_id"] = json!(Uuid::new_v4());
+    let judge_path = format!("/api/pentests/{}/review-code", Uuid::new_v4());
+    assert_eq!(
+        test.request("POST", &judge_path, judge_body.clone(), &mh)
+            .await
+            .0,
+        StatusCode::OK
+    );
+    let another = format!("/api/pentests/{}/review-code", Uuid::new_v4());
+    judge_body["code"] = judges[1]["code"].clone();
+    judge_body["consent"]["request_id"] = json!(Uuid::new_v4());
+    assert_eq!(
+        test.request("POST", &another, judge_body.clone(), &mh)
+            .await
+            .2["error"],
+        "invalid_or_used_review_code"
+    );
+    assert_eq!(
+        test.request("POST", &another, judge_body, &oh).await.0,
+        StatusCode::OK
+    );
+    test.finish().await;
+}
