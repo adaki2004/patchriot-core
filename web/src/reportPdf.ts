@@ -2,6 +2,7 @@ import { workflowRecordLines, workflowCaveat, workflowAbsent, workflowToolName }
 import { reportBlocks } from './reportFormatting';
 import { fallbackDescription, browserAccessDescription } from './LiveReport';
 import { coverageChecks, checkLabels, evidenceAccessLabel, findingRequest } from './report';
+import { exposureData, type ExposureData } from './exposure';
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { reportSummary, reviewMethod, reportRoles, roleMethods, roleOutcome, supportLabels, severities, teamDescription, toolOutcome, reportLimits, type ReportInput } from './report';
@@ -88,6 +89,75 @@ async function asset(path: string) {
   return response.arrayBuffer();
 }
 
+/** A printable snapshot of the same recorded observations as the interactive map.
+ * Keep this separate from findings: visibility and header presence are not verdicts. */
+function exposureSnapshot(p: Pages, data: ExposureData) {
+  p.begin('03 / What your site exposes');
+  p.paragraph('Observed, not necessarily vulnerable. This snapshot uses the same saved requests as the interactive map. It does not make new requests or infer unseen services.');
+  if (!data.requests) {
+    p.paragraph('No in-scope HTTP observations were retained. This is not evidence that the website has no exposed routes or vulnerabilities.');
+    return;
+  }
+  const cardWidth = (lineWidth - 12) / 2;
+  const panelHeight = 96 + Math.ceil(data.stages.length / 2) * 74;
+  p.ensure(panelHeight + 24);
+  const top = p.y;
+  p.page.drawRectangle({ x: margin, y: top - panelHeight, width: lineWidth, height: panelHeight, color: rgb(.95, .97, 1) });
+  p.page.drawText('RECORDED EXPOSURE', { x: margin + 16, y: top - 24, size: 9, font: p.font, color: blue });
+  p.page.drawText(`${data.routes.length} route + method pairs / ${data.requests} requests / ${data.services.length} web services`, { x: margin + 16, y: top - 47, size: 11, font: p.font, color: ink });
+  p.page.drawLine({ start: { x: margin + 16, y: top - 63 }, end: { x: width - margin - 16, y: top - 63 }, color: blue, thickness: 1 });
+  data.stages.forEach((stage, i) => {
+    const x = margin + (i % 2) * (cardWidth + 12) + 16, y = top - 89 - Math.floor(i / 2) * 74;
+    p.page.drawLine({ start: { x: x + 3, y: y + 4 }, end: { x: x + 3, y: y - 34 }, color: blue, thickness: .6 });
+    p.page.drawCircle({ x: x + 3, y: y + 4, size: 2.5, color: blue });
+    p.page.drawText(stage.label, { x: x + 14, y, size: 11, font: p.font, color: ink });
+    p.page.drawText(`${stage.routeKeys.length} routes / ${stage.requests} requests`, { x: x + 14, y: y - 17, size: 9, font: p.font, color: muted });
+    const sample = data.routes.find(r => r.key === stage.routeKeys[0]);
+    if (sample) {
+      let path = p.text(`${sample.method} ${sample.path}`);
+      while (p.font.widthOfTextAtSize(path, 9) > cardWidth - 44) path = path.slice(0, -4) + '...';
+      p.page.drawText(path, { x: x + 14, y: y - 34, size: 9, font: p.font, color: blue });
+    }
+  });
+  p.y = top - panelHeight - 20;
+  p.paragraph('Each node shows a check and one example path it recorded, not execution order or a pass. A request may be cited by several checks. Routes are grouped by origin, path and method; query values are omitted.', 9, muted);
+  if (data.firstObserved || data.lastObserved) p.paragraph(`Observation window: ${data.firstObserved ? new Date(data.firstObserved * 1000).toISOString() : 'unknown'} to ${data.lastObserved ? new Date(data.lastObserved * 1000).toISOString() : 'unknown'}`, 9, muted);
+  if (data.excluded) p.paragraph(`${data.excluded} records with invalid, credential-bearing or out-of-scope URLs were excluded from this snapshot.`, 9, muted);
+
+  p.newPage('03 / What your site exposes');
+  p.heading('Services & response signals', 1);
+  p.heading('Access seen in the evidence');
+  p.paragraph(['Public', 'Signed-in', 'Sign-in step'].map(context => `${context}: ${data.routes.filter(r => r.contexts.includes(context)).length} route + method pairs`).join('\n'), 10);
+  p.paragraph('The same route can appear in several access contexts. A 200 response may be a generic application page; it does not prove private data was accessible.', 9, muted);
+  p.heading('Observed web services');
+  if (!data.services.length) p.paragraph('No successful HTTP transport was recorded. Failed attempts do not establish an open service.');
+  for (const service of data.services) p.paragraph(`${service.origin} / ${service.protocol} port ${service.port} / ${service.responses} recorded responses`, 10);
+  p.paragraph('These ports returned HTTP responses during the assessment. This is not a network port scan and says nothing about other ports on the host.', 9, muted);
+  p.heading('Technology hints');
+  if (!data.technologies.length) p.paragraph('No supported technology fingerprints were retained.');
+  for (const tech of data.technologies) p.paragraph(`${tech.name} / ${tech.refs.slice(0, 8).join(', ')}${tech.refs.length > 8 ? ` / ${tech.refs.length - 8} more references in the interactive map` : ''}`, 10);
+  p.paragraph('Hints come from supported scanner receipts, not a verified software inventory or a version-vulnerability match.', 9, muted);
+  p.heading('Response headers');
+  p.paragraph(data.headers.map(header => `${header.name}: present in ${header.present} of ${header.responses} retained HTTP responses`).join('\n'), 9);
+  p.paragraph('Presence only. Header values and policy strength are not assessed here. Missing headers are not automatically vulnerabilities, and retained evidence may omit fields.', 9, muted);
+
+  p.newPage('03 / What your site exposes');
+  p.heading('Observed routes', 1);
+  // Bound the printable inventory; do not turn thousands of crawl paths into an
+  // unusable PDF. The private map and endpoint export retain the full inventory.
+  const printed = data.routes.slice(0, 40);
+  p.paragraph(`${printed.length} of ${data.routes.length} route + method pairs, sorted by origin and path. ${data.routes.length > printed.length ? 'The remaining routes are available in the private interactive map and the observed-endpoint export.' : 'All retained route + method pairs are listed below.'}`, 10);
+  p.paragraph('References are specific to the named agent. Query names are shown without values; credentials, request bodies and response bodies are excluded from this inventory.', 9, muted);
+  for (const route of printed) {
+    p.ensure(115);
+    p.heading(`${route.method} ${route.origin}${route.path}`);
+    p.paragraph(`${route.contexts.join(' / ')} / HTTP ${route.statuses.join(', ') || 'no response'} / ${route.requests} requests${route.failed ? ` / ${route.failed} request errors` : ''}`, 9);
+    p.paragraph(`Recorded by: ${route.stages.map(id => data.stages.find(s => s.id === id)?.label ?? id).join(', ')}`, 9);
+    if (route.queryNames.length) p.paragraph(`Query names: ${route.queryNames.join(', ')}`, 9, muted);
+    p.paragraph(`References: ${route.refs.slice(0, 6).join(', ')}${route.refs.length > 6 ? ` / ${route.refs.length - 6} more in the interactive map` : ''}`, 8, muted);
+  }
+}
+
 /** Generated locally from the authorized report. No customer data leaves the browser. */
 export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   // Use the original TrueType font for PDF subsets. The browser WOFF2 font's
@@ -98,7 +168,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   const logo = await doc.embedPng(logoBytes);
   const summary = reportSummary(input);
   const generated = new Date();
-  doc.setTitle('Patchriot vulnerability report'); doc.setAuthor('Patchriot'); doc.setSubject('Automated website assessment'); doc.setCreationDate(generated);
+  doc.setTitle('Patchriot audit'); doc.setAuthor('Patchriot'); doc.setSubject('Automated website assessment'); doc.setCreationDate(generated);
   const mono = await doc.embedFont(monoBytes, { subset: true });
   const p = new Pages(doc, font, mono);
   const cover = doc.addPage([width, height]);
@@ -110,7 +180,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   cover.drawText('patchriot_', { x: margin + 85, y: height - 103, size: 24, font, color: rgb(.96, .96, .98) });
   p.page = cover; p.y = height - 225;
   p.paragraph('PRIVATE / AUTOMATED SECURITY ASSESSMENT', 10, rgb(.67, .74, .88));
-  p.paragraph('Vulnerability\nreport', 44, rgb(1, 1, 1));
+  p.paragraph('Website\nsecurity audit', 44, rgb(1, 1, 1));
   p.y -= 16;
   p.paragraph(input.origins.join('\n') || 'Website assessment', 20, rgb(.83, .88, .98));
   p.paragraph(summary.headline, 15, rgb(1, .65, .57));
@@ -144,7 +214,9 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
   p.paragraph(teamDescription(input));
   p.paragraph('Evidence is reported by the operators. This document does not attest their honesty, independently verify a model’s identity or demonstrate that a suggested fix works.');
 
-  p.begin('03 / Agent contributions');
+  exposureSnapshot(p, exposureData(input.steps, input.origins));
+
+  p.begin('04 / Agent contributions');
   for (const s of input.steps) {
     p.ensure(200);
     p.heading(`${reportRoles[s.role]} — ${roleOutcome(s).label}`);
@@ -159,10 +231,10 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     if (refs.length) p.paragraph(`Observations: ${refs.join(', ')}`, 10, blue);
   }
 
-  p.begin('04 / Findings');
+  p.begin('05 / Findings');
   if (!summary.findings.length) p.paragraph('No findings are available in the saved assessments. Read the execution and coverage limitations before interpreting this result.');
   summary.findings.forEach((row, i) => {
-    if (i) p.newPage('04 / Findings');
+    if (i) p.newPage('05 / Findings');
     const f = row.finding;
     p.paragraph(`${row.id} / ${f.severity.toUpperCase()} / ${reportRoles[row.role].toUpperCase()}`, 10, blue);
     p.heading(f.title, 1);
@@ -191,7 +263,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     p.paragraph('Response excerpts, headers and tool transcripts are available in the private report’s Technical evidence view and the separate evidence JSON download. References are scoped to their agent.', 9, muted);
   });
 
-  p.begin('05 / Coverage & limitations');
+  p.begin('06 / Coverage & limitations');
   p.paragraph(workflowCaveat, 9, muted);
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);
@@ -205,7 +277,7 @@ export async function createReportPdf(input: ReportInput): Promise<Uint8Array> {
     if (limits?.length) limits.forEach((limit, i) => p.paragraph(`${i + 1}. ${limit}`));
     else p.paragraph(roleOutcome(s).detail);
   }
-  p.begin('06 / Tool register & record');
+  p.begin('07 / Tool register & record');
   p.paragraph('Discovery tools map the site; later roles check specific claims. Older reports may repeat scanners. The register below shows what actually ran; assigned methods alone do not establish coverage.', 9, muted);
   for (const s of input.steps) {
     p.heading(reportRoles[s.role]);

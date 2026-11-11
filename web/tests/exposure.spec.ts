@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import { exposureData } from '../src/exposure';
 import type { HttpRecord, LiveStep, LiveToolRun } from '../src/LiveReport';
 import { emptyDashboard } from './helpers';
+import { PDFDocument, PDFName } from 'pdf-lib';
+import { writeFile } from 'node:fs/promises';
 
 const origin = 'https://owned.example';
 function record(id: number, overrides: Partial<HttpRecord> = {}): HttpRecord {
@@ -68,6 +70,34 @@ test('deep component receipts belong to deep scan and an empty result is not a s
   expect(exposureData([{ role: 'investigator', state: 'leased', result: null }], [origin])).toMatchObject({ requests: 0, routes: [], services: [], technologies: [] });
   const data = exposureData([step([record(1)], [tool('patchriot-surface', [1], { arguments: ['scoped', '--deep-suite'] })])], [origin]);
   expect(data.stages.map(s => s.id)).toEqual(['deep']);
+});
+
+test('audit exports a bounded exposure snapshot with zero findings and no target requests', async ({ page }, info) => {
+  await emptyDashboard(page);
+  await page.goto('/');
+  const records = Array.from({ length: 45 }, (_, i) => record(i + 1, {
+    url: origin + `/routes/${String(i).padStart(2, '0')}` + (i === 0 ? '?token=private-query-value' : ''),
+    authenticated: i % 2 === 0, status: i % 3 === 0 ? 401 : 200,
+  }));
+  records.push(record(46, { url: 'http://127.0.0.1:1234/scanner-secret' }));
+  const steps = [step(records, [tool('patchriot-discovery', [1, 2]), tool('patchriot-deep', [3, 4]), tool('ares-web-surface', [1], { output_excerpt: JSON.stringify({ root_evidence_id: 1, technology_hints: ['nginx'] }) })])];
+  const requests: string[] = [];
+  page.on('request', request => requests.push(request.url()));
+  const bytes = await page.evaluate(async input => {
+    const module = '/src/reportPdf.ts';
+    const { createReportPdf } = await import(/* @vite-ignore */ module);
+    return Array.from(await createReportPdf(input)) as number[];
+  }, { id: 'exposure-fixture', state: 'completed', created_at: 1793640000, origins: [origin], steps });
+  const buffer = Uint8Array.from(bytes);
+  await writeFile(info.outputPath('audit-exposure.pdf'), buffer);
+  const pdf = await PDFDocument.load(buffer);
+  expect(pdf.getTitle()).toBe('Patchriot audit');
+  expect(pdf.getPageCount()).toBeGreaterThanOrEqual(10);
+  expect(pdf.getPageCount()).toBeLessThan(25);
+  expect(buffer.length).toBeLessThan(1024 * 1024);
+  expect(pdf.catalog.get(PDFName.of('OpenAction'))).toBeUndefined();
+  for (const page of pdf.getPages()) expect(page.node.Annots()?.size() ?? 0).toBe(0);
+  expect(requests.every(url => new URL(url).origin === 'http://127.0.0.1:5174')).toBe(true);
 });
 
 test('exposure map works with zero findings, traces stages, filters contexts and keeps interactions local', async ({ page }, info) => {

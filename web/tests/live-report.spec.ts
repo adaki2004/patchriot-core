@@ -94,7 +94,7 @@ for (const mode of ['verified', 'gap'] as const) test(`browser access ${mode} is
   await expect(page.getByText(expected, {exact:false}).first()).toBeVisible();
   if (mode === 'verified') await expect(page.getByText('Evidence #1 and #2.', {exact:false}).first()).toBeVisible();
   const download = page.waitForEvent('download');
-  await page.getByRole('button', {name:'Download vulnerability report'}).click();
+  await page.getByRole('button', {name:'Download Audit'}).click();
   const pdf = await PDFDocument.load(await readFile((await (await download).path())!));
   expect(pdf.getPageCount()).toBeGreaterThan(1);
   await page.getByText('Other downloads & test details', {exact:true}).click();
@@ -140,7 +140,7 @@ test('paired account proofs and evidence remain labelled in the report and expor
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.locator('.live-assessment').screenshot({path:info.outputPath('paired-evidence.png')});
   const pdfDownload=page.waitForEvent('download');
-  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  await page.getByRole('button',{name:'Download Audit'}).click();
   const pdf=await pdfDownload;
   await pdf.saveAs(info.outputPath('paired-evidence.pdf'));
   expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(1);
@@ -253,12 +253,12 @@ test('a compact report preserves the author, uncertainty and request references'
 test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }, info) => {
   await setup(page, false, false, true);
   const pdfDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download vulnerability report' }).click();
+  await page.getByRole('button', { name: 'Download Audit' }).click();
   const pdfFile = await pdfDownload;
-  expect(pdfFile.suggestedFilename()).toBe(`patchriot-${id}-report.pdf`);
+  expect(pdfFile.suggestedFilename()).toBe(`patchriot-${id}-audit.pdf`);
   await pdfFile.saveAs(info.outputPath('workflow-legacy.pdf'));
   const pdf = await PDFDocument.load(await readFile((await pdfFile.path())!));
-  expect(pdf.getTitle()).toBe('Patchriot vulnerability report');
+  expect(pdf.getTitle()).toBe('Patchriot audit');
   expect(pdf.getPageCount()).toBeGreaterThanOrEqual(8);
   expect(pdf.catalog.get(PDFName.of('OpenAction'))).toBeUndefined();
   await page.getByText('Other downloads & test details', { exact: true }).click();
@@ -302,7 +302,7 @@ test('large evidence stays intact while the report and PDF stay concise', async 
   await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const pdfDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download vulnerability report' }).click();
+  await page.getByRole('button', { name: 'Download Audit' }).click();
   const pdfBytes = await readFile((await (await pdfDownload).path())!);
   expect(pdfBytes.length).toBeLessThan(1024 * 1024);
   expect((await PDFDocument.load(pdfBytes)).getPageCount()).toBeGreaterThan(5);
@@ -335,7 +335,7 @@ test('viewing unfinished work does not start a download or deletion clock', asyn
   let exports = 0;
   page.on('request', r => { if (r.url().endsWith('/report')) exports++; });
   await setup(page);
-  await expect(page.getByRole('button', { name: 'Download vulnerability report' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Download Audit' })).toBeDisabled();
   await expect(page.getByText(/Downloads become available when the test ends/)).toBeVisible();
   await page.getByText('Other downloads & test details', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download readable report' })).toBeDisabled();
@@ -1002,7 +1002,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await activity.screenshot({path:info.outputPath('workflow-partial.png')});
   await mockExport(page,response());
   const pdfDownload=page.waitForEvent('download');
-  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  await page.getByRole('button',{name:'Download Audit'}).click();
   const pdf=await pdfDownload;
   await pdf.saveAs(info.outputPath('workflow-partial.pdf'));
   expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(5);

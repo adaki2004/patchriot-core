@@ -139,12 +139,12 @@ export function PdfReportDownload({ report, loadReport, disabled }: { report: Re
       const latest = await loadReport();
       const bytes = await createReportPdf(latest);
       const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'application/pdf' }));
-      const a = document.createElement('a'); a.href = url; a.download = `patchriot-${report.id}-report.pdf`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `patchriot-${report.id}-audit.pdf`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { setError(e instanceof Error ? e.message : 'The PDF could not be prepared. Retry before the report expires.'); }
     finally { setBusy(false); }
   }
-  return <><div className="report-download-main"><button className="primary" disabled={busy || disabled} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download vulnerability report ↓'}</button><p>Summary, findings, evidence & recommended fixes.</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
+  return <><div className="report-download-main"><button className="primary" disabled={busy || disabled} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download Audit'}</button><p>Exposure map, findings, coverage & recommended fixes.</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
 }
 
 export function LiveReportDownloads({ id, steps, loadReport, disabled }: { id: string; steps: LiveStep[]; loadReport: () => Promise<ReportInput>; disabled: boolean }) {
