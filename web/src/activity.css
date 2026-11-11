@@ -100,13 +100,13 @@
 .workflow-lane-label { grid-row: 1; margin: 0; min-width: 0; }
 .workflow-lane-label small { display: block; margin-top: 3px; }
 .workflow-lane > ol { grid-row: 2; }
-.workflow-public > * { grid-column: 1 / span 5; }
-.workflow-access > * { grid-column: 6 / span 2; }
+.workflow-public > * { grid-column: 1 / span var(--workflow-public-columns); }
+.workflow-access > * { grid-column: var(--workflow-access-start) / span var(--workflow-access-columns); }
 .workflow-output > * { grid-column: -2 / -1; }
 .workflow-lane-label strong { color: #d8e5fa; font: 500 14px/1.5 var(--body-font); }
 .workflow-lane-label small { color: #91a6c7; font: 11px/1.5 var(--body-font); }
 .workflow-map ol { list-style: none; padding: 0; margin: 0; position: relative; display: grid; gap: 10px; }
-.workflow-public ol { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.workflow-public ol { grid-template-columns: repeat(var(--workflow-public-columns), minmax(0, 1fr)); }
 .workflow-step { position: relative; min-width: 0; }
 .textmode-ui .workflow-step > button { display: flex; align-items: center; flex-direction: column; text-align: center; width: 100%; height: 100%; min-height: 150px; padding: 0 2px 9px; border: 0; border-radius: 8px; background: transparent; color: #d9e6f8; box-shadow: none; }
 .textmode-ui .workflow-step > button:hover { background: transparent; }
@@ -134,7 +134,7 @@
 .workflow-step button[aria-pressed=true] .workflow-node::after { transform-origin: center; content: ''; position: absolute; inset: -6px; border: 1px solid #a4c7fb; border-radius: 50%; }
 .workflow-step[data-live=true] .workflow-node::after { content: ''; position: absolute; inset: -6px; border: 1px solid #ffad97; border-radius: 50%; animation: workflow-beacon 3s ease-out infinite; }
 @keyframes workflow-beacon { from { opacity: .8; transform: scale(.96); } to { opacity: .1; transform: scale(1.16); } }
-.workflow-access ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workflow-access ol { grid-template-columns: repeat(var(--workflow-access-columns), minmax(0, 1fr)); }
 .workflow-inspector { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 18px 24px; border: 1px solid #4b6384; border-left: 2px solid #9cbff2; border-radius: 8px; background: #152237; padding: 20px; margin-top: 24px; }
 .textmode-ui .workflow-inspector h5 { margin: 7px 0 9px; font: 500 17px/1.3 var(--body-font); color: #e1edff; }
 .workflow-inspector p { font-size: 12px; line-height: 1.65; color: #a9bddb; margin: 0; }
@@ -181,8 +181,7 @@
 }
 @media(prefers-reduced-motion:reduce) { .workflow-step[data-live=true] .workflow-node::after { animation: none; } }
 
-.workflow-diagram { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px 10px; padding: 0 8px; }
-.workflow-diagram[data-authenticated=true] { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.workflow-diagram { position: relative; display: grid; grid-template-columns: repeat(var(--workflow-columns), minmax(0, 1fr)); gap: 18px 10px; padding: 0 8px; }
 .workflow-edges { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
 .workflow-edges path { fill: none; stroke: #7196c2; stroke-width: 1.2; }
 .workflow-edges marker path { stroke-width: 1.3; }
@@ -232,10 +231,6 @@
 @media(max-width:700px) { .workspace-dashboard .workspace-art { opacity: .65; width: clamp(90px, 30vw, 140px); height: 110px; right: 8px; top: auto; bottom: 14px; padding: 0; }.contributor-machine { display: grid; grid-template-columns: 36px minmax(0,1fr); }.contributor-machine > span { grid-column: 2; margin-left: 0; } }
 
 /* Combined investigation has one stage, with signed-in coverage available inside it. */
-.workflow-diagram[data-combined=true] { grid-template-columns: repeat(7, minmax(0, 1fr)); }
-.workflow-diagram[data-combined=true] .workflow-public > * { grid-column: 1 / span 4; }
-.workflow-diagram[data-combined=true] .workflow-public ol { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.workflow-diagram[data-combined=true] .workflow-access > * { grid-column: 5 / span 2; }
 .textmode-ui .workflow-diagram[data-combined=true] .workflow-step > button { height: auto; }
 .textmode-ui .workflow-step > .workflow-coverage { display: block; min-height: 0; height: auto; padding: 7px 4px; margin-top: 7px; border: 1px solid #405b7d; border-radius: 5px; background: #182b43; font-size: 10px; line-height: 1.4; }
 .workflow-coverage small { display: block; color: #a9c7ef; margin-top: 3px; }

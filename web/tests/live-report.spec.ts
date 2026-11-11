@@ -867,11 +867,12 @@ test('deep-check evidence belongs to the opted-in workflow stage', async ({page}
   await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','false');
 });
 
-for(const grey of [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}`, async ({page},info)=>{
+for(const grey of [false,true]) for(const deep of [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}, deep=${deep}`, async ({page},info)=>{
   await emptyDashboard(page);
   await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
   const workflow=structuredWorkflow(grey);
   if(!grey) workflow.checks[4].state='running';
+  if(deep) {workflow.version=2;workflow.checks.splice(5,0,{id:'public_deep',state:'pending',evidence_count:0});}
   const received=Math.floor(Date.now()/1000);
   const review={id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
     pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic workflow fixture',...(grey?{authentication:'session',browser_login:{}}:{})},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
@@ -880,7 +881,7 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
-  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Web & API checks']);
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Web & API checks',...(deep?['Deep scan']:[])]);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(grey?2:1);
   await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
   if(grey) {
@@ -906,7 +907,7 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await expect(activity).toContainText('Recorded = saved work.');
   for(const width of info.project.name==='desktop' ? [1280,1920,1024,760] : [390]) {
     await page.setViewportSize({width,height:1000});
-    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe(grey?7:5);
+    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe((grey?7:5)+(deep?1:0));
     await expect.poll(async()=>activity.evaluate(root=>{
       const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;const origin=svg.getBoundingClientRect();
       return [...svg.querySelectorAll<SVGPathElement>('path[data-from]')].every(path=>{
@@ -929,6 +930,36 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
     await activity.screenshot({path:info.outputPath(`workflow-${grey?'grey':'black'}-${width}.png`)});
   }
 
+});
+
+test('combined authenticated workflow gives deep scan its own column', async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(true);
+  workflow.version=2;
+  workflow.checks[4].state='running';
+  workflow.checks.splice(5,0,{id:'public_deep',state:'pending',evidence_count:0});
+  const now=Math.floor(Date.now()/1000);
+  const review={id,mode:'pentest_agent',state:'running',created_at:now-30,deadline_at:now+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],authentication:'session',browser_login:{}},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:now,progress:{phase:'scoped_tools',http_requests:40,inference_calls:4,completed_tools:4,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  const graph=page.locator('.workflow-diagram');
+  await expect(graph).toHaveAttribute('data-combined','true');
+  await expect(graph.locator('.workflow-node')).toHaveCount(8);
+  await expect(graph.locator('.workflow-access .workflow-step')).toHaveCount(3);
+  for(const width of info.project.name==='desktop'?[1280,1920,1024,760]:[390]) {
+    await page.setViewportSize({width,height:1000});
+    await expect.poll(()=>graph.evaluate(root=>{
+      const nodes=[...root.querySelectorAll('.workflow-node')].map(n=>n.getBoundingClientRect());
+      return nodes.slice(1).every((next,i)=>root.getBoundingClientRect().width>760
+        ? Math.abs(next.y-nodes[i].y)<2&&next.x>nodes[i].x
+        : Math.abs(next.x-nodes[i].x)<2&&next.y>nodes[i].y);
+    })).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await graph.screenshot({path:info.outputPath(`combined-deep-${width}.png`)});
+  }
 });
 
 test('structured graph keeps incomplete, reused, missing and stale states distinct', async ({page},info)=>{

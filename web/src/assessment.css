@@ -212,7 +212,6 @@
 .pentests-page .check-choice .check { flex: 1; margin: 0; padding: 0; gap: 9px; font-size: 14px; line-height: 1.4; min-width: 0; }
 .check-choice .check > span { min-width: 0; }
 .check-choice strong { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
-.check-choice em { font-size: 10px; font-weight: 400; font-style: normal; color: var(--muted); }
 .check-choice small { display: block; color: var(--muted); margin-top: 3px; font-size: 12px; line-height: 1.45; }
 .check-help { flex: 0 0 auto; }
 .pentests-page .check-help button { display: grid; place-items: center; width: 28px; height: 28px; min-width: 0; min-height: 0; margin: -4px -4px 0 0; padding: 0; border: 0; background: transparent; color: var(--muted); box-shadow: none; }
