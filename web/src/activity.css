@@ -116,7 +116,7 @@
 .workflow-node { position: relative; z-index: 1; display: grid; place-items: center; width: 60px; height: 60px; flex-shrink: 0; border: 1px solid #587497; border-radius: 50%; background: #142338; color: #9db9e1; margin-bottom: 17px; box-shadow: inset 0 0 20px #25426844; }
 .workflow-node::before { content: ''; position: absolute; inset: 5px; border: 1px solid #8cb5ef20; border-radius: 50%; }
 .workflow-node svg { width: 22px; height: 22px; }
-.workflow-index { position: absolute; top: -7px; right: -6px; min-width: 22px; background: #101c2c; border: 1px solid #506d91; border-radius: 4px; padding: 2px; color: #9db9e1; font: 9px var(--mono-font); }
+.workflow-index { position: absolute; z-index: 2; top: -7px; right: -6px; min-width: 22px; background: #101c2c; border: 1px solid #506d91; border-radius: 4px; padding: 2px; color: #9db9e1; font: 9px var(--mono-font); }
 .workflow-step strong { font: 500 13px/1.4 var(--body-font); color: #dce7f7; }
 .workflow-tool { color: #8ea8cd; font: 11px/1.45 var(--body-font); margin: 6px 0 8px; }
 .workflow-state { color: #9aacc5; font: 11px/1.4 var(--body-font); margin-top: auto; }
@@ -331,6 +331,12 @@
 
 .workflow-tool-tree .tool-record-open { display: none; }
 
-@container(min-width:761px) {
-  .workflow-tool-cluster[data-cluster=follow-up] { width: 220px; justify-self: center; }
+/* Tool shelves share the available width independently of stage columns. */
+.workflow-tool-shelves { display: grid; grid-column: 1 / -1; grid-row: 3; grid-template-columns: repeat(var(--workflow-tool-columns), minmax(0, 1fr)); gap: 24px; padding-top: 48px; }
+.workflow-tool-shelves > .workflow-tool-cluster { grid-row: auto; min-width: 0; margin: 0 0 18px; padding-top: 0; }
+.workflow-tool-shelves .workflow-tool-tree { width: min(240px, 100%); }
+.workflow-tool-shelves .workflow-tool-cluster .tool-record-name { white-space: normal; overflow-wrap: anywhere; }
+@container(max-width:760px) {
+  .workflow-tool-shelves { display: contents; }
+  .workflow-tool-shelves > .workflow-tool-cluster { margin: 2px 0 20px 70px; padding: 8px 0 0 12px; }
 }

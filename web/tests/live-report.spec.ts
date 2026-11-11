@@ -822,7 +822,7 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   for (const tool of tools.slice(0, 4)) tool.arguments = ['scoped', '--discovery-suite'];
   await page.reload();
   await activity.getByRole('button',{name:'Scout Needs review'}).click();
-  const deeper = activity.getByRole('region', {name: 'Deeper-check tools'});
+  const deeper = activity.getByRole('region', {name: 'Web & API tools'});
   await expect(deeper.getByRole('button')).toHaveCount(5);
   await expect(activity.getByRole('region', {name: 'Scoped tools', exact: true})).toHaveCount(0);
   await deeper.getByRole('button', {name: 'ZAP web scanner: Recorded', exact: true}).click();
@@ -880,8 +880,8 @@ for(const grey of [false,true]) for(const deep of grey ? [false] : [false,true])
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
-  await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
-  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Web & API checks',...(deep?['Deep scan']:[])]);
+  await expect(activity.getByText('From discovery to findings',{exact:true})).toBeVisible();
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints',...(deep?['Explore in browser']:[]),'Web & API checks',...(deep?['Deep scan']:[])]);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(grey?2:1);
   await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
   if(grey) {
@@ -907,7 +907,7 @@ for(const grey of [false,true]) for(const deep of grey ? [false] : [false,true])
   await expect(activity).toContainText('Recorded = saved work.');
   for(const width of info.project.name==='desktop' ? [1280,1920,1024,760] : [390]) {
     await page.setViewportSize({width,height:1000});
-    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe((grey?7:5)+(deep?1:0));
+    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe((grey?7:5)+(deep?2:0));
     await expect.poll(async()=>activity.evaluate(root=>{
       const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;const origin=svg.getBoundingClientRect();
       return [...svg.querySelectorAll<SVGPathElement>('path[data-from]')].every(path=>{
@@ -949,7 +949,7 @@ test('current authenticated workflow keeps access before the web and deep passes
   await expect(graph).toHaveAttribute('data-combined','true');
   await expect(graph.locator('.workflow-node')).toHaveCount(8);
   await expect(graph.locator('.workflow-access .workflow-step')).toHaveCount(3);
-  await expect(graph.locator('.workflow-access .workflow-step > button > strong')).toHaveText(['Verify access','Agentic investigation','Deep scan']);
+  await expect(graph.locator('.workflow-access .workflow-step > button > strong')).toHaveText(['Verify access','Web & API checks','Deep scan']);
   for(const width of info.project.name==='desktop'?[1280,1920,1024,760]:[390]) {
     await page.setViewportSize({width,height:1000});
     await expect.poll(()=>graph.evaluate(root=>{
@@ -1014,7 +1014,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   const markdown=await readFile((await download.path())!,'utf8');
   expect(markdown).toContain('Headers & config (Patchriot baseline): Reused evidence');
   expect(markdown).toContain('Source: Scout');
-  expect(markdown).toContain('Map routes (Patchriot crawl): Incomplete · 3 evidence records');
+  expect(markdown).toContain('Map routes (Link crawler): Incomplete · 3 evidence records');
   expect(markdown).toContain('It does not mean complete coverage or a finding-free website.');
   expect(markdown).toContain('Known signatures (Nuclei): Not recorded (no checklist entry)');
 });
@@ -1077,19 +1077,19 @@ test('combined engine receipt identifies both access modes without inventing usa
   await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await activity.getByRole('button',{name:'Scout Report received'}).click();
-  await activity.getByRole('button',{name:'Agentic investigation: Recorded',exact:true}).click();
+  await activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true}).click();
   const selected=activity.getByRole('region',{name:'Selected workflow step'});
-  await expect(selected).toContainText('One engine run used combined anonymous and authenticated mode.');
+  await expect(selected).toContainText('This pass checked public and signed-in routes.');
   await expect(selected).toContainText('1 anonymous and 1 authenticated requests.');
   await expect(activity).toContainText('Agentic security checks');
   await expect(activity).not.toContainText('ARTEX');
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
-  await expect(activity.locator('[data-cluster=baseline]')).toHaveAttribute('data-parents', 'public_baseline public_mapping public_signatures public_fingerprints authentication');
+  await expect(activity.locator('[data-cluster=baseline]')).toHaveAttribute('data-parents', 'public_baseline public_mapping public_signatures public_fingerprints');
   if (info.project.name==='mobile') {
     const shelf=await activity.locator('[data-cluster=baseline]').boundingBox();
     const access=await activity.locator('[data-check=authentication]').boundingBox();
     const investigation=await activity.locator('[data-check=public_analysis]').boundingBox();
-    expect(shelf!.y).toBeGreaterThan(access!.y+access!.height);
+    expect(shelf!.y+shelf!.height).toBeLessThanOrEqual(access!.y);
     expect(shelf!.y+shelf!.height).toBeLessThanOrEqual(investigation!.y);
   }
   await activity.getByRole('button',{name:'Signed-in coverage: Recorded',exact:true}).click();
@@ -1125,7 +1125,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
   expect(await activity.locator('.workflow-step').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-check')))).toEqual([...publicWorkflowIds.slice(0,4),'authentication','public_analysis','evidence_review']);
-  await expect(activity.getByRole('button',{name:'Agentic investigation: Running',exact:true})).toBeVisible();
+  await expect(activity.getByRole('button',{name:'Web & API checks: Running',exact:true})).toBeVisible();
   await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveCount(0);
   await expect(activity.locator('[data-check=public_analysis]')).toContainText('Anonymous + signed-in');
   await activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true}).click();
@@ -1154,7 +1154,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
     review.steps[0].progress.progress.phase=phase;
     await page.getByRole('button',{name:'Refresh report',exact:false}).click();
     await expect(activity.locator('.workflow-step')).toHaveCount(7);
-    await expect(activity.getByRole('button',{name:'Agentic investigation: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true})).toBeVisible();
     await expect(activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true})).toBeVisible();
   }
   // A new review cannot inherit observed mode from the previously opened run.
@@ -1290,4 +1290,49 @@ test('ZAP follow-up failure is distinct from a completed initial scan', () => {
   expect(toolCoverageDetail(run)).toContain('underlying cause was not retained');
   expect(toolOutcome(run)).toBe('Incomplete');
   expect(toolOutcome({...run,failure:null,arguments:[],output_excerpt:'{}'})).toBe('Ran');
+});
+
+for (const scenario of ['waiting', 'browser', 'checks', 'investigating', 'finishing', 'stale', 'saved', 'unknown', 'reused', 'grey'] as const) test(`browser discovery and vulnerability investigation have distinct stages: ${scenario}`, async ({page}, info) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r=>r.fulfill({json:{account:{id,display_name:'Fixture owner',role:'member'},csrf_token:'test-csrf'}}));
+  const grey = scenario === 'grey';
+  const role = scenario === 'reused' ? 'reproducer' : 'investigator';
+  const workflow = structuredWorkflow(grey, 'recorded');
+  workflow.version = 2;
+  workflow.checks.splice(5, 0, {id:'public_deep',state:'not_applicable',evidence_count:0});
+  workflow.checks.find(c=>c.id==='public_analysis')!.state = ['waiting','browser','stale'].includes(scenario) ? 'pending' : scenario === 'checks' ? 'running' : 'recorded';
+  if(scenario==='reused') Object.assign(workflow.checks.find(c=>c.id==='public_analysis')!,{state:'reused',evidence_count:0,source_role:'investigator'});
+  const now = Math.floor(Date.now()/1000);
+  const phase = ['investigating','saved','unknown','grey'].includes(scenario) ? 'investigating' : scenario==='finishing' ? 'finishing' : 'scoped_tools';
+  const browser = ['browser','stale'].includes(scenario) ? 'running' : ['checks','investigating','finishing','saved'].includes(scenario) ? 'returned' : undefined;
+  const review = {id,mode:'pentest_agent',state:scenario==='saved'?'completed':'running',created_at:now-120,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic stage fixture',...(grey?{authentication:'session',browser_login:{}}:{})},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role,state:scenario==='saved'?'completed':'leased',result:scenario==='saved'?{...result,workflow}:null,
+      progress:{received_at:now-(scenario==='stale'?200:0),progress:{phase,browser_exploration:browser,http_requests:71,inference_calls:40,completed_tools:4,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  if(scenario==='saved') await page.getByRole('combobox',{name:'Report view'}).selectOption('coverage');
+  const activity = page.getByRole('region',{name:'Recorded assessment activity'});
+  const browserNode = activity.locator('[data-check=browser_exploration]');
+  if(grey) {
+    await expect(browserNode).toHaveCount(0);
+    await expect(activity).toContainText('no separate public browser pass');
+  } else {
+    await expect(browserNode).toHaveAttribute('data-status',browser==='running'?'running':browser==='returned'?'recorded':scenario==='waiting'?'pending':scenario==='reused'?'not_applicable':'not_recorded');
+    await expect(browserNode).toHaveAttribute('data-live',String(scenario==='browser'));
+    const order = await activity.locator('.workflow-step').evaluateAll(items=>items.map(item=>item.getAttribute('data-check')));
+    expect(order.indexOf('browser_exploration')).toBe(order.indexOf('public_fingerprints')+1);
+    expect(order.indexOf('public_analysis')).toBe(order.indexOf('browser_exploration')+1);
+    await browserNode.getByRole('button').click();
+    await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('separate from the later vulnerability investigation');
+    if(browser==='returned') await expect(browserNode).toContainText('Step ended');
+    if(scenario==='unknown') await expect(browserNode).toContainText('Not recorded');
+    if(scenario==='reused') await expect(browserNode).toContainText('Not repeated');
+    if(scenario==='stale') await expect(browserNode).toContainText('Last reported running');
+  }
+  await activity.locator('[data-check=evidence_review]').getByRole('button').click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText(scenario==='reused' ? 'investigates promising untested leads' : 'actively searches for weaknesses');
+  if(scenario==='finishing') await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('preparing and returning its report');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(scenario==='browser'||scenario==='grey') await activity.screenshot({path:info.outputPath(`stages-${scenario}.png`)});
 });

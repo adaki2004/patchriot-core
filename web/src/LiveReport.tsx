@@ -31,7 +31,7 @@ export function browserAccessDescription(result: LiveResult | null) {
   if (result?.account_access?.length) return result.account_access.map(({ account, proof }) => describe(proof, `${accountLabel(account)} signed-in access`)).join('\n\n');
   return result?.browser_access ? describe(result.browser_access) : 'Signed-in access was not verified. Public checks and saved findings may still be useful; authenticated coverage remains a gap.';
 }
-export type LiveActivity = { received_at: number; progress: { workflow?: LiveWorkflow; phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number; model_request?: { purpose: 'discovery' | 'investigation' | 'summary'; elapsed_seconds: number } } };
+export type LiveActivity = { received_at: number; progress: { workflow?: LiveWorkflow; phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; browser_exploration?: 'running' | 'returned'; http_requests: number; inference_calls: number; completed_tools: number; model_request?: { purpose: 'discovery' | 'investigation' | 'summary'; elapsed_seconds: number } } };
 export type LiveStep = { role: LiveRole; state: string; result: LiveResult | null; evidence_complete?: boolean | null; progress?: LiveActivity | null };
 export type LiveTiming = { role_limit_seconds: number; started_at: number | null; active_role_deadline_at: number | null; requests_ahead: number };
 const roleDuty = { investigator: 'Map the application and investigate leads.', reproducer: 'Repeat probes and challenge the initial claims.', challenger: 'Check the evidence, impact and recommended fixes.' };

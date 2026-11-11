@@ -2,14 +2,14 @@ import type { LiveWorkflow, LiveToolRun, WorkflowCheckId, WorkflowCheckState } f
 
 export const checkDefinitions: { id: WorkflowCheckId; title: string; tool: string; description: string }[] = [
   { id: 'public_baseline', title: 'Headers & config', tool: 'Patchriot baseline', description: 'Inspect public response headers, browser policies and exposed configuration without a signed-in session.' },
-  { id: 'public_mapping', title: 'Map routes', tool: 'Patchriot crawl', description: 'Map reachable public pages, links and forms within the approved origin.' },
+  { id: 'public_mapping', title: 'Map routes', tool: 'Link crawler', description: 'Follow public links and forms with a bounded crawler. This collects paths for later checks; it is separate from the agent’s browser exploration.' },
   { id: 'public_signatures', title: 'Known signatures', tool: 'Nuclei', description: 'Run the curated signature checks against public responses. Matches are leads to investigate.' },
   { id: 'public_fingerprints', title: 'Web fingerprints', tool: 'ARES-engine', description: 'Compare public technology and content fingerprints with missing-path controls.' },
-  { id: 'public_analysis', title: 'Web & API checks', tool: 'Agentic security checks', description: 'Investigate the public attack surface within the saved scope and remaining limits.' },
+  { id: 'public_analysis', title: 'Web & API checks', tool: 'Structured checks', description: 'Run scoped route probes, ZAP checks and available API-schema tests against collected paths and browser requests. These tool results become evidence for the agent’s later vulnerability investigation.' },
   { id: 'public_deep', title: 'Deep scan', tool: 'Patchriot deep pass', description: 'Opt-in deeper reads: script and route mining, access-control paths, header and cache probes, observed-parameter checks and cross-account objects. Leads still need a control.' },
   { id: 'authentication', title: 'Verify access', tool: 'Relay access proof', description: 'Establish the permitted account or disposable-wallet access and record an anonymous comparison.' },
   { id: 'authenticated_checks', title: 'Signed-in checks', tool: 'Signed-in investigation', description: 'Inspect signed-in resources under the saved permission, in addition to public checks. Recorded means requests were made with verified access; the evidence shows what was actually tested.' },
-  { id: 'evidence_review', title: 'Review & report', tool: 'Agent assessment', description: 'Review claims against evidence, retain uncertainty and produce this role’s assessment.' },
+  { id: 'evidence_review', title: 'Investigate & report', tool: 'Agent investigation', description: 'Use the collected evidence to choose possible vulnerabilities, test them with follow-up requests and compare controls. Then write findings and limitations. No findings is a valid result.' },
 ];
 
 export const workflowStateLabels: Record<WorkflowCheckState | 'not_recorded', string> = {

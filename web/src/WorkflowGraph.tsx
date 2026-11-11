@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react';
 import { workflowStateLabels as statusText, workflowCaveat } from './workflow';
 import { UIIcon } from './UIIcon';
 
-/** View records are supplied only from the runner's typed checklist. */
+/** Nodes use the runner's typed checklist and explicit browser activity. */
 export type WorkflowNodeStatus = 'pending' | 'running' | 'recorded' | 'reused' | 'limited' | 'incomplete' | 'not_applicable' | 'not_recorded';
 export type WorkflowNode = {
   id: string;
@@ -52,7 +52,8 @@ function useWorkflowEdges(key: string) {
         return { from: previous.id, to: next.id, path };
       });
       const vertical = nodes.length > 1 && Math.abs(nodes[0].y - nodes[1].y) > 2;
-      const branches = [...root.querySelectorAll<HTMLElement>('[data-parents]')].flatMap(cluster => {
+      const clusters = [...root.querySelectorAll<HTMLElement>('[data-parents]')];
+      const branches = clusters.flatMap((cluster, clusterIndex) => {
         const parents = (cluster.dataset.parents ?? '').split(' ').map(id => nodes.find(node => node.id === id)).filter(node => node !== undefined);
         if (!parents.length) return [];
         const heading = cluster.querySelector('.workflow-cluster-root')!.getBoundingClientRect();
@@ -70,11 +71,12 @@ function useWorkflowEdges(key: string) {
           const rect = content.getBoundingClientRect();
           return {x: parent.x, y: rect.bottom - bounds.top + 8};
         });
-        const rail = target.y - 12;
+        // Separate tracks keep shared-parent links legible after shelves reflow.
+        const rail = target.y - 12 - (clusters.length - clusterIndex - 1) * 12;
         const drops = anchors.map(point => `M${point.x} ${point.y}V${rail}`).join('');
         const path = parents.length === 1
           ? `M${anchors[0].x} ${anchors[0].y}V${rail}H${target.x}V${target.y}`
-          : `${drops}M${anchors[0].x} ${rail}H${anchors[anchors.length - 1].x}M${target.x} ${rail}V${target.y}`;
+          : `${drops}M${Math.min(anchors[0].x, target.x)} ${rail}H${Math.max(anchors[anchors.length - 1].x, target.x)}M${target.x} ${rail}V${target.y}`;
         return [{group: cluster.dataset.cluster!, path, anchors}];
       });
       setDrawing({ width: bounds.width, height: bounds.height, edges, branches });
@@ -112,22 +114,24 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   const discoveryTools = toolNodes.filter(node => node.id === 'tool-zap-discoveries' || node.parent_check === 'public_analysis');
   const deepTools = toolNodes.filter(node => node.parent_check === 'public_deep');
   const scopedTools = toolNodes.filter(node => !discoveryTools.includes(node) && !deepTools.includes(node) && node.id !== 'tool-patchriot-coverage');
-  const baselineIds = route.slice(0, investigationIndex > 0 ? investigationIndex : 4).map(node => node.id);
+  const baselineIds = route.filter(node => ['public_baseline', 'public_mapping', 'public_signatures', 'public_fingerprints'].includes(node.id)).map(node => node.id);
   const parentIds: Record<string, string[]> = {baseline: baselineIds, 'follow-up': ['public_analysis'], deep: ['public_deep'], coverage: [reportNode.id]};
   const groupFor = (id: string) => deepTools.some(node=>node.id===id) ? 'deep' : discoveryTools.some(node=>node.id===id) ? 'follow-up' : id === 'tool-patchriot-coverage' ? 'coverage' : scopedTools.some(node => node.id === id) ? 'baseline' : null;
   const activeGroup = hoveredGroup ?? groupFor(selected.id);
   const related = (id: string) => !!activeGroup && parentIds[activeGroup].includes(id);
-  function inspectTool(id: string) {
+  function inspectNode(id: string) {
     setChoice(id);
     if ((ref.current?.clientWidth ?? Infinity) <= 760) requestAnimationFrame(() => {
       inspector.current?.scrollIntoView({block: 'nearest', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'});
     });
   }
-  function toolCluster(title: string, records: WorkflowNode[], column: string, order: number, kind: string) {
+  const coverageTools = toolNodes.filter(node => node.id === 'tool-patchriot-coverage');
+  const toolShelfCount = [scopedTools.length, discoveryTools.length, deepIndex >= 0 && deepTools.length, coverageTools.length].filter(Boolean).length;
+  function toolCluster(title: string, records: WorkflowNode[], order: number, kind: string) {
     if (!records.length) return null;
-    return <section className="workflow-tool-cluster" data-cluster={kind} data-parents={parentIds[kind].join(' ')} data-related={activeGroup === kind} onPointerEnter={() => setHoveredGroup(kind)} onPointerLeave={() => setHoveredGroup(null)} onFocus={() => setHoveredGroup(kind)} onBlur={() => setHoveredGroup(null)} aria-label={title} style={{gridColumn: column, order}}>
+    return <section className="workflow-tool-cluster" data-cluster={kind} data-parents={parentIds[kind].join(' ')} data-related={activeGroup === kind} onPointerEnter={() => setHoveredGroup(kind)} onPointerLeave={() => setHoveredGroup(null)} onFocus={() => setHoveredGroup(kind)} onBlur={() => setHoveredGroup(null)} aria-label={title} style={{order}}>
       <div className="workflow-tool-tree"><h5><span className="workflow-cluster-root" aria-hidden="true" />{title}</h5><ul>{records.map(node => <li key={node.id} data-tool-check={node.id} data-status={node.status}>
-        <button type="button" aria-pressed={selected.id === node.id} onClick={() => inspectTool(node.id)} aria-label={`${node.title}: ${label(node)}`}>
+        <button type="button" aria-pressed={selected.id === node.id} onClick={() => inspectNode(node.id)} aria-label={`${node.title}: ${label(node)}`}>
           <span className="tool-record-mark" aria-hidden="true">{['incomplete', 'limited'].includes(node.status) ? '!' : node.status === 'not_applicable' ? '–' : '✓'}</span>
           <span className="tool-record-name">{node.id === 'tool-zap-discoveries' ? 'ZAP follow-up' : node.title}<small>{label(node)}</small></span><span className="tool-record-open" aria-hidden="true">›</span>
         </button>
@@ -136,34 +140,36 @@ export function WorkflowGraph({ publicNodes, accessNodes, reportNode, coverageNo
   }
   function nodeButton(node: WorkflowNode, index: number, icon: 'shield' | 'globe' | 'agent' | 'lock' | 'file') {
     return <li key={node.id} data-check={node.id} data-related={related(node.id)} data-status={node.status} data-live={live && node.status === 'running'} className="workflow-step" style={{order: (index + 1) * 10}}>
-      <button type="button" aria-pressed={selected.id === node.id} onClick={() => setChoice(node.id)} aria-label={`${node.title}: ${label(node)}`}>
+      <button type="button" aria-pressed={selected.id === node.id} onClick={() => inspectNode(node.id)} aria-label={`${node.title}: ${label(node)}`}>
         <span className="workflow-node"><UIIcon name={icon} /><span className="workflow-index">{String(index + 1).padStart(2, '0')}</span></span>
         <strong>{node.title}</strong><span className="workflow-tool">{node.tool}</span><span className="workflow-state">{label(node)}</span>
       </button>
-      {node.id === 'public_analysis' && coverageNode && <button type="button" className="workflow-coverage" aria-pressed={selected.id === coverageNode.id} onClick={() => setChoice(coverageNode.id)} aria-label={`${coverageNode.title}: ${label(coverageNode)}`}><span>Signed-in coverage</span><small>{label(coverageNode)} ↗</small></button>}
+      {node.id === 'public_analysis' && coverageNode && <button type="button" className="workflow-coverage" aria-pressed={selected.id === coverageNode.id} onClick={() => inspectNode(coverageNode.id)} aria-label={`${coverageNode.title}: ${label(coverageNode)}`}><span>Signed-in coverage</span><small>{label(coverageNode)} ↗</small></button>}
     </li>;
   }
   return <div className="workflow-map" data-recorded={recorded}>
-    <div className="workflow-intro"><div><span className="assessment-kicker">ONE PUBLIC BASELINE</span><h4>{accessNodes.length ? 'Public and signed-in investigation.' : 'Public first. Deeper with access.'}</h4><p>{coverageNode ? 'Access is verified before one Agentic investigation. Open signed-in coverage for its request evidence and later agent checks.' : accessNodes.length ? 'Public investigation and signed-in checks follow the recorded workflow.' : 'Public checks lead into evidence review. Select a step for its evidence.'}</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Runner checklist' : 'Workflow guide'}</span></div>
+    <div className="workflow-intro"><div><h4>From discovery to findings</h4><p>{accessNodes.length ? 'Verify access, check public and signed-in routes, then investigate the evidence. There is no separate public browser pass.' : publicNodes.some(node => node.id === 'browser_exploration') ? 'Discover routes, explore the interface, run structured checks, then investigate possible vulnerabilities. Each step has a different job.' : 'Run the selected public checks, then investigate possible vulnerabilities from their evidence.'}</p></div><span className="workflow-legend"><i aria-hidden="true" />{recorded ? 'Reported activity' : 'Workflow guide'}</span></div>
     {!recorded && <p className="workflow-history" role="status">{awaitingRecords ? 'Waiting for this agent’s stage updates.' : 'Structured checklist not recorded for this role. The map shows the planned workflow; tool records below remain available.'}</p>}
     <div ref={ref} className="workflow-diagram" data-authenticated={accessNodes.length > 0} data-combined={!!coverageNode} style={{'--workflow-columns':route.length,'--workflow-public-columns':publicNodes.length,'--workflow-access-columns':Math.max(1,accessNodes.length),'--workflow-access-start':publicNodes.length+1} as CSSProperties}>
       <svg className="workflow-edges" aria-hidden="true" width={drawing.width} height={drawing.height} viewBox={`0 0 ${drawing.width || 1} ${drawing.height || 1}`}><defs><marker id={marker} viewBox="0 0 8 8" refX="8" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M1 1L7 4L1 7" /></marker></defs>{drawing.edges.map(edge=><path key={edge.from} data-from={edge.from} data-to={edge.to} d={edge.path} markerEnd={`url(#${marker})`} />)}<g className="workflow-evidence-edges">{drawing.branches.map(branch => <g key={branch.group} data-branch={branch.group} data-related={activeGroup === branch.group}><path d={branch.path} />{branch.anchors.map((point, index) => <circle key={index} cx={point.x} cy={point.y} r="2.5" />)}</g>)}</g></svg>
       <div className="workflow-lane workflow-public">
-        <div className="workflow-lane-label"><strong>{coverageNode ? 'Public baseline' : 'Public checks'}</strong><small>{coverageNode ? 'Four shared checks' : 'Shared public baseline'}</small></div>
+        <div className="workflow-lane-label"><strong>{coverageNode ? 'Public baseline' : 'Discover & check'}</strong></div>
         <ol aria-label="Public assessment workflow">{publicNodes.map((node, index) => nodeButton(node, index, index === 0 ? 'shield' : index === 1 ? 'globe' : 'agent'))}</ol>
       </div>
       {accessNodes.length > 0 && <div className="workflow-lane workflow-access">
-        <div className="workflow-lane-label" style={{order: publicNodes.length * 10 + 6}}><strong>{coverageNode ? 'Combined investigation' : 'Behind the login'}</strong><small>{coverageNode ? 'Verify access, then investigate' : 'Additional grey-box checks'}</small></div>
+        <div className="workflow-lane-label" style={{order: publicNodes.length * 10 + 6}}><strong>{coverageNode ? 'Public + signed-in checks' : 'Behind the login'}</strong></div>
         <ol aria-label="Additional authenticated workflow">{accessNodes.map((node, index) => nodeButton(node, index + publicNodes.length, node.id === 'public_analysis' ? 'agent' : 'lock'))}</ol>
       </div>}
       <div className="workflow-lane workflow-output">
-        <div className="workflow-lane-label" style={{order: (route.length - 1) * 10 + 6}}><strong>Evidence review</strong></div>
-        <ol aria-label="Report workflow">{nodeButton(reportNode, publicNodes.length + accessNodes.length, 'file')}</ol>
+        <div className="workflow-lane-label" style={{order: (route.length - 1) * 10 + 6}}><strong>Agent follow-up</strong></div>
+        <ol aria-label="Report workflow">{nodeButton(reportNode, publicNodes.length + accessNodes.length, 'agent')}</ol>
       </div>
-      {toolCluster('Scoped tools', scopedTools, `1 / span ${baselineIds.length}`, baselineIds.length * 10 + 5, 'baseline')}
-      {toolCluster(discoveryTools.some(node=>node.parent_check) ? 'Deeper-check tools' : 'Discovery follow-up', discoveryTools, String(investigationIndex + 1), (investigationIndex + 1) * 10 + 5, 'follow-up')}
-      {deepIndex >= 0 && toolCluster('Deep-check evidence', deepTools, String(deepIndex + 1), (deepIndex + 1) * 10 + 5, 'deep')}
-      {toolCluster('Coverage summary', toolNodes.filter(node => node.id === 'tool-patchriot-coverage'), '-2 / -1', route.length * 10 + 5, 'coverage')}
+      {toolShelfCount > 0 && <div className="workflow-tool-shelves" style={{'--workflow-tool-columns': toolShelfCount} as CSSProperties}>
+        {toolCluster('Scoped tools', scopedTools, baselineIds.length * 10 + 5, 'baseline')}
+        {toolCluster(discoveryTools.some(node=>node.parent_check) ? 'Web & API tools' : 'Discovery follow-up', discoveryTools, (investigationIndex + 1) * 10 + 5, 'follow-up')}
+        {deepIndex >= 0 && toolCluster('Deep-check evidence', deepTools, (deepIndex + 1) * 10 + 5, 'deep')}
+        {toolCluster('Coverage summary', coverageTools, route.length * 10 + 5, 'coverage')}
+      </div>}
     </div>
     <p className="workflow-status-help"><strong>Recorded = saved work.</strong> {toolNodes.length ? 'Dashed branches show tool evidence for this agent. Select a step or tool to inspect it.' : 'Select a step to inspect its evidence.'}</p>
     <section ref={inspector} className="workflow-inspector" aria-label="Selected workflow step">
