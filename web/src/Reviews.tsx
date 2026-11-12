@@ -11,7 +11,6 @@ import type { PentestContext } from './Pentests';
 import { VulnerabilityReport } from './VulnerabilityReport';
 import { ExposureMap } from './ExposureMap';
 import { exposureData } from './exposure';
-import { ReportCheck } from './ReportCheck';
 import { reviewMethod, type ReportInput } from './report';
 import { SponsoredReviews } from './ReviewCodes';
 
@@ -169,7 +168,6 @@ export function ReviewDetail({ id, csrf, onClose, onChange, onOpenOrders }: { id
       <details className="report-method"><summary>Review method</summary><p className="fine" aria-label="Review method">{reviewMethod(report)}</p></details>
       <VulnerabilityReport report={report} />
       <ExposureMap key={`exposure-${review.id}`} data={exposureData(liveSteps, report.origins)} pending={['queued', 'running', 'awaiting_payment'].includes(review.state)} />
-      {['completed', 'needs_review'].includes(review.state) && <ReportCheck key={id} id={id} csrf={csrf} beforeExport={exportReview} />}
       <details className="assessment-disclosure report-technical"><summary>Other downloads & test details</summary>
         <LiveReportDownloads id={review.id} steps={liveSteps} loadReport={loadReport} disabled={!canExport} />
         <button className="quiet" disabled={!canExport || busy} onClick={() => void exportEvidence()}>Download evidence JSON ↓</button>

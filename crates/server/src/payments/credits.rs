@@ -20,9 +20,9 @@ pub(crate) use purchases::{cancel_purchase, create_purchase, purchase_detail};
 pub(crate) use topups::{create_topup, topup_quote};
 
 const ATOMS_PER_CENT: i64 = 10_000;
-const BLACK_CENTS: i64 = 199;
-const GREY_CENTS: i64 = 499;
-const MINIMUM_TOPUP_CENTS: i64 = 200;
+const BLACK_CENTS: i64 = 100;
+const GREY_CENTS: i64 = 250;
+const MINIMUM_TOPUP_CENTS: i64 = 100;
 const MAXIMUM_TOPUP_CENTS: i64 = 500;
 
 fn service(state: &AppState) -> Result<&access::CheckoutService, ApiError> {

@@ -23,7 +23,7 @@ test('granted coupon comes from the server beside credit without automatic grant
   await page.getByRole('button',{name:'Use coupon',exact:true}).click();await expect(page).toHaveURL(/#\/request$/);
 });
 
-test('a requested coupon fills checkout but does not submit work or replace consent', async ({ page }) => {
+test('a requested coupon fills checkout but does not submit work or replace consent', async ({ page }, info) => {
   await session(page);
   await page.route('**/api/coupons',r=>r.fulfill({json:[coupon]}));
   const target = { id, scope: { origins: ['https://owned.example'], methods: ['GET', 'HEAD', 'OPTIONS'] }, scope_sha256: 'a'.repeat(64), state: 'approved', ownership_verified: true, is_requester: true, can_start: true, expires_at: 9999999999 };
@@ -34,8 +34,16 @@ test('a requested coupon fills checkout but does not submit work or replace cons
   let starts = 0; let received:Record<string,unknown>|undefined;
   await page.route(`**/api/pentests/${id}/review-code`, r => { starts++; received=r.request().postDataJSON(); return r.fulfill({ status: 409, json: { error: 'request_conflict' } }); });
   await page.goto(`/#/pentests/${id}`);
-  await page.getByLabel('Choose a coupon').selectOption(coupon.id);
-  await expect(page.getByLabel('Choose a coupon')).toHaveValue(coupon.id);
+  const picker = page.getByRole('combobox', {name:'Choose a coupon'});
+  await picker.scrollIntoViewIfNeeded(); await picker.focus(); await picker.press('ArrowDown');
+  await expect(page.getByRole('listbox')).toBeVisible();
+  await page.screenshot({path:info.outputPath('coupon-picker.png'),fullPage:false});
+  await page.keyboard.press('Escape');
+  await expect(picker).toBeFocused();
+  expect(starts).toBe(0);
+  await picker.click();
+  await page.getByRole('option', {name:/Welcome/}).click();
+  await expect(page.getByRole('combobox', {name:'Choose a coupon'})).toContainText('Welcome');
   await expect(page.getByRole('button',{name:'New website test +'})).toHaveCount(0);
   const start = page.getByRole('button', { name: 'Use coupon & start test' });
   await expect(start).toBeDisabled();

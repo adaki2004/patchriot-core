@@ -224,7 +224,7 @@ test('paid review shows the price before an exact network-specific deposit and n
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
   await instructions.getByRole('button', { name: 'Send to an address', exact: false }).click();
   await expect(instructions).toContainText('0.01% provider app fee is included in the displayed amount');
-  await expect(instructions.getByRole('heading', { name: 'Send 1.000000000000000000000001 NEAR Exact transfer amount warning', exact: true })).toBeVisible();
+  await expect(instructions.getByRole('heading', { name: 'Send exactly 1.000000000000000000000001 NEAR Exact transfer amount warning', exact: true })).toBeVisible();
   await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (value: string) => { (window as Window & { copiedAmount?: string }).copiedAmount = value; } } }));
   await instructions.getByRole('button', { name: 'Copy exact amount', exact: true }).click();
   expect(await page.evaluate(() => (window as Window & { copiedAmount?: string }).copiedAmount)).toBe('1.000000000000000000000001');
@@ -257,7 +257,7 @@ for (const blockchain of ['eth', 'sol']) for (const symbol of ['USDC', 'USDT']) 
   await page.getByRole('button', { name: 'Reserve review & get quote →', exact: true }).click();
   const instructions = page.getByRole('region', { name: 'Payment instructions' });
   await instructions.getByRole('button', { name: 'Send to an address', exact: false }).click();
-  await expect(instructions.getByRole('heading', { name: `Send 1.000123 ${symbol} Exact transfer amount warning`, exact: true })).toBeVisible();
+  await expect(instructions.getByRole('heading', { name: `Send exactly 1.000123 ${symbol} Exact transfer amount warning`, exact: true })).toBeVisible();
   await expect(instructions).toContainText(network);
   await expect(instructions).toContainText('1 USDC');
   expect(state.submissions[0].origin_asset).toBe(selected.asset_id);

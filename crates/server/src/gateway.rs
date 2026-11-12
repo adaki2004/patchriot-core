@@ -488,19 +488,15 @@ pub async fn report(
     ))
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ReportCheckConsent {
-    accepts_near_ai: bool,
-}
-
+/// Preserve private access to saved receipts from the retired optional checker.
+/// There is no public write route: opening a report cannot start more inference.
 pub async fn report_check(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    request_with_limit(
+    let Json(mut receipt): Json<serde_json::Value> = request_with_limit(
         &state,
         reqwest::Method::GET,
         &format!("/internal/reviews/{id}/consistency-check"),
@@ -508,25 +504,11 @@ pub async fn report_check(
         None::<&()>,
         512 * 1024,
     )
-    .await
-}
-
-pub async fn request_report_check(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(id): Path<Uuid>,
-    Json(input): Json<ReportCheckConsent>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let session = auth::require_write(&headers, &state).await?;
-    request_with_limit(
-        &state,
-        reqwest::Method::POST,
-        &format!("/internal/reviews/{id}/consistency-check"),
-        Some(&session),
-        Some(&input),
-        512 * 1024,
-    )
-    .await
+    .await?;
+    if let Some(record) = receipt.as_object_mut() {
+        record.insert("can_request".into(), serde_json::Value::Bool(false));
+    }
+    Ok(Json(receipt))
 }
 
 /// Staff metrics must retain the server-verified role; query/header input cannot

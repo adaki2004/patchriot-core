@@ -42,10 +42,22 @@ test('shows real fleet dimensions, prototype scope and usable mobile layout', as
   await setup(page);
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Your webapp, our AI swarm. See what hackers see.' })).toBeVisible();
+  const steps = page.getByLabel('Assessment steps');
+  await expect(steps).toContainText('Add your URL');
+  const labels = await steps.locator(':scope > span').evaluateAll(items => items.map(item => {
+    const box = item.getBoundingClientRect();
+    return { x: box.x, y: box.y, width: box.width, height: box.height };
+  }));
+  expect(labels).toHaveLength(3);
+  for (const label of labels) {
+    expect(label.width).toBeGreaterThan(70);
+    expect(label.height).toBeLessThan(65);
+    expect(Math.abs(label.y - labels[0].y)).toBeLessThan(4);
+  }
   await expect(page.getByLabel('Live fleet counts').getByText('3', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Live fleet counts')).toContainText('1 OPERATORS');
-  await expect(page.locator('.tm-footnote')).toContainText('An automated first check, before a human penetration test');
-  await expect(page.locator('.tm-footnote')).toContainText('cannot discover every vulnerability or certify a website as safe.');
+  await expect(page.locator('.tm-footnote')).toContainText('Security pre-screening for developers and researchers');
+  await expect(page.locator('.tm-footnote')).toContainText('supports human investigation');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.getByRole('button', { name: 'Pair an agent', exact: true })).toHaveCount(0);
   await page.goto('/#/guide');

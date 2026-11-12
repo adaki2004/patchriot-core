@@ -148,7 +148,7 @@ impl Fixture {
         serde_json::from_value(self.target.lock().unwrap()["id"].clone()).unwrap()
     }
     fn input(&self) -> Value {
-        json!({"amount_cents":199,"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":[Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4()],"accepts_operator_access":true,"accepts_provider_access":true}})
+        json!({"amount_cents":100,"consent":{"request_id":Uuid::new_v4(),"scope_sha256":"a".repeat(64),"device_ids":[Uuid::new_v4(),Uuid::new_v4(),Uuid::new_v4()],"accepts_operator_access":true,"accepts_provider_access":true}})
     }
     async fn call(&self, method: &str, path: &str, body: Value) -> (StatusCode, Value) {
         let mut req = Request::builder()
@@ -211,10 +211,10 @@ async fn pilot_topup_cap_rejects_new_excess_and_allows_repeat_deposits() {
     let f = Fixture::new(&db).await;
     let (status, summary) = f.call("GET", "/api/credits", Value::Null).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(summary["minimum_topup_cents"], 200);
+    assert_eq!(summary["minimum_topup_cents"], 100);
     assert_eq!(summary["maximum_topup_cents"], 500);
     let offer = service(&f.state).ok().unwrap().policy.id().unwrap();
-    for amount in [-1, 0, 199, 501, 100000, i64::MAX] {
+    for amount in [-1, 0, 99, 501, 100000, i64::MAX] {
         let (status, body) = f
             .call(
                 "POST",
@@ -234,11 +234,11 @@ async fn pilot_topup_cap_rejects_new_excess_and_allows_repeat_deposits() {
         .await
         .unwrap();
     assert_eq!(rows, 0);
-    for amount in [200, 500, 500] {
+    for amount in [100, 250, 500] {
         let quote = f.topup(amount).await;
         f.settle(&quote, amount * ATOMS_PER_CENT).await;
     }
-    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1200);
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 850);
     assert_eq!(f.quotes.load(Ordering::SeqCst), 3);
     db.finish().await;
 }
@@ -338,7 +338,7 @@ async fn credit_reservation_is_idempotent_and_recovers_a_lost_funding_reply() {
     assert_eq!(a.0, StatusCode::OK, "{}", a.1);
     assert_eq!(b.0, StatusCode::OK, "{}", b.1);
     assert_eq!(a.1["id"], b.1["id"]);
-    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1);
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 100);
     f.lose_fund_reply.store(true, Ordering::SeqCst);
     process_once(&f.state).await.unwrap();
     let saved: String = sqlx::query_scalar("SELECT state FROM credit_purchases")
@@ -353,7 +353,7 @@ async fn credit_reservation_is_idempotent_and_recovers_a_lost_funding_reply() {
         1,
         "do not send funding twice after its lost reply"
     );
-    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1);
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 100);
     assert_eq!(f.call("POST", &path, input).await.0, StatusCode::OK);
     let mut changed = f.input();
     changed["amount_cents"] = json!(1);
@@ -404,7 +404,8 @@ async fn balance_and_deposits_are_private_and_write_routes_require_csrf() {
     let (s, v) = f.call("GET", "/api/credits", Value::Null).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(v["available_cents"], 200);
-    assert_eq!(v["prices"]["grey"], 499);
+    assert_eq!(v["prices"]["black"], 100);
+    assert_eq!(v["prices"]["grey"], 250);
     f.headers.remove("x-csrf-token");
     assert_eq!(
         f.call(
@@ -429,8 +430,8 @@ async fn simultaneous_different_tests_cannot_spend_the_same_balance() {
     let db = TestDb::new().await;
     let first = Fixture::new(&db).await;
     let second = Fixture::new(&db).await;
-    let quote = first.topup(200).await;
-    first.settle(&quote, 2_000_000).await;
+    let quote = first.topup(100).await;
+    first.settle(&quote, 1_000_000).await;
     let a = format!("/api/pentests/{}/credits", first.id());
     let b = format!("/api/pentests/{}/credits", second.id());
     let (a, b) = tokio::join!(
@@ -442,7 +443,7 @@ async fn simultaneous_different_tests_cannot_spend_the_same_balance() {
         1,
         "{a:?} {b:?}"
     );
-    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1);
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 0);
     db.finish().await;
 }
 
@@ -461,16 +462,16 @@ async fn grey_box_price_is_read_from_saved_scope_not_the_browser() {
         )
         .await;
     assert_eq!(s, StatusCode::OK, "{body}");
-    assert_eq!(body["amount_cents"], 499);
+    assert_eq!(body["amount_cents"], 250);
     let mut input = f.input();
     let path = format!("/api/pentests/{}/credits", f.id());
     assert_eq!(
         f.call("POST", &path, input.clone()).await.0,
         StatusCode::CONFLICT
     );
-    input["amount_cents"] = json!(499);
+    input["amount_cents"] = json!(250);
     assert_eq!(f.call("POST", &path, input).await.0, StatusCode::OK);
-    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1);
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 250);
     db.finish().await;
 }
 
@@ -512,24 +513,21 @@ async fn credit_paid_completed_roles_keep_the_existing_backed_ninety_ten_split()
     .fetch_one(&db.pool)
     .await
     .unwrap();
-    assert_eq!(
-        allocation,
-        ("credits".into(), 1_990_000, 199_000, 1_791_000)
-    );
+    assert_eq!(allocation, ("credits".into(), 1_000_000, 100_000, 900_000));
     let total: i64 = sqlx::query_scalar("SELECT sum(amount)::bigint FROM operator_earnings")
         .fetch_one(&db.pool)
         .await
         .unwrap();
-    assert_eq!(total, 1_791_000);
+    assert_eq!(total, 900_000);
     {
         let mut conn = db.pool.acquire().await.unwrap();
         assert_eq!(
             super::super::payouts::liabilities(&mut conn).await.unwrap(),
-            1_801_000,
-            "operator debt plus the unspent customer cent remains backed"
+            1_900_000,
+            "operator debt plus unspent customer credit remains backed"
         );
     }
-    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1);
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 100);
     assert!(
         sqlx::query("UPDATE credit_purchases SET state='released'")
             .execute(&db.pool)
@@ -559,7 +557,7 @@ async fn an_unknown_funding_reply_does_not_refund_until_remote_cancellation_conf
     process_once(&f.state).await.unwrap();
     assert_eq!(
         available(&db.pool, db.account).await.unwrap(),
-        1,
+        100,
         "a transport failure cannot release credit"
     );
     f.review.lock().unwrap().as_mut().unwrap()["state"] = json!("expired");
@@ -684,7 +682,7 @@ async fn cancellation_before_admission_returns_credit_without_starting_work() {
     let (status, pending) = f.call("POST", &path, json!({})).await;
     assert_eq!(status, StatusCode::OK);
     assert!(pending["cancel_requested_at"].is_string());
-    assert_eq!(available(&db.pool, db.account).await.unwrap(), 1);
+    assert_eq!(available(&db.pool, db.account).await.unwrap(), 100);
     process_once(&f.state).await.unwrap();
     assert_eq!(available(&db.pool, db.account).await.unwrap(), 200);
     assert_eq!(f.funds.load(Ordering::SeqCst), 0);
@@ -722,7 +720,7 @@ async fn cancellation_resolves_uncertain_funding_without_returning_already_spent
         );
         assert_eq!(
             available(&db.pool, db.account).await.unwrap(),
-            if funding_arrived { 1 } else { 200 }
+            if funding_arrived { 100 } else { 200 }
         );
         let saved: String = sqlx::query_scalar("SELECT state FROM credit_purchases")
             .fetch_one(&db.pool)
