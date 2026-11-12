@@ -222,6 +222,9 @@ pub struct AgentSystem {
     pub os_version: Option<String>,
     pub architecture: String,
     pub relay_version: String,
+    /// Configured backup only, not proof of use or permission to send it data.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_model: Option<String>,
 }
 
 impl AgentSystem {
@@ -238,6 +241,14 @@ impl AgentSystem {
             if value.trim().is_empty() || value.len() > 80 || value.chars().any(char::is_control) {
                 return Err("invalid_system_details");
             }
+        }
+        if self.secondary_model.as_deref().is_some_and(|model| {
+            !matches!(
+                pentests::LiveProvider::from_model(model),
+                Some(pentests::LiveProvider::NearDeepSeek | pentests::LiveProvider::VeniceDeepSeek)
+            )
+        }) {
+            return Err("invalid_secondary_model");
         }
         Ok(())
     }
@@ -732,6 +743,22 @@ mod tests {
             payload_hash(&heartbeat).unwrap(),
             payload_hash(&old).unwrap()
         );
+    }
+
+    #[test]
+    fn legacy_system_metadata_keeps_its_signature_without_a_backup() {
+        let old = serde_json::json!({"sequence":8,"paused":false,"running":0,"system":{"os_name":"Linux","os_version":null,"architecture":"x86_64","relay_version":"0.0.1"}});
+        let heartbeat: Heartbeat = serde_json::from_value(old.clone()).unwrap();
+        let system = heartbeat.system.as_ref().unwrap();
+        system.validate().unwrap();
+        assert!(system.secondary_model.is_none());
+        assert_eq!(
+            payload_hash(&heartbeat).unwrap(),
+            payload_hash(&old).unwrap()
+        );
+        let mut invalid = system.clone();
+        invalid.secondary_model = Some("https://unapproved.example/model".into());
+        assert_eq!(invalid.validate(), Err("invalid_secondary_model"));
     }
     use super::*;
 

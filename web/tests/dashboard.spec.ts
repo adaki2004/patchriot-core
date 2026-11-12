@@ -140,7 +140,7 @@ test('setup does not invent a deployment endpoint and the agent directory shows 
   await expect(page.getByRole('alert')).toContainText('not configured');
   await expect(page.locator('pre').filter({ hasText: ' init ' })).toHaveCount(0);
   await page.evaluate(() => { location.hash = '/agents'; });
-  await expect(page.getByText('Not reported', { exact: true })).toBeVisible();
+  await expect(page.getByText('Not reported', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('local-model', { exact: true })).toBeVisible();
   await expect(page.getByText('offline', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -627,4 +627,22 @@ test('workspace shows real runner facts and a qualified NEAR integration', async
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.locator('.workspace-heading').screenshot({path:info.outputPath('workspace-banner.png')});
   await page.screenshot({path:info.outputPath('workspace-runtime.png'),fullPage:true});
+});
+
+for (const [primary, secondary, primaryName, backupName] of [
+  ['deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated', 'deepseek-v4-1-flash-1017-uncensored', 'NEAR AI', 'Venice'],
+  ['deepseek-v4-1-flash-1017-uncensored', 'deepseek-ai/DeepSeek-V4.1-Flash-1017-abliterated', 'Venice', 'NEAR AI'],
+]) test(`agent cards disclose ${primaryName} primary and ${backupName} backup without claiming use`, async ({ page }) => {
+  await setup(page, true);
+  await page.route('**/api/agents', route => route.fulfill({ json: [{ id: 'fixture-route', runtime: 'hermes', runtime_version: 'fixture', declared_model: primary, state: 'online', last_seen_at: null, reports_received: 0, system: { os_name: 'Kali', os_version: '2026', architecture: 'x86_64', relay_version: 'fixture', secondary_model: secondary } }] }));
+  await page.goto('/#/agents');
+  const card = page.locator('.network-agent-row');
+  await expect(card.locator('dt').filter({ hasText: /^Primary$/ }).locator('+ dd')).toHaveText(`${primaryName} · DeepSeek V4.1 Flash`);
+  await expect(card.locator('dt').filter({ hasText: /^Backup$/ }).locator('+ dd')).toHaveText(`${backupName} · DeepSeek V4.1 Flash`);
+  await expect(card).not.toContainText('verified');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // The UI must not turn an invalid or omitted declaration into a working backup.
+  await page.route('**/api/agents', route => route.fulfill({ json: [{ id: 'fixture-route', runtime: 'hermes', declared_model: primary, state: 'online', system: { os_name: 'Kali', os_version: null, architecture: 'x86_64', relay_version: 'fixture', secondary_model: primary } }] }));
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(card.locator('dt').filter({ hasText: /^Backup$/ }).locator('+ dd')).toHaveText('Not reported');
 });
