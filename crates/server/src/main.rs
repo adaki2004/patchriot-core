@@ -162,7 +162,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ga_measurement_id = match std::env::var("PATCHRIOT_GA_MEASUREMENT_ID") {
         _ if !analytics_enabled => None,
         Ok(value) => Some(value),
-        Err(std::env::VarError::NotPresent) => Some("G-Y3HKPCZH4E".into()),
+        Err(std::env::VarError::NotPresent) => {
+            return Err("PATCHRIOT_GA_MEASUREMENT_ID is required when analytics is enabled".into());
+        }
         Err(_) => return Err("invalid PATCHRIOT_GA_MEASUREMENT_ID".into()),
     };
     let analytics_origin = match std::env::var("PATCHRIOT_ANALYTICS_ORIGIN") {

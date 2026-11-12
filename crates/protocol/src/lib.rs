@@ -289,6 +289,32 @@ pub struct DeviceView {
     /// findings or earnings. Older dispatchers/decision replies may omit this.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reports_received: Option<u64>,
+    /// Staff-approved capabilities, separate from the relay's current claims.
+    #[serde(default)]
+    pub approved_capabilities: WorkCapabilities,
+}
+
+/// An operator's declaration is not evidence that its runtime passed testing.
+/// Staff records the capabilities they checked; dispatch also requires the
+/// device's current opt-in. This is manual approval, not remote attestation.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields)]
+pub struct WorkCapabilities {
+    pub website_reviews: bool,
+    pub source_reviews: bool,
+    pub live_tests: bool,
+    pub live_tools: Vec<pentests::LiveToolProfile>,
+}
+
+impl WorkCapabilities {
+    pub fn valid(&self) -> bool {
+        (self.live_tests || self.live_tools.is_empty())
+            && !self
+                .live_tools
+                .iter()
+                .enumerate()
+                .any(|(i, t)| self.live_tools[..i].contains(t))
+    }
 }
 
 /// Only these fields are shared with other admitted accounts. Keep operator
@@ -323,6 +349,8 @@ pub struct PairingDeployment {
 pub struct DeviceDecision {
     pub action: String,
     pub reason: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<WorkCapabilities>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

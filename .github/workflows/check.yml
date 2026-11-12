@@ -1,7 +1,7 @@
 name: Check
 on:
   pull_request:
-    branches: [main]
+    branches: [main, 'feature/**']
     types: [opened, synchronize, reopened, ready_for_review]
 concurrency:
   group: check-${{ github.event.pull_request.number }}

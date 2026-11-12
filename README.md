@@ -140,7 +140,9 @@ npm run build
 cd ..
 ```
 
-Set these through your **private environment**:
+Copy [.env.example](.env.example) to `.env`, set file permissions to `600` and fill its required values. It documents every optional feature separately. Use separate core and dispatcher databases; migrations run automatically. Generate one service secret with `openssl rand -hex 32` and copy it into both private environment files. The binaries do not automatically read `.env`: load each service's file in its own terminal with `set -a; . ./.env; set +a`. Keep new checkout closed until agents are ready, then choose `coupons` for local tests. Coupons avoid crypto payments, but live inference still uses your provider allowance.
+
+The essential settings are:
 
 | Variable | Local value |
 | --- | --- |
@@ -149,7 +151,7 @@ Set these through your **private environment**:
 | `PATCHRIOT_PUBLIC_ORIGIN` | `http://127.0.0.1:7410` |
 | `PATCHRIOT_DISPATCHER_URL` | `http://127.0.0.1:7411` |
 | `PATCHRIOT_CONTACT_EMAIL` | Optional public email; leave unset until configured |
-| `PATCHRIOT_GA_MEASUREMENT_ID` | Public GA4 measurement ID; defaults to `G-Y3HKPCZH4E` when analytics is explicitly enabled |
+| `PATCHRIOT_GA_MEASUREMENT_ID` | Your public GA4 measurement ID; required when analytics is explicitly enabled |
 | `PATCHRIOT_ANALYTICS_ENABLED` | Defaults to `false`; must be `true` to enable the configured signed-in workspace analytics |
 | `PATCHRIOT_ANALYTICS_ORIGIN` | Separate HTTPS hostname for analytics, routed to core; required with the measurement ID |
 | `PATCHRIOT_RELAY_ORIGIN` | Relay-facing URL; locally `http://127.0.0.1:7411` |
@@ -165,7 +167,7 @@ target/debug/patchriot-core bootstrap-admin your_username ../admin-password.txt
 
 Open **http://127.0.0.1:7410** and sign in with that username and the generated password. Keep the password file private, outside Git. **Access & users** lets you approve free-coupon requests, issue individual coupons and disable member sign-in. New customers sign in through a configured provider; no invitation or account approval is required. No email is sent automatically.
 
-Sessions last 12 hours; passwords are stored as Argon2id hashes. Legacy setup links expire after 24 hours and completing setup ends old sessions. **Issue coupon** grants an account-bound seven-day coupon and replaces that account’s unused coupons while leaving already-started reviews intact. This is separate from the thirty-day sponsorship and judge pools. Disabling login ends browser sessions; revoke devices separately in Agent approvals.
+Sessions last 12 hours; each account retains at most five active sessions. A new sign-in removes its oldest session when necessary. Passwords are stored as Argon2id hashes. Legacy setup links expire after 24 hours and completing setup ends old sessions. **Issue coupon** grants an account-bound seven-day coupon and replaces that account’s unused coupons while leaving already-started reviews intact. This is separate from the thirty-day sponsorship and judge pools. Disabling login ends browser sessions; revoke devices separately in Agent approvals.
 
 To keep an existing admin identity, append its UUID to `bootstrap-admin`; it must not already have password credentials. Existing password accounts and previously issued setup links still work. Password sign-in retains its per-username throttle. Public authentication also has per-client/action limits and a 32-request concurrency cap; there is no shared fifteen-minute sign-in allowance that one visitor can exhaust for everyone.
 
@@ -429,7 +431,7 @@ Quote replies include `request_id`, the original consent's retry key, and a sepa
 
 Run `patchriot-core payments-run` alongside the web server before enabling checkout. Every ten seconds it handles due cancellations, checks due 1Click receipts, activates paid work and allocates earnings from completed reviews. Each stage processes at most ten records; invoice checks normally repeat after 60 seconds. Database claims make restart and duplicate delivery safe. It keeps watching expired quotes for seven days; late or mismatched money needs operator review. No chain-wide indexer or block cursor is needed for these quote-specific deposits.
 
-For Linux, [deploy/patchriot-payments.service](deploy/patchriot-payments.service) uses the same installed core binary. Put `DATABASE_URL`, `PATCHRIOT_PUBLIC_ORIGIN`, `PATCHRIOT_DISPATCHER_URL`, `PATCHRIOT_INTERNAL_KEY` and `PATCHRIOT_1CLICK_API_KEY` in root-readable `/etc/patchriot/payments.env`. Never add a wallet private key. Install the unit, run `systemctl daemon-reload`, then `systemctl enable --now patchriot-payments`. Inspect fixed status counts with `journalctl -u patchriot-payments`. Both checkout and this worker need DNS/HTTPS access to `1click.chaindefuser.com`; the core pilot unit’s loopback-only network policy must be adjusted explicitly for paid checkout. Browser requests never trigger reconciliation or confirm their own payment.
+For Linux, [deploy/patchriot-payments.service](deploy/patchriot-payments.service) uses the same installed core binary. Put `DATABASE_URL`, `PATCHRIOT_PUBLIC_ORIGIN`, `PATCHRIOT_DISPATCHER_URL`, `PATCHRIOT_INTERNAL_KEY` and `PATCHRIOT_1CLICK_API_KEY` in root-readable `/etc/patchriot/payments.env`. Never add a wallet private key. Install the unit, run `systemctl daemon-reload`, then `systemctl enable --now patchriot-payments`. Inspect fixed status counts with `journalctl -u patchriot-payments`. Both checkout and this worker need DNS/HTTPS access to `1click.chaindefuser.com`; the core unit permits outbound networking for these configured integrations. If you apply an egress firewall, allow the selected providers and DNS explicitly; systemd IP rules accept addresses, not hostnames. Browser requests never trigger reconciliation or confirm their own payment.
 
 The quote keeps the recipient, refund destination, asset, amount and deadline bound to the saved order. Known provider defaults and timestamp formatting are accepted; other changes are rejected. A provider may keep its deposit address active for up to three additional days; Patchriot still closes payment instructions after its five-minute window and holds late receipts for review. Provider app fees are capped at 100 basis points (1%) and shown as part of the exact transfer amount. Saved payment terms must match later status replies; missing tracing IDs and empty optional metadata do not change those terms. The provider can update its origin-chain refund fee; that field is validated separately and never determines the credited service amount. All other quote fields stay exact. `GET /api/payments` exposes the signed-in account’s recorded receipt totals. Checkout and reconciliation never hold a treasury signing key.
 

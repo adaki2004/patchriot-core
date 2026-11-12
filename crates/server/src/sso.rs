@@ -350,7 +350,7 @@ async fn login_identity(
     .await?;
     let account = if let Some(account) = existing {
         let disabled: bool =
-            sqlx::query_scalar("SELECT disabled FROM accounts WHERE id=$1 FOR SHARE")
+            sqlx::query_scalar("SELECT disabled FROM accounts WHERE id=$1 FOR UPDATE")
                 .bind(account)
                 .fetch_one(&mut *tx)
                 .await?;

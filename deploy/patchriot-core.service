@@ -36,10 +36,10 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 MemoryMax=512M
 CPUQuota=200%
 TasksMax=128
-# This pilot talks only to a local database and dispatcher. Public access goes
-# through an authenticated tunnel or a separately configured HTTPS proxy.
-IPAddressDeny=any
-IPAddressAllow=localhost
+# Core needs DNS and outbound HTTPS for configured sign-in/payment providers.
+# Restrict these destinations at your egress firewall/proxy if required. systemd
+# IPAddressAllow accepts IPs/CIDRs, not provider hostnames with changing addresses.
+# The application listener stays loopback unless CORE_BIND explicitly changes it.
 
 [Install]
 WantedBy=multi-user.target

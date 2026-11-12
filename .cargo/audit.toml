@@ -1,0 +1,9 @@
+[advisories]
+# Reviewed 2026-11-12; scripts/check-audit-scope.py gates these exceptions in CI.
+# SQLx's optional SQLite is locked but not compiled on any target in this build.
+# RSA 0.9.10 is used through OpenID Connect to verify Google's public signatures.
+# The Marvin advisory concerns private-key operations. Production never holds
+# an RSA private key; owned test fixtures generate their own keys offline.
+# Neither dependency is patched here. Remove/re-review these exceptions when
+# upstream dependencies or the guarded authentication/compiled paths change.
+ignore = ["RUSTSEC-2026-0459", "RUSTSEC-2023-0071"]

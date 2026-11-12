@@ -1698,6 +1698,7 @@ async fn bounded_fleet_and_review_lists_fit_the_gateway_even_with_escaped_labels
             compute_group: intro.compute_group.clone(),
             approval: "approved".into(),
             private_work_approved: true,
+            approved_capabilities: Default::default(),
             website_reviews: true,
             live_tests: false,
             state: "online".into(),
@@ -2159,4 +2160,76 @@ async fn private_report_budget_stays_held_until_delivery_or_disconnect() {
     drop(fourth);
     test.finish().await;
     server.abort();
+}
+
+#[tokio::test]
+async fn concurrent_logins_keep_five_sessions_and_preserve_other_accounts() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let (old_cookie, session) = test.login("member").await;
+    let account: Uuid = session["account"]["id"].as_str().unwrap().parse().unwrap();
+    let (other_cookie, _) = test.login("member").await;
+    for _ in 0..3 {
+        let code = invite_account(&test.pool, account).await.unwrap();
+        assert_eq!(
+            test.request(
+                "POST",
+                "/api/auth/redeem",
+                json!({"code":code}),
+                &[("origin", ORIGIN)]
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+    }
+    let a = invite_account(&test.pool, account).await.unwrap();
+    let b = invite_account(&test.pool, account).await.unwrap();
+    let (a, b) = tokio::join!(
+        test.request(
+            "POST",
+            "/api/auth/redeem",
+            json!({"code":a}),
+            &[("origin", ORIGIN)]
+        ),
+        test.request(
+            "POST",
+            "/api/auth/redeem",
+            json!({"code":b}),
+            &[("origin", ORIGIN)]
+        )
+    );
+    assert_eq!(a.0, StatusCode::OK);
+    assert_eq!(b.0, StatusCode::OK);
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM sessions WHERE account_id=$1")
+        .bind(account)
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 5);
+    let oldest = test
+        .request(
+            "GET",
+            "/api/session",
+            Value::Null,
+            &[("cookie", &old_cookie)],
+        )
+        .await;
+    assert!(oldest.2["account"].is_null());
+    let other = test
+        .request(
+            "GET",
+            "/api/session",
+            Value::Null,
+            &[("cookie", &other_cookie)],
+        )
+        .await;
+    assert!(!other.2["account"].is_null());
+    disable_account(&test.pool, account).await.unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT count(*) FROM sessions WHERE account_id=$1")
+        .bind(account)
+        .fetch_one(&test.pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+    test.finish().await;
 }
