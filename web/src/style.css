@@ -226,6 +226,7 @@ nav > button, .nav-note { flex-shrink: 0; white-space: nowrap; }
 .network-agent-facts > div { min-width: 0; }
 .network-agent-facts dt { font-size: 11px; margin-bottom: 7px; }
 .network-agent-facts dd { line-height: 1.5; }
+.network-agent-facts dt.agent-backup-label { margin-top: 12px; }
 .network-agent-panel .network-agent-details { margin: 0; border: 0; padding: 0; background: none; }
 .network-agent-details > summary { cursor: pointer; width: fit-content; color: var(--ink); font-size: 12px; padding: 8px 0; }
 .network-agent-details > summary:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }

@@ -2,6 +2,7 @@ import { UIIcon } from './UIIcon';
 import { useState } from 'react';
 import { useLive } from './useLive';
 import type { AgentSystem } from './api';
+import { modelLabel, permitsSecondary } from './inference';
 
 type PairingInfo = { relay_origin: string; audience: string };
 type Agent = { id: string; reported_os: string | null; system?: AgentSystem | null; runtime: string; runtime_version: string; declared_model: string | null; state: string; last_seen_at: number | null; live_tests?: boolean; live_tools?: string[]; reports_received?: number };
@@ -94,6 +95,10 @@ export function Guide({ onPair }: { onPair: () => void }) {
 
 export function AgentList({ compact = false, onAll }: { compact?: boolean; onAll?: () => void }) {
   const agents = useLive<Agent[]>('/agents');
+  const backup = (agent: Agent) => {
+    const model = agent.system?.secondary_model;
+    return model && agent.declared_model && permitsSecondary(agent.declared_model, model) ? model : null;
+  };
   return <section className={compact ? 'agent-panel compact-agents' : 'panel agent-panel network-agent-panel'} aria-labelledby="agents-title">
     <div className={compact ? 'block-heading' : 'panel-heading'}><div>{!compact && <p className="eyebrow">NETWORK</p>}<h2 id="agents-title">{compact ? 'Network agents' : 'Connected to Patchriot'}</h2></div>{compact ? <button className="text-button" onClick={onAll}>View all →</button> : <button className="quiet" onClick={agents.refresh}>Refresh</button>}</div>
     {!compact && <p>Approved agents across the network. Software and model details are self-reported.</p>}
@@ -102,12 +107,12 @@ export function AgentList({ compact = false, onAll }: { compact?: boolean; onAll
     {agents.data?.length === 0 && <p>No approved agents to show yet.</p>}
     <div className="agent-directory">{(compact ? agents.data?.slice(0, 3) : agents.data)?.map(agent => !compact ? <article key={agent.id} className="agent-entry network-agent-row">
       <div className="network-agent-heading"><span className="network-agent-mark"><UIIcon name="agent" /></span><div><strong>{agent.runtime === 'hermes' ? 'Hermes' : 'Built-in example'}</strong><small>Device {agent.id.slice(0, 8)}</small></div><span className="pill">{agent.state.replaceAll('_', ' ')}</span></div>
-      <dl className="network-agent-facts"><div><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd></div><div><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd></div><div><dt>Reports received</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd></div><div><dt>Last heartbeat</dt><dd>{agent.last_seen_at ? <time dateTime={new Date(agent.last_seen_at * 1000).toISOString()}>{new Date(agent.last_seen_at * 1000).toLocaleString()}</time> : 'None yet'}</dd></div></dl>
+      <dl className="network-agent-facts"><div><dt>Primary</dt><dd title={agent.declared_model ?? undefined}>{modelLabel(agent.declared_model)}</dd><dt className="agent-backup-label">Backup</dt><dd title={backup(agent) ?? undefined}>{modelLabel(backup(agent))}</dd></div><div><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd></div><div><dt>Reports received</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd></div><div><dt>Last heartbeat</dt><dd>{agent.last_seen_at ? <time dateTime={new Date(agent.last_seen_at * 1000).toISOString()}>{new Date(agent.last_seen_at * 1000).toLocaleString()}</time> : 'None yet'}</dd></div></dl>
       <details className="network-agent-details"><summary>Capabilities & versions</summary><dl><dt>Website tests</dt><dd>{agent.live_tests ? (agent.live_tools?.some(tool => ['artex_engine_v1', 'scoped_discovery_v1'].includes(tool)) ? 'Agentic security checks + standard checks' : 'Standard checks') : 'Not enabled'}</dd>{agent.live_tests && <><dt>Supported roles</dt><dd>Investigation, reproduction and evidence review. Assigned per assessment.</dd></>}<dt>Runner version</dt><dd>{agent.runtime_version || 'Not reported'}</dd>{agent.system && <><dt>Architecture</dt><dd>{agent.system.architecture}</dd><dt title="Package version; the runner version above identifies the installed agent runtime.">Relay package</dt><dd>{agent.system.relay_version}</dd></>}</dl></details>
     </article> : <article key={agent.id} className="agent-entry">
       <div><strong>{agent.runtime === 'hermes' ? 'Hermes' : 'Built-in example'} <span className="subtle">{agent.id.slice(0, 8)}</span></strong><span className="pill">{agent.state.replaceAll('_', ' ')}</span></div>
-      <dl><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd><dt>Model</dt><dd>{agent.declared_model ?? 'No model'}</dd><dt>Runtime</dt><dd>{agent.runtime_version || 'Not reported'}</dd><dt>Heartbeat</dt><dd>{agent.last_seen_at ? <time dateTime={new Date(agent.last_seen_at * 1000).toISOString()}>{new Date(agent.last_seen_at * 1000).toLocaleTimeString()}</time> : 'None yet'}</dd><dt>Reports</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd></dl>
+      <dl><dt>System</dt><dd>{agent.system ? [agent.system.os_name, agent.system.os_version].filter(Boolean).join(' ') : agent.reported_os ?? 'Not reported'}</dd><dt>Primary</dt><dd title={agent.declared_model ?? undefined}>{modelLabel(agent.declared_model)}</dd><dt>Backup</dt><dd title={backup(agent) ?? undefined}>{modelLabel(backup(agent))}</dd><dt>Runtime</dt><dd>{agent.runtime_version || 'Not reported'}</dd><dt>Heartbeat</dt><dd>{agent.last_seen_at ? <time dateTime={new Date(agent.last_seen_at * 1000).toISOString()}>{new Date(agent.last_seen_at * 1000).toLocaleTimeString()}</time> : 'None yet'}</dd><dt>Reports</dt><dd>{agent.reports_received == null ? '—' : agent.reports_received.toLocaleString()}</dd></dl>
     </article>)}</div>
-    <p className="fine">{compact ? 'Network-wide presence. Online does not mean available or independently verified.' : 'A heartbeat shows presence, not verified skill. Counts include incomplete role reports, not just confirmed findings. Customer work and machine addresses are private.'}</p>
+    <p className="fine">{compact ? 'Network-wide presence. Online does not mean available or independently verified.' : 'A heartbeat shows presence, not verified skill. Counts include incomplete role reports, not just confirmed findings. Backup configuration is self-reported; each audit requires permission to use it and records actual use. Customer work and machine addresses are private.'}</p>
   </section>;
 }

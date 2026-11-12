@@ -7,7 +7,7 @@ export type Account = {
 
 export type Session = { account: Account | null; csrf_token: string | null };
 export type Fleet = { online_devices: number; online_operators: number; online_compute_groups: number };
-export type AgentSystem = { os_name: string; os_version: string | null; architecture: string; relay_version: string };
+export type AgentSystem = { os_name: string; os_version: string | null; architecture: string; relay_version: string; secondary_model?: string | null };
 export type Device = {
   id: string;
   operator_id: string;

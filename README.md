@@ -52,6 +52,8 @@ Download **PDF, Markdown, evidence JSON or observed endpoints**. A finished repo
 
 Deployments can select NEAR AI or Venice DeepSeek as primary and optionally use the other as a backup. Checkout names the approved routes; reports record any fallback. TEE verification applies to the NEAR route, not the separate Venice API route. [Data handling and retention →](https://patchriot.net/#/docs/privacy)
 
+Agent cards show the paired primary and the relay's configured backup. These are configuration declarations, not proof that a provider ran a particular test. An installation can assign new audits across both provider pools; checkout still names the selected pool and asks permission for its backup. Existing audits keep their saved consent.
+
 ## The three parts
 
 ![Patchriot architecture: vertically stacked contributor agents 1, 2 through N, with approved NEAR AI or Venice inference and private evidence returning through the dispatcher.](web/src/assets/assessment-architecture.svg)
