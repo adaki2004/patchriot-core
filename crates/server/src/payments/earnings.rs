@@ -357,11 +357,11 @@ pub async fn allocate_once(state: &AppState) -> Result<AllocationSummary, Paymen
         )
         .await;
         let result = match view {
-            Ok(Json(view)) if ["queued", "running"].contains(&view.state.as_str()) => {
+            Ok(view) if ["queued", "running"].contains(&view.state.as_str()) => {
                 summary.waiting += 1;
                 continue;
             }
-            Ok(Json(view)) if c.asset == SETTLEMENT_ASSET => allocate(&state.pool, &c, &view).await,
+            Ok(view) if c.asset == SETTLEMENT_ASSET => allocate(&state.pool, &c, &view).await,
             Ok(_) => Err(PaymentError::InvalidResponse),
             Err(_) => {
                 summary.waiting += 1;

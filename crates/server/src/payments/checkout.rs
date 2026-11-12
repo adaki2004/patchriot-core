@@ -267,7 +267,7 @@ async fn prepare_claimed(
     order: &Order,
     token: Uuid,
 ) -> Result<CheckoutQuote, CheckoutError> {
-    let Json(review): Json<ReviewView> = gateway::request_review_for_account(
+    let review = gateway::request_review_for_account(
         state,
         reqwest::Method::POST,
         &format!(

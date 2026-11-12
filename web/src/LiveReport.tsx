@@ -22,16 +22,16 @@ export function fallbackDescription(receipt: FallbackReceipt) {
   const near = receipt.model === nearModel;
   return `${near ? 'NEAR AI' : 'Venice'} fallback: ${receipt.model}. ${receipt.fallback_completed} completed replies from ${receipt.fallback_attempts} attempts; ${receipt.primary_attempts} ${near ? 'Venice' : 'NEAR'} attempts. Trigger: ${receipt.reason.replaceAll('_', ' ')}. ${near ? 'Completed NEAR replies passed the relay’s attestation and signature checks; earlier Venice attempts were a separate API route.' : 'Venice replies use its API route; relay-verified TEE protection applies to NEAR replies.'} Recovery attempts share one logical call; both providers count toward the cost limit.`;
 }
-export type WorkflowCheckId = 'public_baseline' | 'public_mapping' | 'public_signatures' | 'public_fingerprints' | 'public_analysis' | 'authentication' | 'authenticated_checks' | 'evidence_review';
+export type WorkflowCheckId = 'public_baseline' | 'public_mapping' | 'public_signatures' | 'public_fingerprints' | 'public_analysis' | 'public_deep' | 'authentication' | 'authenticated_checks' | 'evidence_review';
 export type WorkflowCheckState = 'pending' | 'running' | 'recorded' | 'incomplete' | 'reused' | 'not_applicable';
-export type LiveWorkflow = { version: 1; checks: { id: WorkflowCheckId; state: WorkflowCheckState; evidence_count: number; source_role?: LiveRole }[] };
+export type LiveWorkflow = { version: 1 | 2; checks: { id: WorkflowCheckId; state: WorkflowCheckState; evidence_count: number; source_role?: LiveRole }[] };
 export type LiveResult = { workflow?: LiveWorkflow; browser_access?: BrowserAccessProof; account_access?: { account: AccountSlot; proof: BrowserAccessProof }[]; kind: 'pentest_agent_v1'; scope_sha256: string; execution: { state: string; provider: string; model: string; image_digest?: string; duration_ms: number; inference_calls: number; http_requests: number; cost_upper_microusd: number; inference_usage?: InferenceUsageObservation[]; cleanup_confirmed: boolean; failure_reason?: string; fallback?: FallbackReceipt }; assessment: { summary: string; findings: LiveFinding[]; limitations: string[] } | null; evidence: HttpRecord[]; tool_runs?: LiveToolRun[]; raw_summary: string };
 export function browserAccessDescription(result: LiveResult | null) {
   const describe = (proof: BrowserAccessProof, label = 'Signed-in access') => `${label} verified: ${proof.check.kind === 'account_identity' ? 'the account response matched the supplied identity and differed from the anonymous response' : 'the protected resource was accessible with the account and refused anonymously'}. Evidence #${proof.authenticated_id} and #${proof.anonymous_id}. This establishes access to that resource, not coverage of every private page.`;
   if (result?.account_access?.length) return result.account_access.map(({ account, proof }) => describe(proof, `${accountLabel(account)} signed-in access`)).join('\n\n');
   return result?.browser_access ? describe(result.browser_access) : 'Signed-in access was not verified. Public checks and saved findings may still be useful; authenticated coverage remains a gap.';
 }
-export type LiveActivity = { received_at: number; progress: { workflow?: LiveWorkflow; phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; http_requests: number; inference_calls: number; completed_tools: number; model_request?: { purpose: 'discovery' | 'investigation' | 'summary'; elapsed_seconds: number } } };
+export type LiveActivity = { received_at: number; progress: { workflow?: LiveWorkflow; phase: 'starting' | 'scoped_tools' | 'investigating' | 'finishing'; browser_exploration?: 'running' | 'returned'; http_requests: number; inference_calls: number; completed_tools: number; model_request?: { purpose: 'discovery' | 'investigation' | 'summary'; elapsed_seconds: number } } };
 export type LiveStep = { role: LiveRole; state: string; result: LiveResult | null; evidence_complete?: boolean | null; progress?: LiveActivity | null };
 export type LiveTiming = { role_limit_seconds: number; started_at: number | null; active_role_deadline_at: number | null; requests_ahead: number };
 const roleDuty = { investigator: 'Map the application and investigate leads.', reproducer: 'Repeat probes and challenge the initial claims.', challenger: 'Check the evidence, impact and recommended fixes.' };
@@ -94,7 +94,7 @@ export function reportMarkdown(id: string, steps: LiveStep[], origins: string[],
     lines.push(`## ${liveRoles[s.role]}`, outcome.label, outcome.detail);
     if (policy.browser_login || s.result?.browser_access || s.result?.account_access?.length) lines.push('### Sign-in verification', browserAccessDescription(s.result));
     const workflow = s.result ? s.result.workflow : s.progress?.progress.workflow;
-    lines.push('### Structured checklist', workflow?.version === 1 ? workflowCaveat : workflowAbsent);
+    lines.push('### Structured checklist', (workflow?.version ?? 0) >= 1 ? workflowCaveat : workflowAbsent);
     for (const line of workflowRecordLines(workflow)) lines.push(`- ${line}`);
     if (!s.result) { lines.push('No report received.'); continue; }
     const r = s.result;
@@ -139,12 +139,12 @@ export function PdfReportDownload({ report, loadReport, disabled }: { report: Re
       const latest = await loadReport();
       const bytes = await createReportPdf(latest);
       const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes).buffer], { type: 'application/pdf' }));
-      const a = document.createElement('a'); a.href = url; a.download = `patchriot-${report.id}-report.pdf`; a.click();
+      const a = document.createElement('a'); a.href = url; a.download = `patchriot-${report.id}-audit.pdf`; a.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (e) { setError(e instanceof Error ? e.message : 'The PDF could not be prepared. Retry before the report expires.'); }
     finally { setBusy(false); }
   }
-  return <><div className="report-download-main"><button className="primary" disabled={busy || disabled} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download vulnerability report ↓'}</button><p>Summary, findings, evidence & recommended fixes.</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
+  return <><div className="report-download-main"><button className="primary" disabled={busy || disabled} onClick={() => void download()}>{busy ? 'Preparing PDF…' : 'Download Audit'}</button><p>Exposure map, findings, coverage & recommended fixes.</p></div>{error && <p className="notice error" role="alert">{error}</p>}</>;
 }
 
 export function LiveReportDownloads({ id, steps, loadReport, disabled }: { id: string; steps: LiveStep[]; loadReport: () => Promise<ReportInput>; disabled: boolean }) {

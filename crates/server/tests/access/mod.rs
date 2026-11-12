@@ -200,20 +200,9 @@ async fn approved_member_sets_password_then_logs_in_without_another_invite() {
     assert_eq!(admin_session["account"]["id"], owner.to_string());
     assert_eq!(admin_session["account"]["auth_method"], "password");
     let admin = write_headers(&admin_cookie, &admin_session);
-    let request = json!({"display_name":"First judge","email":"Judge@Example.com","note":"I would like to review my own project."});
-    for _ in 0..2 {
-        assert_eq!(
-            test.request(
-                "POST",
-                "/api/access-requests",
-                request.clone(),
-                &[("origin", ORIGIN)]
-            )
-            .await
-            .0,
-            StatusCode::ACCEPTED
-        );
-    }
+    // A pending request made before open onboarding remains administrable.
+    sqlx::query("INSERT INTO access_requests(id,display_name,email,note) VALUES($1,'First judge','judge@example.com','Legacy request')")
+        .bind(Uuid::new_v4()).execute(&test.pool).await.unwrap();
     assert_eq!(
         test.request("GET", "/api/admin/access", Value::Null, &[])
             .await
@@ -401,7 +390,8 @@ async fn lost_approval_reply_is_recoverable_without_creating_another_account_or_
     let test = TestApp::new("http://127.0.0.1:1").await;
     let (cookie, view) = test.login("admin").await;
     let headers = write_headers(&cookie, &view);
-    test.request("POST", "/api/access-requests", json!({"display_name":"Second judge","email":"second@example.com","note":"Check an owned website."}), &[("origin", ORIGIN)]).await;
+    sqlx::query("INSERT INTO access_requests(id,display_name,email,note) VALUES($1,'Second judge','second@example.com','Legacy request')")
+        .bind(Uuid::new_v4()).execute(&test.pool).await.unwrap();
     let desk = test
         .request("GET", "/api/admin/access", Value::Null, &headers)
         .await
@@ -604,7 +594,7 @@ async fn access_writes_require_admin_csrf_and_origin_and_cannot_disable_an_admin
 }
 
 #[tokio::test]
-async fn public_access_limits_ignore_forged_forwarding_headers_and_never_create_accounts() {
+async fn retired_invitation_requests_never_create_accounts_or_requests() {
     let test = TestApp::new("http://127.0.0.1:1").await;
     let input =
         json!({"display_name":"Applicant","email":"one@example.com","note":"Check owned code."});
@@ -629,14 +619,7 @@ async fn public_access_limits_ignore_forged_forwarding_headers_and_never_create_
                 &[("origin", ORIGIN), ("x-forwarded-for", &ip)],
             )
             .await;
-        assert_eq!(
-            result.0,
-            if i < 5 {
-                StatusCode::ACCEPTED
-            } else {
-                StatusCode::TOO_MANY_REQUESTS
-            }
-        );
+        assert_eq!(result.0, StatusCode::GONE);
     }
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM accounts")
         .fetch_one(&test.pool)
@@ -743,5 +726,52 @@ async fn invalid_passwords_and_taken_usernames_do_not_consume_an_activation() {
             .2["error"],
         "invalid_or_expired_invite"
     );
+    test.finish().await;
+}
+
+#[tokio::test]
+async fn trusted_ingress_client_buckets_are_separate_and_global_lockout_is_retired() {
+    let test = TestApp::new("http://127.0.0.1:1").await;
+    let cfg = Config::new(
+        ORIGIN.into(),
+        "http://127.0.0.1:1".into(),
+        "k".repeat(32),
+        None,
+    )
+    .unwrap()
+    .with_client_ip_source("trusted_x_real_ip")
+    .unwrap();
+    let app = router(AppState::new(test.pool.clone(), cfg).unwrap());
+    for (key, n) in [("login:198.51.100.1", 60), ("public-auth", 180)] {
+        sqlx::query("INSERT INTO auth_attempts(key,started_at,attempts) VALUES($1,now(),$2)")
+            .bind(hex::encode(Sha256::digest(key.as_bytes())))
+            .bind(n)
+            .execute(&test.pool)
+            .await
+            .unwrap();
+    }
+    for (ip, expected) in [
+        ("198.51.100.1", 429),
+        ("198.51.100.2", 401),
+        ("198.51.100.2, 198.51.100.3", 400),
+    ] {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/auth/login")
+                    .header("origin", ORIGIN)
+                    .header("x-real-ip", ip)
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({"username":"unknown_account","password":"incorrect"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status().as_u16(), expected);
+    }
     test.finish().await;
 }

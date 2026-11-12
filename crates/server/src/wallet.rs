@@ -94,7 +94,7 @@ pub(crate) async fn challenge(
     enabled(&state.config)?;
     auth::origin(&headers, &state.config)?;
     signed_out(&state, &headers).await?;
-    access::public_rate(&state, peer, "wallet-start", 30, 900).await?;
+    access::public_rate(&state, &headers, peer, "wallet-start", 30, 900).await?;
     let address = address(&input.network, &input.address)?;
     let nonce = auth::token()?;
     let browser = auth::token()?;
@@ -193,7 +193,7 @@ pub(crate) async fn verify(
     enabled(&state.config)?;
     auth::origin(&headers, &state.config)?;
     signed_out(&state, &headers).await?;
-    access::public_rate(&state, peer, "wallet-verify", 60, 900).await?;
+    access::public_rate(&state, &headers, peer, "wallet-verify", 60, 900).await?;
     if input.nonce.len() != 64
         || !input.nonce.bytes().all(|b| b.is_ascii_hexdigit())
         || input.signature.len() > 132

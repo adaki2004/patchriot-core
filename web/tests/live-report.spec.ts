@@ -88,13 +88,13 @@ async function setup(page: import('@playwright/test').Page, failed = false, stop
 
 for (const mode of ['verified', 'gap'] as const) test(`browser access ${mode} is explicit in the report and exports`, async ({page}) => {
   await setup(page, false, false, true, mode);
-  await page.getByRole('button', {name:'Agent reports', exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   // A gap remains visible even when a model returned a plausible report.
   const expected = mode === 'verified' ? 'Signed-in access verified:' : 'Signed-in access was not verified.';
   await expect(page.getByText(expected, {exact:false}).first()).toBeVisible();
   if (mode === 'verified') await expect(page.getByText('Evidence #1 and #2.', {exact:false}).first()).toBeVisible();
   const download = page.waitForEvent('download');
-  await page.getByRole('button', {name:'Download vulnerability report'}).click();
+  await page.getByRole('button', {name:'Download Audit'}).click();
   const pdf = await PDFDocument.load(await readFile((await (await download).path())!));
   expect(pdf.getPageCount()).toBeGreaterThan(1);
   await page.getByText('Other downloads & test details', {exact:true}).click();
@@ -130,17 +130,17 @@ test('paired account proofs and evidence remain labelled in the report and expor
   await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
   await mockExport(page,review);
   await page.reload();
-  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   await expect(page.getByText('Account 1 (testing) signed-in access verified:',{exact:false})).toBeVisible();
   await expect(page.getByText('Account 2 (reference) signed-in access verified:',{exact:false})).toBeVisible();
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Request evidence (4)',{exact:true}).click();
   await expect(page.locator('.request-evidence').filter({hasText:'HTTP #1'})).toContainText('Account 1 (testing)');
   await expect(page.locator('.request-evidence').filter({hasText:'HTTP #3'})).toContainText('Account 2 (reference)');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.locator('.live-assessment').screenshot({path:info.outputPath('paired-evidence.png')});
   const pdfDownload=page.waitForEvent('download');
-  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  await page.getByRole('button',{name:'Download Audit'}).click();
   const pdf=await pdfDownload;
   await pdf.saveAs(info.outputPath('paired-evidence.pdf'));
   expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(1);
@@ -163,69 +163,14 @@ async function mockExport(page: import('@playwright/test').Page, review: unknown
   });
 }
 
-test('NEAR report advice needs consent, renders inert text and exports through retention', async ({ page }) => {
-  await page.clock.install();
-  let state = 'not_requested', writes = 0, exports = 0, reads = 0;
-  const advice = { duplicate_groups: [['investigator-1', 'reproducer-1']], review_ids: ['challenger-1'], explanation: '<img src=x onerror="window.checkExecuted=true"> Compare the evidence.' };
-  const result = { advisory_only: true, advice, omitted_findings: 0, receipt: { kind: 'provider_tee', request_sha256: 'a'.repeat(64), response_sha256: 'b'.repeat(64), signer: 'fixture' } };
-  await page.route(`**/api/reviews/${id}/consistency-check`, async route => {
-    if (route.request().method() === 'POST') {
-      expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');
-      expect(route.request().postDataJSON()).toEqual({ accepts_near_ai: true });
-      writes++; state = 'queued';
-    } else reads++;
-    await route.fulfill({ json: { state, can_request: state === 'not_requested', model: 'fixture-model', result: state === 'verified' ? result : null } });
-  });
-  page.on('request', r => { if (r.url().endsWith('/report')) exports++; });
+test('reports do not request or offer a separate model summary check', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', request => { if (request.url().includes('/consistency-check')) requests.push(request.method()); });
   await setup(page, false, false, true);
-  const check = page.getByLabel('NEAR AI report check');
-  await check.locator('summary').first().click();
-  await expect(check.getByRole('button', { name: 'Check this report' })).toBeDisabled();
-  expect(writes).toBe(0); expect(exports).toBe(0);
-  await check.getByRole('checkbox').check();
-  await check.getByRole('button', { name: 'Check this report' }).click();
-  await expect(check.getByText('Waiting for the report checker.')).toBeVisible();
-  state = 'verified'; await page.clock.fastForward(5000);
-  await expect(check.getByText('1 possible overlap', { exact: true })).toBeVisible();
-  await expect(check.getByText('Scout #1 · Recon #1')).not.toBeVisible();
-  await check.getByText('What was compared?', { exact: true }).click();
-  await expect(check.getByText('Scout #1 · Recon #1')).toBeVisible();
-  await expect(check.locator('img, script')).toHaveCount(0);
-  expect(await page.evaluate(() => 'checkExecuted' in window)).toBe(false);
-  const previous = reads; await page.clock.fastForward(60_000); expect(reads).toBe(previous);
-  const download = page.waitForEvent('download');
-  await check.getByText('Verification receipt', { exact: true }).click();
-  await check.getByRole('button', { name: 'Download check & signature ↓' }).click();
-  const file = await download;
-  expect(JSON.parse(await readFile((await file.path())!, 'utf8'))).toEqual(result);
-  expect(exports).toBe(1); expect(writes).toBe(1);
-  await expect(page.getByText('Save a copy before', { exact: false })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-});
-
-test('an unavailable checker keeps the original findings and never shows a proof badge', async ({ page }) => {
-  let writes = 0;
-  await page.route(`**/api/reviews/${id}/consistency-check`, route => {
-    if (route.request().method() === 'POST') writes++;
-    return route.fulfill({ json: { state: 'unavailable', can_request: false, model: 'fixture-model', error_code: 'response_signature_unavailable' } });
-  });
-  await setup(page, false, false, true);
-  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').first().click();
-  await expect(check.getByText(/could not be completed and verified/)).toBeVisible();
-  await expect(check.getByRole('button')).toHaveCount(0);
-  await expect(page.locator('.report-check-summary')).toHaveCount(0);
-  await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible(); expect(writes).toBe(0);
-});
-
-test('expired receipt download cannot save stale model advice', async ({ page }) => {
-  await page.route(`**/api/reviews/${id}/consistency-check`, route => route.fulfill({ json: { state: 'verified', can_request: false, model: 'fixture-model', result: { advisory_only: true, advice: { duplicate_groups: [], review_ids: [], explanation: 'Fixture.' }, omitted_findings: 0, receipt: { kind: 'provider_tee' } } } }));
-  await setup(page, false, false, true);
-  await page.route(`**/api/reviews/${id}/report`, route => route.fulfill({ status: 410, json: { error: 'report_content_deleted' } }));
-  let downloads = 0; page.on('download', () => downloads++);
-  const check = page.getByLabel('NEAR AI report check'); await check.locator('summary').first().click();
-  await check.getByText('Verification receipt', { exact: true }).click();
-  await check.getByRole('button', { name: 'Download check & signature ↓' }).click();
-  await expect(check.getByRole('alert')).toBeVisible(); expect(downloads).toBe(0);
+  await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('NEAR AI report check')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Check this report' })).toHaveCount(0);
+  expect(requests).toEqual([]);
 });
 
 test('a compact report preserves the author, uncertainty and request references', async ({ page }) => {
@@ -253,12 +198,12 @@ test('a compact report preserves the author, uncertainty and request references'
 test('PDF, original report and endpoint downloads keep their distinct purposes', async ({ page }, info) => {
   await setup(page, false, false, true);
   const pdfDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download vulnerability report' }).click();
+  await page.getByRole('button', { name: 'Download Audit' }).click();
   const pdfFile = await pdfDownload;
-  expect(pdfFile.suggestedFilename()).toBe(`patchriot-${id}-report.pdf`);
+  expect(pdfFile.suggestedFilename()).toBe(`patchriot-${id}-audit.pdf`);
   await pdfFile.saveAs(info.outputPath('workflow-legacy.pdf'));
   const pdf = await PDFDocument.load(await readFile((await pdfFile.path())!));
-  expect(pdf.getTitle()).toBe('Patchriot vulnerability report');
+  expect(pdf.getTitle()).toBe('Patchriot audit');
   expect(pdf.getPageCount()).toBeGreaterThanOrEqual(8);
   expect(pdf.catalog.get(PDFName.of('OpenAction'))).toBeUndefined();
   await page.getByText('Other downloads & test details', { exact: true }).click();
@@ -302,7 +247,7 @@ test('large evidence stays intact while the report and PDF stay concise', async 
   await expect(page.getByText('Debug metadata exposed', { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const pdfDownload = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download vulnerability report' }).click();
+  await page.getByRole('button', { name: 'Download Audit' }).click();
   const pdfBytes = await readFile((await (await pdfDownload).path())!);
   expect(pdfBytes.length).toBeLessThan(1024 * 1024);
   expect((await PDFDocument.load(pdfBytes)).getPageCount()).toBeGreaterThan(5);
@@ -335,7 +280,7 @@ test('viewing unfinished work does not start a download or deletion clock', asyn
   let exports = 0;
   page.on('request', r => { if (r.url().endsWith('/report')) exports++; });
   await setup(page);
-  await expect(page.getByRole('button', { name: 'Download vulnerability report' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Download Audit' })).toBeDisabled();
   await expect(page.getByText(/Downloads become available when the test ends/)).toBeVisible();
   await page.getByText('Other downloads & test details', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Download readable report' })).toBeDisabled();
@@ -393,7 +338,7 @@ test('a refused export never saves stale evidence from an open page', async ({ p
 test('raw tool output is hidden until requested and never interpreted as HTML', async ({ page }) => {
   await setup(page);
   await expect(page.getByText('<script>window.toolExecuted=true</script>', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Technical evidence', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Tools run (1)', { exact: true }).click();
   await expect(page.getByText('nuclei · 3.11.1', { exact: true })).toBeVisible();
   await expect(page.getByText('<script>window.toolExecuted=true</script>', { exact: true })).not.toBeVisible();
@@ -407,8 +352,8 @@ test('raw tool output is hidden until requested and never interpreted as HTML', 
 test('a missing assessment is explained as unfinished work, not zero vulnerabilities', async ({ page }) => {
   await setup(page, true);
   await expect(page.getByText('No agent has returned a usable assessment.', { exact: false })).toBeVisible();
-  await expect(page.locator('.report-counts div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
-  await page.getByRole('button', { name: 'Agent reports', exact: true }).click();
+  await expect(page.locator('.report-counts div').filter({ hasText: 'Findings' }).locator('dd')).toHaveText('—');
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   await expect(page.getByText('No assessment', { exact: true })).toBeVisible();
   await expect(page.locator('.report-agent').first().locator('dl div').filter({ hasText: 'Observations' }).locator('dd')).toHaveText('—');
   await expect(page.getByText(/The agent reached its allowed AI usage budget/)).toBeVisible();
@@ -432,11 +377,11 @@ test('requested discovery without a receipt is unconfirmed and summary waits sta
   await page.reload();
   await page.getByText('Latest activity', {exact:true}).click();
   await expect(page.getByText('Summarizing the investigation · 95s', {exact:true})).toBeVisible();
-  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   await expect(page.getByText('Agentic security checks was requested, but Scout returned no engine completion record.', {exact:false})).toBeVisible();
   recovered = true;
   await page.reload();
-  await page.getByRole('button', {name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   await expect(page.getByText('Agentic security checks was requested, but Scout returned no engine completion record.', {exact:false})).toHaveCount(0);
   await expect(page.getByRole('row').filter({hasText:'Agentic security checks'})).toContainText('Recon');
 });
@@ -573,7 +518,7 @@ test('the grouped report and downloaded Markdown retain all contributions withou
   await page.route(`**/api/reviews/${id}`, r => r.fulfill({ json: review }));
   await mockExport(page, review);
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Findings (2)', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Findings (2)', exact: true })).toBeVisible();
   await expect(page.getByText(/Roles differ — review needed/)).toBeVisible();
   await page.locator('.report-finding > summary').first().click();
   await expect(page.locator('.report-finding').first().getByText(/Different request examples/)).toBeVisible();
@@ -651,7 +596,7 @@ test('Venice recovery is disclosed on the report and readable export', async ({p
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toContainText('providers, verification and completed replies');
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await expect(page.getByRole('status').filter({hasText:'Venice fallback:'})).toContainText('4 completed replies');
   await page.getByText('Other downloads & test details', {exact:true}).click();
   const download=page.waitForEvent('download');
@@ -675,7 +620,7 @@ test('NEAR recovery reports the actual backup and retains Venice primary attempt
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   await expect(page.getByRole('status').filter({hasText:'Provider recovery was attempted'})).toBeVisible();
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await expect(page.getByRole('status').filter({hasText:'NEAR AI fallback:'})).toContainText('2 Venice attempts');
   await page.getByText('Other downloads & test details',{exact:true}).click();
   const download=page.waitForEvent('download');
@@ -716,7 +661,7 @@ test('historical activity keeps unknown checklist states and retained tool evide
 
 for (const stopped of [false, true, 'cancelled'] as const) test(`ended assessment keeps recorded activity inspectable: stopped=${stopped}`, async ({page}) => {
   await setup(page,false,stopped,!stopped);
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity).toBeVisible();
   await expect(activity.locator('[data-live=true]')).toHaveCount(0);
@@ -762,7 +707,7 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   const baseline = await activity.getByRole('region',{name:'Scoped tools'}).boundingBox();
   const analysis = await activity.locator('[data-check=public_analysis]').boundingBox();
   if (info.project.name === 'mobile') expect(baseline!.y + baseline!.height).toBeLessThanOrEqual(analysis!.y);
-  await expect(branch.getByRole('button',{name:'API schema checks: Not applicable',exact:true})).toBeVisible();
+  await expect(branch.getByRole('button',{name:'Schemathesis · API checks: Not applicable',exact:true})).toBeVisible();
   await expect(branch.getByRole('button',{name:'ZAP · discovered inputs: No new inputs',exact:true})).toBeVisible();
   await branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true}).click();
   const detail = activity.getByRole('region',{name:'Selected workflow step'});
@@ -819,6 +764,17 @@ test('supporting tool graph retains scoped scanner outcomes without inventing li
   await expect(branch.getByRole('button',{name:'ZAP web scanner: Recorded',exact:true})).toBeVisible();
   await activity.locator('.workflow-map').screenshot({path:info.outputPath('follow-up-warning.png')});
 
+  for (const tool of tools.slice(0, 4)) tool.arguments = ['scoped', '--discovery-suite'];
+  await page.reload();
+  await activity.getByRole('button',{name:'Scout Needs review'}).click();
+  const deeper = activity.getByRole('region', {name: 'Web & API tools'});
+  await expect(deeper.getByRole('button')).toHaveCount(5);
+  await expect(activity.getByRole('region', {name: 'Scoped tools', exact: true})).toHaveCount(0);
+  await deeper.getByRole('button', {name: 'ZAP web scanner: Recorded', exact: true}).click();
+  await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','true');
+  await expect(activity.locator('[data-check=public_baseline]')).toHaveAttribute('data-related','false');
+  await activity.locator('.workflow-map').screenshot({path:info.outputPath('named-discovery-tools.png')});
+
   await activity.getByRole('button',{name:'Recon Working'}).click();
   await expect(branch).toHaveCount(0);
 });
@@ -832,11 +788,36 @@ function structuredWorkflow(grey: boolean, state: 'running' | 'recorded' = 'runn
   ]};
 }
 
-for(const grey of [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}`, async ({page},info)=>{
+test('deep-check evidence belongs to the opted-in workflow stage', async ({page}) => {
+  await setup(page, false, false, true);
+  const review = await page.evaluate(async reviewId => (await fetch(`/api/reviews/${reviewId}`)).json(), id);
+  const workflow = structuredWorkflow(false, 'recorded');
+  workflow.version = 2;
+  workflow.checks.splice(5, 0, {id:'public_deep', state:'recorded', evidence_count:3});
+  review.steps[0].result = {...result, workflow, tool_runs:[{
+    ...result.tool_runs![0], tool:'patchriot-surface', arguments:['scoped', '--deep-suite'],
+    output_excerpt:JSON.stringify({coverage_complete:true, evidence_count:3}),
+  }]};
+  await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:review}));
+  await page.reload();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
+  const activity = page.getByRole('region',{name:'Recorded assessment activity'});
+  await activity.getByRole('button',{name:'Scout Report received'}).click();
+  await expect(activity.locator('[data-check=public_deep]')).toHaveCount(1);
+  const branch = activity.getByRole('region',{name:'Deep-check evidence',exact:true});
+  await expect(branch).toHaveAttribute('data-parents','public_deep');
+  await expect(branch.getByRole('button')).toHaveCount(1);
+  await branch.getByRole('button').click();
+  await expect(activity.locator('[data-check=public_deep]')).toHaveAttribute('data-related','true');
+  await expect(activity.locator('[data-check=public_analysis]')).toHaveAttribute('data-related','false');
+});
+
+for(const grey of [false,true]) for(const deep of grey ? [false] : [false,true]) test(`structured graph retains the shared public workflow and adds only consented access: grey=${grey}, deep=${deep}`, async ({page},info)=>{
   await emptyDashboard(page);
   await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
   const workflow=structuredWorkflow(grey);
   if(!grey) workflow.checks[4].state='running';
+  if(deep) {workflow.version=2;workflow.checks.splice(5,0,{id:'public_deep',state:'pending',evidence_count:0});}
   const received=Math.floor(Date.now()/1000);
   const review={id,mode:'pentest_agent',state:'running',created_at:received-60,deadline_at:received+3600,
     pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic workflow fixture',...(grey?{authentication:'session',browser_login:{}}:{})},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
@@ -844,8 +825,8 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
-  await expect(activity.getByText(grey?'Public and signed-in investigation.':'Public first. Deeper with access.',{exact:true})).toBeVisible();
-  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints','Deeper public checks']);
+  await expect(activity.getByText('From discovery to findings',{exact:true})).toBeVisible();
+  await expect(activity.getByRole('list',{name:'Public assessment workflow'}).locator('strong')).toHaveText(['Headers & config','Map routes','Known signatures','Web fingerprints',...(deep?['Explore in browser']:[]),'Web & API checks',...(deep?['Deep scan']:[])]);
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(grey?2:1);
   await expect(activity.getByText('Structured checklist not recorded',{exact:false})).toHaveCount(0);
   if(grey) {
@@ -871,7 +852,7 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
   await expect(activity).toContainText('Recorded = saved work.');
   for(const width of info.project.name==='desktop' ? [1280,1920,1024,760] : [390]) {
     await page.setViewportSize({width,height:1000});
-    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe(grey?7:5);
+    await expect.poll(async()=>activity.locator('.workflow-edges > path').count()).toBe((grey?7:5)+(deep?2:0));
     await expect.poll(async()=>activity.evaluate(root=>{
       const svg=root.querySelector<SVGSVGElement>('.workflow-edges')!;const origin=svg.getBoundingClientRect();
       return [...svg.querySelectorAll<SVGPathElement>('path[data-from]')].every(path=>{
@@ -894,6 +875,37 @@ for(const grey of [false,true]) test(`structured graph retains the shared public
     await activity.screenshot({path:info.outputPath(`workflow-${grey?'grey':'black'}-${width}.png`)});
   }
 
+});
+
+test('current authenticated workflow keeps access before the web and deep passes from startup', async ({page},info)=>{
+  await emptyDashboard(page);
+  await page.route('**/api/session',r=>r.fulfill({json:{account:{id,display_name:'Workflow owner',role:'member'},csrf_token:'test-csrf'}}));
+  const workflow=structuredWorkflow(true);
+  workflow.version=2;
+  for (const check of workflow.checks) check.state='pending';
+  workflow.checks.splice(5,0,{id:'public_deep',state:'pending',evidence_count:0});
+  const now=Math.floor(Date.now()/1000);
+  const review={id,mode:'pentest_agent',state:'running',created_at:now-30,deadline_at:now+3600,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],authentication:'session',browser_login:{}},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role:'investigator',state:'leased',result:null,progress:{received_at:now,progress:{phase:'scoped_tools',http_requests:40,inference_calls:4,completed_tools:4,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  const graph=page.locator('.workflow-diagram');
+  await expect(graph).toHaveAttribute('data-combined','true');
+  await expect(graph.locator('.workflow-node')).toHaveCount(8);
+  await expect(graph.locator('.workflow-access .workflow-step')).toHaveCount(3);
+  await expect(graph.locator('.workflow-access .workflow-step > button > strong')).toHaveText(['Verify access','Web & API checks','Deep scan']);
+  for(const width of info.project.name==='desktop'?[1280,1920,1024,760]:[390]) {
+    await page.setViewportSize({width,height:1000});
+    await expect.poll(()=>graph.evaluate(root=>{
+      const nodes=[...root.querySelectorAll('.workflow-node')].map(n=>n.getBoundingClientRect());
+      return nodes.slice(1).every((next,i)=>root.getBoundingClientRect().width>760
+        ? Math.abs(next.y-nodes[i].y)<2&&next.x>nodes[i].x
+        : Math.abs(next.x-nodes[i].x)<2&&next.y>nodes[i].y);
+    })).toBe(true);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    await graph.screenshot({path:info.outputPath(`combined-deep-${width}.png`)});
+  }
 });
 
 test('structured graph keeps incomplete, reused, missing and stale states distinct', async ({page},info)=>{
@@ -922,20 +934,20 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('explicit coverage gap');
   await expect(activity.getByRole('button',{name:'Known signatures: Not recorded',exact:true})).toBeVisible();
   finished=true;await page.getByRole('button',{name:'Refresh report',exact:false}).click();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.getByRole('button',{name:'Map routes: Incomplete',exact:true})).toBeVisible();
   await expect(activity.locator('.workflow-step[data-live=true]')).toHaveCount(0);
   await activity.getByRole('button',{name:'Headers & config: Reused evidence',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Scout');
-  await activity.getByRole('button',{name:'Deeper public checks: Incomplete',exact:true}).click();
+  await activity.getByRole('button',{name:'Web & API checks: Incomplete',exact:true}).click();
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('Reached this tool’s request limit.');
   await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('6s');
   await expect(activity).toContainText('Agentic security checks');
   await activity.screenshot({path:info.outputPath('workflow-partial.png')});
   await mockExport(page,response());
   const pdfDownload=page.waitForEvent('download');
-  await page.getByRole('button',{name:'Download vulnerability report'}).click();
+  await page.getByRole('button',{name:'Download Audit'}).click();
   const pdf=await pdfDownload;
   await pdf.saveAs(info.outputPath('workflow-partial.pdf'));
   expect((await PDFDocument.load(await readFile((await pdf.path())!))).getPageCount()).toBeGreaterThan(5);
@@ -947,7 +959,7 @@ test('structured graph keeps incomplete, reused, missing and stale states distin
   const markdown=await readFile((await download.path())!,'utf8');
   expect(markdown).toContain('Headers & config (Patchriot baseline): Reused evidence');
   expect(markdown).toContain('Source: Scout');
-  expect(markdown).toContain('Map routes (Patchriot crawl): Incomplete · 3 evidence records');
+  expect(markdown).toContain('Map routes (Link crawler): Incomplete · 3 evidence records');
   expect(markdown).toContain('It does not mean complete coverage or a finding-free website.');
   expect(markdown).toContain('Known signatures (Nuclei): Not recorded (no checklist entry)');
 });
@@ -975,7 +987,7 @@ test('provider observations keep partial USD, DIEM and cache coverage distinct',
   };
   await page.route(`**/api/reviews/${id}`, route => route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Agent reports',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('agents');
   await page.getByText('Inference usage & cost',{exact:true}).first().click();
   const usage = page.locator('.inference-usage[open]').first();
   const venice = usage.getByRole('region',{name:'venice usage'});
@@ -992,7 +1004,7 @@ test('provider observations keep partial USD, DIEM and cache coverage distinct',
   await expect(usage).toContainText('1.8 USD');
   await expect(usage).not.toContainText('1.8123');
   await usage.screenshot({path:info.outputPath('inference-observations.png')});
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Inference usage & cost',{exact:true}).click();
   await expect(page.getByRole('region',{name:'venice usage'})).toContainText('0.0123 USD');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -1007,38 +1019,38 @@ test('combined engine receipt identifies both access modes without inventing usa
   review.steps[0].result.tool_runs.push({...result.tool_runs![0],tool:'patchriot-probes'});
   await page.route(`**/api/reviews/${id}`, route=>route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await activity.getByRole('button',{name:'Scout Report received'}).click();
-  await activity.getByRole('button',{name:'Agentic investigation: Recorded',exact:true}).click();
+  await activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true}).click();
   const selected=activity.getByRole('region',{name:'Selected workflow step'});
-  await expect(selected).toContainText('One engine run used combined anonymous and authenticated mode.');
+  await expect(selected).toContainText('This pass checked public and signed-in routes.');
   await expect(selected).toContainText('1 anonymous and 1 authenticated requests.');
   await expect(activity).toContainText('Agentic security checks');
   await expect(activity).not.toContainText('ARTEX');
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
-  await expect(activity.locator('[data-cluster=baseline]')).toHaveAttribute('data-parents', 'public_baseline public_mapping public_signatures public_fingerprints authentication');
+  await expect(activity.locator('[data-cluster=baseline]')).toHaveAttribute('data-parents', 'public_baseline public_mapping public_signatures public_fingerprints');
   if (info.project.name==='mobile') {
     const shelf=await activity.locator('[data-cluster=baseline]').boundingBox();
     const access=await activity.locator('[data-check=authentication]').boundingBox();
     const investigation=await activity.locator('[data-check=public_analysis]').boundingBox();
-    expect(shelf!.y).toBeGreaterThan(access!.y+access!.height);
+    expect(shelf!.y+shelf!.height).toBeLessThanOrEqual(access!.y);
     expect(shelf!.y+shelf!.height).toBeLessThanOrEqual(investigation!.y);
   }
   await activity.getByRole('button',{name:'Signed-in coverage: Recorded',exact:true}).click();
   await expect(selected).toContainText('Signed-in coverage');
   await expect(selected).toContainText('4');
   await activity.screenshot({path:info.outputPath('combined-engine.png')});
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Inference usage & cost',{exact:true}).click();
   await expect(page.locator('.inference-usage')).toContainText('Provider usage and response costs were not recorded.');
   for(const receipt of [{receipt_schema:1,access_mode:'anonymous',anonymous_evidence_count:1,authenticated_evidence_count:0},{receipt_schema:1}]) {
     review.steps[0].result.tool_runs[0].output_excerpt=JSON.stringify(receipt);
     await page.getByRole('button',{name:'Refresh report',exact:false}).click();
-    await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+    await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
     await activity.getByRole('button',{name:'Scout Report received'}).click();
     await expect(activity.locator('.workflow-step')).toHaveCount(8);
-    await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true})).toBeVisible();
     await expect(activity.getByRole('button',{name:'Signed-in checks: Recorded',exact:true})).toBeVisible();
     await expect(activity.locator('.workflow-coverage')).toHaveCount(0);
   }
@@ -1058,7 +1070,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
   await expect(activity.locator('.workflow-step')).toHaveCount(7);
   expect(await activity.locator('.workflow-step').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-check')))).toEqual([...publicWorkflowIds.slice(0,4),'authentication','public_analysis','evidence_review']);
-  await expect(activity.getByRole('button',{name:'Agentic investigation: Running',exact:true})).toBeVisible();
+  await expect(activity.getByRole('button',{name:'Web & API checks: Running',exact:true})).toBeVisible();
   await expect(activity.getByRole('button',{name:'Signed-in checks: Running',exact:true})).toHaveCount(0);
   await expect(activity.locator('[data-check=public_analysis]')).toContainText('Anonymous + signed-in');
   await activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true}).click();
@@ -1087,7 +1099,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
     review.steps[0].progress.progress.phase=phase;
     await page.getByRole('button',{name:'Refresh report',exact:false}).click();
     await expect(activity.locator('.workflow-step')).toHaveCount(7);
-    await expect(activity.getByRole('button',{name:'Agentic investigation: Recorded',exact:true})).toBeVisible();
+    await expect(activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true})).toBeVisible();
     await expect(activity.getByRole('button',{name:'Signed-in coverage: Running',exact:true})).toBeVisible();
   }
   // A new review cannot inherit observed mode from the previously opened run.
@@ -1095,7 +1107,7 @@ test('live combined ARTEX follows access verification and keeps signed-in covera
   await page.route(`**/api/reviews/${historicalId}`,route=>route.fulfill({json:{...review,id:historicalId}}));
   await page.goto(`/#/reviews/${historicalId}`);
   await expect(activity.locator('.workflow-step')).toHaveCount(8);
-  await expect(activity.getByRole('button',{name:'Deeper public checks: Recorded',exact:true})).toBeVisible();
+  await expect(activity.getByRole('button',{name:'Web & API checks: Recorded',exact:true})).toBeVisible();
   // Paired scope identifies the combined plan even when first opened after ARTEX.
   Object.assign(review.pentest.scope,{account_policy:{allow_password_changes:false}});
   workflow.checks[6].state='incomplete';
@@ -1141,9 +1153,9 @@ test('ZAP names its recorded handoff and preserves an inapplicable scan in both 
   review.steps[0].result.tool_runs=[{...result.tool_runs![0],tool:'zap',arguments:['scoped','--engine-discoveries'],output_truncated:false,evidence_ids:[],output_excerpt:JSON.stringify({phase:'engine_discoveries',state:'inapplicable',reason:'no_new_recorded_get_inputs'})}];
   await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   await expect(page.getByRole('row').filter({hasText:'ZAP · discovered inputs'})).toContainText('No new inputs');
-  await page.getByRole('button',{name:'Technical evidence',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('evidence');
   await page.getByText('Tools run (1)',{exact:true}).click();
   await expect(page.locator('.tool-evidence .request-evidence')).toContainText('ZAP · discovered inputs');
   await expect(page.locator('.tool-evidence .request-evidence')).toContainText('No new inputs');
@@ -1161,7 +1173,7 @@ test('coverage limitations and recorded URLs wrap within the report on narrow sc
   review.steps[0].result.tool_runs=[{...result.tool_runs![0],tool:'patchriot-coverage',output_truncated:false,output_excerpt:JSON.stringify({version:1,units:[{id:'c'.repeat(64),url:longUrl,method:'GET',account:'anonymous',class:'http_observation',state:'deferred',reason:'No further requests were made.',evidence_ids:[1]}]})}];
   await page.route(`**/api/reviews/${id}`,route=>route.fulfill({json:review}));
   await page.reload();
-  await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const limits=page.locator('.report-limitations');
   await expect(limits).toContainText(longIdentifier);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
@@ -1190,7 +1202,7 @@ for (const scenario of ['discovery', 'investigating', 'finishing', 'stale', 'que
   await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
   await page.goto(`/#/reviews/${id}`);
   const activity=page.getByRole('region',{name:'Recorded assessment activity'});
-  if(scenario==='saved') await page.getByRole('button',{name:'Coverage & tools',exact:true}).click();
+  if(scenario==='saved') await page.getByRole('combobox', { name: 'Report view' }).selectOption('coverage');
   const node=activity.locator('[data-check=evidence_review]');
   await expect(node).toHaveAttribute('data-status',reviewing?'running':scenario==='gap'?'incomplete':'pending');
   await expect(node).toHaveAttribute('data-live',String(reviewing&&scenario!=='stale'));
@@ -1223,4 +1235,49 @@ test('ZAP follow-up failure is distinct from a completed initial scan', () => {
   expect(toolCoverageDetail(run)).toContain('underlying cause was not retained');
   expect(toolOutcome(run)).toBe('Incomplete');
   expect(toolOutcome({...run,failure:null,arguments:[],output_excerpt:'{}'})).toBe('Ran');
+});
+
+for (const scenario of ['waiting', 'browser', 'checks', 'investigating', 'finishing', 'stale', 'saved', 'unknown', 'reused', 'grey'] as const) test(`browser discovery and vulnerability investigation have distinct stages: ${scenario}`, async ({page}, info) => {
+  await emptyDashboard(page);
+  await page.route('**/api/session', r=>r.fulfill({json:{account:{id,display_name:'Fixture owner',role:'member'},csrf_token:'test-csrf'}}));
+  const grey = scenario === 'grey';
+  const role = scenario === 'reused' ? 'reproducer' : 'investigator';
+  const workflow = structuredWorkflow(grey, 'recorded');
+  workflow.version = 2;
+  workflow.checks.splice(5, 0, {id:'public_deep',state:'not_applicable',evidence_count:0});
+  workflow.checks.find(c=>c.id==='public_analysis')!.state = ['waiting','browser','stale'].includes(scenario) ? 'pending' : scenario === 'checks' ? 'running' : 'recorded';
+  if(scenario==='reused') Object.assign(workflow.checks.find(c=>c.id==='public_analysis')!,{state:'reused',evidence_count:0,source_role:'investigator'});
+  const now = Math.floor(Date.now()/1000);
+  const phase = ['investigating','saved','unknown','grey'].includes(scenario) ? 'investigating' : scenario==='finishing' ? 'finishing' : 'scoped_tools';
+  const browser = ['browser','stale'].includes(scenario) ? 'running' : ['checks','investigating','finishing','saved'].includes(scenario) ? 'returned' : undefined;
+  const review = {id,mode:'pentest_agent',state:scenario==='saved'?'completed':'running',created_at:now-120,
+    pentest:{pentest_id:id,scope:{origins:['https://owned.example'],methods:['GET'],objective:'Synthetic stage fixture',...(grey?{authentication:'session',browser_login:{}}:{})},scope_sha256:'a'.repeat(64),reviewers:[],provider:'fixture-provider'},
+    steps:[{role,state:scenario==='saved'?'completed':'leased',result:scenario==='saved'?{...result,workflow}:null,
+      progress:{received_at:now-(scenario==='stale'?200:0),progress:{phase,browser_exploration:browser,http_requests:71,inference_calls:40,completed_tools:4,workflow}}}]};
+  await page.route(`**/api/reviews/${id}`,r=>r.fulfill({json:review}));
+  await page.goto(`/#/reviews/${id}`);
+  if(scenario==='saved') await page.getByRole('combobox',{name:'Report view'}).selectOption('coverage');
+  const activity = page.getByRole('region',{name:'Recorded assessment activity'});
+  const browserNode = activity.locator('[data-check=browser_exploration]');
+  if(grey) {
+    await expect(browserNode).toHaveCount(0);
+    await expect(activity).toContainText('no separate public browser pass');
+  } else {
+    await expect(browserNode).toHaveAttribute('data-status',browser==='running'?'running':browser==='returned'?'recorded':scenario==='waiting'?'pending':scenario==='reused'?'not_applicable':'not_recorded');
+    await expect(browserNode).toHaveAttribute('data-live',String(scenario==='browser'));
+    const order = await activity.locator('.workflow-step').evaluateAll(items=>items.map(item=>item.getAttribute('data-check')));
+    expect(order.indexOf('browser_exploration')).toBe(order.indexOf('public_fingerprints')+1);
+    expect(order.indexOf('public_analysis')).toBe(order.indexOf('browser_exploration')+1);
+    await browserNode.getByRole('button').click();
+    await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('separate from the later vulnerability investigation');
+    if(browser==='returned') await expect(browserNode).toContainText('Step ended');
+    if(scenario==='unknown') await expect(browserNode).toContainText('Not recorded');
+    if(scenario==='reused') await expect(browserNode).toContainText('Not repeated');
+    if(scenario==='stale') await expect(browserNode).toContainText('Last reported running');
+  }
+  await activity.locator('[data-check=evidence_review]').getByRole('button').click();
+  await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText(scenario==='reused' ? 'investigates promising untested leads' : 'actively searches for weaknesses');
+  if(scenario==='finishing') await expect(activity.getByRole('region',{name:'Selected workflow step'})).toContainText('preparing and returning its report');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(scenario==='browser'||scenario==='grey') await activity.screenshot({path:info.outputPath(`stages-${scenario}.png`)});
 });

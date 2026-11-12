@@ -43,8 +43,8 @@ for (const step of [2, 3] as const) test(`saved setup step ${step} keeps its con
     await expect(page.getByRole('button', { name: 'Check DNS record', exact: true })).toBeEnabled();
     await expect(page.getByText(/Each check below lasts five minutes/)).toBeVisible();
   } else {
-    await expect(page.getByText('Owned test site authorized by staff', { exact: true })).toBeVisible();
-    await expect(page.getByText(/DNS was not used/)).toBeVisible();
+    await expect(page.getByText('Ownership approved by an administrator', { exact: true })).toBeVisible();
+    await expect(page.getByText(/without a DNS check/)).toBeVisible();
     await expect(page.getByText(/it is not an approval fee/)).toBeVisible();
     await expect(page.getByText('Backup:', { exact: false })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: /I allow these named operators/ })).not.toBeChecked();

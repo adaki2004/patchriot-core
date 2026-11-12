@@ -72,46 +72,30 @@ async fn review_stats_gateway_only_forwards_the_authenticated_administrator() {
 }
 
 #[tokio::test]
-async fn report_check_gateway_requires_session_csrf_and_uses_only_session_identity() {
+async fn retired_report_checker_keeps_receipts_private_and_rejects_new_checks() {
     let seen = Arc::new(Mutex::new(Vec::new()));
     let records = seen.clone();
-    let downstream = Router::new().fallback(
-        move |headers: HeaderMap, uri: axum::http::Uri, body: String| {
-            let records = records.clone();
-            async move {
-                records
-                    .lock()
-                    .unwrap()
-                    .push((headers, uri.path().to_owned(), body));
-                Json(json!({"state":"queued","can_request":false}))
-            }
-        },
-    );
+    let downstream = Router::new().fallback(move |headers: HeaderMap, uri: axum::http::Uri| {
+        let records = records.clone();
+        async move {
+            records
+                .lock()
+                .unwrap()
+                .push((headers, uri.path().to_owned()));
+            Json(json!({"state":"verified","can_request":true}))
+        }
+    });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
     let test = TestApp::new(&url).await;
     let id = Uuid::new_v4();
     let path = format!("/api/reviews/{id}/consistency-check");
-    let body = json!({"accepts_near_ai":true});
     assert_eq!(
         test.request("GET", &path, Value::Null, &[]).await.0,
         StatusCode::UNAUTHORIZED
     );
-    assert_eq!(
-        test.request("POST", &path, body.clone(), &[("origin", ORIGIN)])
-            .await
-            .0,
-        StatusCode::UNAUTHORIZED
-    );
     let (cookie, session) = test.login("member").await;
-    assert_eq!(
-        test.request("POST", &path, body.clone(), &[("cookie", &cookie)])
-            .await
-            .0,
-        StatusCode::FORBIDDEN
-    );
-    assert!(seen.lock().unwrap().is_empty());
     let headers = [
         ("cookie", cookie.as_str()),
         ("origin", ORIGIN),
@@ -120,36 +104,26 @@ async fn report_check_gateway_requires_session_csrf_and_uses_only_session_identi
         ("x-patchriot-role", "admin"),
     ];
     assert_eq!(
-        test.request(
-            "POST",
-            &path,
-            json!({"accepts_near_ai":true,"model":"unapproved"}),
-            &headers
-        )
-        .await
-        .0,
-        StatusCode::UNPROCESSABLE_ENTITY
+        test.request("POST", &path, json!({"accepts_near_ai":true}), &headers)
+            .await
+            .0,
+        StatusCode::METHOD_NOT_ALLOWED
     );
-    for (method, body) in [("GET", Value::Null), ("POST", body)] {
-        assert_eq!(
-            test.request(method, &path, body, &headers).await.0,
-            StatusCode::OK
-        );
-    }
+    assert!(seen.lock().unwrap().is_empty());
+    let (status, _, receipt) = test.request("GET", &path, Value::Null, &headers).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(receipt["can_request"], false);
     let observed = seen.lock().unwrap().clone();
-    assert_eq!(observed.len(), 2);
-    for (headers, path, _) in &observed {
-        assert_eq!(
-            headers["x-patchriot-account"],
-            session["account"]["id"].as_str().unwrap()
-        );
-        assert_eq!(headers["x-patchriot-role"], "member");
-        assert!(!headers.contains_key("cookie"));
-        assert_eq!(path, &format!("/internal/reviews/{id}/consistency-check"));
-    }
+    assert_eq!(observed.len(), 1);
     assert_eq!(
-        serde_json::from_str::<Value>(&observed[1].2).unwrap(),
-        json!({"accepts_near_ai":true})
+        observed[0].0["x-patchriot-account"],
+        session["account"]["id"].as_str().unwrap()
+    );
+    assert_eq!(observed[0].0["x-patchriot-role"], "member");
+    assert!(!observed[0].0.contains_key("cookie"));
+    assert_eq!(
+        observed[0].1,
+        format!("/internal/reviews/{id}/consistency-check")
     );
     server.abort();
     test.finish().await;
@@ -2137,4 +2111,52 @@ fn public_contact_address_is_explicit_and_validated() {
             .as_deref(),
         Some("contact@example.com")
     );
+}
+
+#[tokio::test]
+async fn private_report_budget_stays_held_until_delivery_or_disconnect() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let count = Arc::new(AtomicUsize::new(0));
+    let calls = count.clone();
+    let id = Uuid::new_v4();
+    let downstream=Router::new().fallback(move || {
+        let calls=calls.clone(); async move {
+            calls.fetch_add(1,Ordering::SeqCst);
+            Json(json!({"id":id,"request_id":id,"scenario":"website_snapshot_v1","mode":"website_agent","state":"completed","created_at":1,"deadline_at":2,"steps":[],"evidence_source":"x".repeat(200_000),"private_connection":"must not escape"}))
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, downstream).await.unwrap() });
+    let test = TestApp::new(&url).await;
+    let (cookie, _) = test.login("member").await;
+    let path = format!("/api/reviews/{id}");
+    assert_eq!(
+        test.request("GET", &path, Value::Null, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(count.load(Ordering::SeqCst), 0);
+    let request = || {
+        Request::builder()
+            .uri(&path)
+            .header("cookie", &cookie)
+            .body(Body::empty())
+            .unwrap()
+    };
+    let first = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let denied = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(denied.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(count.load(Ordering::SeqCst), 1);
+    let body = first.into_body().collect().await.unwrap().to_bytes();
+    let json: Value = serde_json::from_slice(&body).unwrap();
+    assert!(json.get("private_connection").is_none());
+    let third = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(third.status(), StatusCode::OK);
+    drop(third); // disconnected reader must release the budget too
+    let fourth = test.app.clone().oneshot(request()).await.unwrap();
+    assert_eq!(fourth.status(), StatusCode::OK);
+    drop(fourth);
+    test.finish().await;
+    server.abort();
 }

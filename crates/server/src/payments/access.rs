@@ -11,9 +11,9 @@ pub const SLIPPAGE_BPS: u16 = 100;
 
 #[derive(Default, Clone)]
 pub enum ReviewAccess {
-    #[default]
     FreePilot,
     Coupons,
+    #[default]
     Closed,
     Paid(Arc<CheckoutService>),
 }

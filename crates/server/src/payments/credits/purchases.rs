@@ -270,7 +270,7 @@ async fn advance(state: &AppState, p: &mut Purchase) -> Result<bool, PaymentErro
         )
         .await;
         let view = match response {
-            Ok(Json(v)) => v,
+            Ok(v) => v,
             Err(e) if e.status.is_server_error() || e.status == StatusCode::TOO_MANY_REQUESTS => {
                 return Ok(false);
             }
@@ -293,7 +293,7 @@ async fn advance(state: &AppState, p: &mut Purchase) -> Result<bool, PaymentErro
         p.state = "admitted".into();
     }
     let id = p.review_id.ok_or(PaymentError::InvalidResponse)?;
-    let Json(view) = match gateway::request_review_for_account::<()>(
+    let view = match gateway::request_review_for_account::<()>(
         state,
         reqwest::Method::GET,
         &format!("/internal/reviews/{id}"),
@@ -312,7 +312,8 @@ async fn advance(state: &AppState, p: &mut Purchase) -> Result<bool, PaymentErro
     if p.cancel_requested_at.is_some()
         && ["awaiting_payment", "queued", "running"].contains(&view.state.as_str())
     {
-        return stop_unfunded(state, p, &view).await;
+        drop(view);
+        return stop_unfunded(state, p, id).await;
     }
     if p.funded(&view) {
         if p.state != "activated" {
@@ -343,13 +344,15 @@ async fn advance(state: &AppState, p: &mut Purchase) -> Result<bool, PaymentErro
         return Err(PaymentError::InvalidResponse);
     }
     if !enabled || p.expires_at <= Utc::now() || view.state != "awaiting_payment" {
-        return stop_unfunded(state, p, &view).await;
+        drop(view);
+        return stop_unfunded(state, p, id).await;
     }
     // Commit intent BEFORE the remote call. An expired claim must not erase the
     // possibility that this request succeeded while its reply was lost.
     if !mark(state, p, "funding", None).await? {
         return Ok(false);
     }
+    drop(view);
     let body = FundReview {
         request_id: p.request_id,
         invoice_id: p.id,
@@ -364,26 +367,26 @@ async fn advance(state: &AppState, p: &mut Purchase) -> Result<bool, PaymentErro
     )
     .await
     {
-        Ok(Json(v)) if p.funded(&v) => mark(state, p, "activated", None).await,
+        Ok(v) if p.funded(&v) => mark(state, p, "activated", None).await,
         Ok(_) => Err(PaymentError::InvalidResponse),
         Err(e) if e.status.is_server_error() || e.status == StatusCode::TOO_MANY_REQUESTS => {
             Ok(false)
         }
-        Err(_) => stop_unfunded(state, p, &view).await,
+        Err(_) => stop_unfunded(state, p, id).await,
     }
 }
 
 async fn stop_unfunded(
     state: &AppState,
     p: &Purchase,
-    view: &ReviewView,
+    review_id: Uuid,
 ) -> Result<bool, PaymentError> {
     // A confirmed cancellation serializes against funding on the dispatcher.
     // A timeout, expired browser, or stale GET by itself cannot release funds.
-    let Json(final_view) = match gateway::request_review_for_account(
+    let final_view = match gateway::request_review_for_account(
         state,
         reqwest::Method::POST,
-        &format!("/internal/reviews/{}/cancel", view.id),
+        &format!("/internal/reviews/{review_id}/cancel"),
         p.account_id,
         Some(&CancelReview {}),
     )

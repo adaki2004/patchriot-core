@@ -142,7 +142,7 @@ async fn deliver_claimed(
     )
     .await
     {
-        Ok(Json(view)) => view,
+        Ok(view) => view,
         Err(error) if error.status.as_u16() == 404 => {
             return Ok(Outcome::Review("admitted_review_missing"));
         }
@@ -169,6 +169,7 @@ async fn deliver_claimed(
     if let Some(reason) = authorize_attempt(&state.pool, event, &order, token).await? {
         return Ok(Outcome::Review(reason));
     }
+    drop(view); // release the first parsed report before requesting another
     let input = FundReview {
         request_id: event.request_id,
         invoice_id: event.invoice_id,
@@ -186,7 +187,7 @@ async fn deliver_claimed(
     )
     .await
     {
-        Ok(Json(view)) => view,
+        Ok(view) => view,
         // A rejection may mean a temporarily offline selected device. The next
         // pass reads again; terminal/expired work cannot be revived by retries.
         Err(_) => return Ok(Outcome::Retry("funding_acknowledgment_unavailable")),

@@ -101,8 +101,16 @@ pub(crate) async fn request_review_for_account<T: Serialize>(
     path: &str,
     account: Uuid,
     body: Option<&T>,
-) -> Result<Json<ReviewView>, ApiError> {
-    request_as(
+) -> Result<crate::response_budget::ReviewLease, ApiError> {
+    let permit = tokio::time::timeout(
+        std::time::Duration::from_secs(2),
+        state.response_slots.clone().acquire_owned(),
+    )
+    .await
+    .ok()
+    .and_then(Result::ok)
+    .ok_or_else(|| ApiError::new(StatusCode::SERVICE_UNAVAILABLE, "dispatcher_busy"))?;
+    let Json(value) = request_as(
         state,
         method,
         path,
@@ -110,7 +118,11 @@ pub(crate) async fn request_review_for_account<T: Serialize>(
         body,
         patchriot_protocol::pentests::MAX_REVIEW_BYTES,
     )
-    .await
+    .await?;
+    Ok(crate::response_budget::ReviewLease {
+        value,
+        _permit: permit,
+    })
 }
 
 async fn request_as<T: Serialize, R: DeserializeOwned>(
@@ -381,9 +393,10 @@ pub async fn review(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<Json<ReviewView>, ApiError> {
+) -> Result<Response, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    request_with_limit::<(), _>(
+    let permit = crate::response_budget::acquire(&state)?;
+    let response: Json<ReviewView> = request_with_limit::<(), _>(
         &state,
         reqwest::Method::GET,
         &format!("/internal/reviews/{id}"),
@@ -391,7 +404,11 @@ pub async fn review(
         None,
         patchriot_protocol::pentests::MAX_REVIEW_BYTES,
     )
-    .await
+    .await?;
+    Ok(crate::response_budget::deliver(
+        response.into_response(),
+        permit,
+    ))
 }
 
 pub async fn create_review(
@@ -415,9 +432,10 @@ pub async fn cancel_review(
     headers: HeaderMap,
     Path(id): Path<Uuid>,
     Json(input): Json<CancelReview>,
-) -> Result<Json<ReviewView>, ApiError> {
+) -> Result<Response, ApiError> {
     let session = auth::require_write(&headers, &state).await?;
-    request_with_limit(
+    let permit = crate::response_budget::acquire(&state)?;
+    let response: Json<ReviewView> = request_with_limit(
         &state,
         reqwest::Method::POST,
         &format!("/internal/reviews/{id}/cancel"),
@@ -425,7 +443,11 @@ pub async fn cancel_review(
         Some(&input),
         patchriot_protocol::pentests::MAX_REVIEW_BYTES,
     )
-    .await
+    .await?;
+    Ok(crate::response_budget::deliver(
+        response.into_response(),
+        permit,
+    ))
 }
 
 pub async fn report(
@@ -435,6 +457,7 @@ pub async fn report(
     Json(input): Json<CancelReview>,
 ) -> Result<Response, ApiError> {
     let session = auth::require_write(&headers, &state).await?;
+    let permit = crate::response_budget::acquire(&state)?;
     let Json(report): Json<ReviewView> = request_with_limit(
         &state,
         reqwest::Method::POST,
@@ -446,35 +469,34 @@ pub async fn report(
     .await?;
     let bytes = serde_json::to_vec_pretty(&report)
         .map_err(|_| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "report_encoding_failed"))?;
-    Ok((
-        [
-            (
-                header::CONTENT_TYPE,
-                "application/json; charset=utf-8".to_owned(),
-            ),
-            (
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"patchriot-review-{id}.json\""),
-            ),
-        ],
-        bytes,
-    )
-        .into_response())
+    Ok(crate::response_budget::deliver(
+        (
+            [
+                (
+                    header::CONTENT_TYPE,
+                    "application/json; charset=utf-8".to_owned(),
+                ),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"patchriot-review-{id}.json\""),
+                ),
+            ],
+            bytes,
+        )
+            .into_response(),
+        permit,
+    ))
 }
 
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ReportCheckConsent {
-    accepts_near_ai: bool,
-}
-
+/// Preserve private access to saved receipts from the retired optional checker.
+/// There is no public write route: opening a report cannot start more inference.
 pub async fn report_check(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
-    request_with_limit(
+    let Json(mut receipt): Json<serde_json::Value> = request_with_limit(
         &state,
         reqwest::Method::GET,
         &format!("/internal/reviews/{id}/consistency-check"),
@@ -482,25 +504,11 @@ pub async fn report_check(
         None::<&()>,
         512 * 1024,
     )
-    .await
-}
-
-pub async fn request_report_check(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    Path(id): Path<Uuid>,
-    Json(input): Json<ReportCheckConsent>,
-) -> Result<Json<serde_json::Value>, ApiError> {
-    let session = auth::require_write(&headers, &state).await?;
-    request_with_limit(
-        &state,
-        reqwest::Method::POST,
-        &format!("/internal/reviews/{id}/consistency-check"),
-        Some(&session),
-        Some(&input),
-        512 * 1024,
-    )
-    .await
+    .await?;
+    if let Some(record) = receipt.as_object_mut() {
+        record.insert("can_request".into(), serde_json::Value::Bool(false));
+    }
+    Ok(Json(receipt))
 }
 
 /// Staff metrics must retain the server-verified role; query/header input cannot

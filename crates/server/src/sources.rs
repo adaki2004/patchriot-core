@@ -99,6 +99,7 @@ pub async fn evidence(
     Path(id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
+    let permit = crate::response_budget::acquire(&state)?;
     let Json(bundle): Json<SourceBundle> = gateway::request_with_limit::<(), _>(
         &state,
         Method::GET,
@@ -109,20 +110,23 @@ pub async fn evidence(
     )
     .await?;
     let bytes = serde_json::to_vec(&bundle).map_err(|_| ApiError::bad("invalid_evidence"))?;
-    Ok((
-        [
-            (
-                header::CONTENT_TYPE,
-                "application/json; charset=utf-8".to_owned(),
-            ),
-            (
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"patchriot-source-{id}.json\""),
-            ),
-        ],
-        bytes,
-    )
-        .into_response())
+    Ok(crate::response_budget::deliver(
+        (
+            [
+                (
+                    header::CONTENT_TYPE,
+                    "application/json; charset=utf-8".to_owned(),
+                ),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"patchriot-source-{id}.json\""),
+                ),
+            ],
+            bytes,
+        )
+            .into_response(),
+        permit,
+    ))
 }
 pub async fn review_plan(
     State(state): State<AppState>,

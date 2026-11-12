@@ -1,27 +1,117 @@
-.vulnerability-report { margin: 28px 0; }
-.textmode-ui .report-overview { background: #171f2d; padding: 28px; border: 1px solid #3b4c69; border-top: 2px solid #9ab8fc; }
-.textmode-ui .report-overview h2 { font: 600 28px/1.25 var(--body-font); margin: 8px 0 12px; letter-spacing: 0; }
-.report-overview p { max-width: 76ch; color: #c4cfdf; line-height: 1.65; }
-.report-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; border-top: 1px solid #3a465d; padding-top: 22px; margin: 24px 0 0; }
-.report-counts dt { font-size: 13px; color: #aebbd2; }.report-counts dd { font: 500 32px/1.5 var(--body-font); margin: 6px 0 0; color: #f0f4ff; }.report-counts dd small { font-size: 16px; color: #97a6c2; }
-.report-tab-list { display: flex; gap: 6px; border-bottom: 1px solid #43516d; margin: 28px 0 0; overflow-x: auto; }
-.textmode-ui .report-tab-list button { padding: 15px 17px; white-space: nowrap; font: 500 14px var(--body-font); color: #aab7cf; border-bottom: 2px solid transparent; }
-.textmode-ui .report-tab-list button[aria-pressed=true] { color: #f2f5ff; background: #1c2637; border-color: #ff927e; }.report-tab-content { padding: 24px 0; }
-.report-section-heading { display: flex; justify-content: space-between; align-items: start; gap: 20px; margin-bottom: 22px; }.textmode-ui .report-section-heading h3 { font: 600 22px/1.3 var(--body-font); margin: 0 0 8px; letter-spacing: 0; }.report-section-heading p { color: #aebbd2; font-size: 14px; max-width: 68ch; margin: 0; }
-.report-section-heading label { flex: 0 0 170px; font-size: 12px; color: #aebbd2; }.report-section-heading select { width: 100%; margin-top: 6px; font-size: 14px; }
-.textmode-ui .report-finding { padding: 0; margin: 12px 0; border: 1px solid #37455f; background: #141b27; border-left: 3px solid #a1b7e2; }
-.report-finding[data-severity=critical], .report-finding[data-severity=high] { border-left-color: #ff8e8e; }.report-finding[data-severity=medium] { border-left-color: #e0bc7e; }
-.textmode-ui .report-finding > summary { display: flex; align-items: center; gap: 16px; padding: 20px; list-style: none; cursor: pointer; }.report-finding > summary::-webkit-details-marker { display: none; }.report-finding summary:focus-visible { outline: 2px solid #a9c0ff; outline-offset: 3px; }
-.finding-ref { font: 500 12px var(--mono-font); color: #a7bce6; flex-shrink: 0; }.finding-name { min-width: 0; flex: 1; }.finding-name strong { display: block; font: 500 16px/1.5 var(--body-font); overflow-wrap: anywhere; color: #e1e9f9; }.finding-name small { display: block; font-size: 12px; color: #a5b3cc; margin-top: 6px; }.severity-label { font-size: 12px; text-transform: capitalize; background: #27354c; padding: 5px 9px; color: #c5d6f5; flex-shrink: 0; }.finding-toggle { font-size: 20px; color: #aab9d6; }.report-finding[open] .finding-toggle { transform: rotate(45deg); }
-.report-finding-body { padding: 0 26px 24px; border-top: 1px solid #37455f; }.textmode-ui .report-finding-body h4 { font: 600 15px var(--body-font); margin: 24px 0 10px; color: #c5d8fb; }.report-finding-body p { line-height: 1.65; font-size: 15px; }.finding-proof { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 20px; font-size: 12px; color: #aab9d6; }
-.report-agents { display: grid; grid-template-columns: 1fr; gap: 16px; }.report-agent { padding: 24px; border: 1px solid #37455f; background: #141b27; }.textmode-ui .report-agent h3 { font: 600 21px var(--body-font); margin: 0; }.report-agent p { font-size: 15px; line-height: 1.6; }.report-agent dl { display: flex; gap: 40px; margin: 22px 0; }.report-agent dt { font-size: 12px; color: #aab9d6; }.report-agent dd { margin: 7px 0 0; font-size: 20px; }.report-agent ul { padding-left: 18px; font-size: 14px; }.report-agent li { margin: 8px 0; }.report-agent li b { color: #a7bce6; margin-right: 8px; }
-.report-tool-version { display: block; color: #aab9d6; font-size: 12px; margin-top: 6px; overflow-wrap: anywhere; }.report-limitations article { border-top: 1px solid #37455f; margin-top: 22px; padding-top: 20px; }.report-limitations h4 { color: #c5d8fb; }.report-limitations li { overflow-wrap: anywhere; margin: 12px 0; font-size: 14px; line-height: 1.65; }.report-empty { border: 1px dashed #43516d; padding: 24px; color: #b8c7df; }
+/* Report-only layout; fonts and the surrounding application remain inherited. */
+.vulnerability-report { --report-line: #303843; --report-muted: #a5aeb9; margin: 28px 0; min-width: 0; }
+.textmode-ui .vulnerability-report .report-overview { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px 32px; padding: 24px 0; border: 0; border-block: 1px solid var(--report-line); background: transparent; }
+.textmode-ui .vulnerability-report .report-overview h2 { font: 500 20px/1.4 var(--body-font); margin: 0 0 8px; letter-spacing: 0; }
+.vulnerability-report .report-status { color: #d7b580; font-size: 13px; font-weight: 400; }
+.vulnerability-report .report-overview p { max-width: 76ch; margin: 0; color: var(--report-muted); font-size: 14px; line-height: 1.65; }
+.vulnerability-report .report-counts { display: flex; align-items: center; gap: 32px; border: 0; padding: 0; margin: 0; }
+.vulnerability-report .report-counts > div { display: flex; flex-direction: column-reverse; }
+.vulnerability-report .report-counts dt { font: 400 12px/1.5 var(--body-font); color: var(--report-muted); margin-top: 4px; }
+.vulnerability-report .report-counts dd { font: 500 26px/1.2 var(--body-font); font-variant-numeric: tabular-nums; margin: 0; color: var(--ink); }
+.vulnerability-report .report-counts dd small { font-size: 14px; font-weight: 400; color: var(--report-muted); }
+.vulnerability-report .report-notes { grid-column: 1 / -1; font-size: 12px; color: var(--report-muted); }
+.vulnerability-report .report-notes > summary { width: fit-content; cursor: pointer; }
+.vulnerability-report .report-notes p { max-width: 92ch; margin: 12px 0 0; font-size: 13px; }
+.vulnerability-report .report-notes h4 { margin: 16px 0 0; font: 500 13px/1.5 var(--body-font); color: var(--ink); }
+.vulnerability-report .report-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 28px 0 20px; }
+.textmode-ui .vulnerability-report .report-toolbar h3 { font: 500 22px/1.3 var(--body-font); margin: 0; letter-spacing: 0; }
+.vulnerability-report .report-view-count { margin-left: 8px; font: 400 13px/1.5 var(--mono-font); color: var(--report-muted); vertical-align: 2px; }
+.vulnerability-report .report-view-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 20px; }
+.vulnerability-report .report-view-controls label { display: flex; align-items: center; gap: 8px; color: var(--report-muted); font-size: 12px; }
+.textmode-ui .vulnerability-report .report-view-controls select { width: auto; max-width: 220px; min-height: 36px; margin: 0; padding: 8px 28px 8px 12px; font: 400 13px/1.4 var(--body-font); border: 1px solid #3b424b; border-radius: 4px; background-color: var(--paper); color: var(--ink); }
+.vulnerability-report .report-tab-content { padding: 0; min-width: 0; }
+.vulnerability-report .report-ledger-heading { display: grid; grid-template-columns: 56px minmax(0, 1fr) 80px 20px; gap: 24px; padding: 0 16px 12px; color: var(--report-muted); font: 400 11px/1.5 var(--mono-font); }
+.vulnerability-report .report-ledger-heading > span:nth-child(3) { text-align: right; }
+.vulnerability-report .report-findings { border-top: 1px solid var(--report-line); }
+.vulnerability-report .report-findings:empty { border: 0; }
+.textmode-ui .vulnerability-report .report-finding { padding: 0; margin: 0; border: 0; border-bottom: 1px solid var(--report-line); border-radius: 0; background: transparent; }
+.textmode-ui .vulnerability-report .report-finding > summary { display: grid; grid-template-columns: 56px minmax(0, 1fr) 80px 20px; align-items: center; gap: 24px; padding: 22px 16px; list-style: none; cursor: pointer; transition: background-color 150ms ease; }
+.vulnerability-report .report-finding > summary::-webkit-details-marker { display: none; }
+.vulnerability-report .report-finding > summary:hover { background: rgba(165, 174, 185, .045); }
+.vulnerability-report summary:focus-visible, .vulnerability-report select:focus-visible, .vulnerability-report button:focus-visible, .vulnerability-report .report-toolbar h3:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.vulnerability-report .finding-ref { font: 400 12px/1.5 var(--mono-font); color: var(--report-muted); }
+.vulnerability-report .finding-name { min-width: 0; }
+.vulnerability-report .finding-name strong { display: block; font: 500 16px/1.45 var(--body-font); overflow-wrap: anywhere; color: var(--ink); }
+.vulnerability-report .finding-name small { display: block; font-size: 12px; line-height: 1.6; color: var(--report-muted); margin-top: 6px; }
+.vulnerability-report .finding-separator { display: inline-block; margin: 0 8px; color: var(--report-muted); }
+.vulnerability-report .severity-label { font: 400 12px/1.5 var(--mono-font); text-transform: capitalize; text-align: right; color: #a3b9ba; background: transparent; padding: 0; }
+.vulnerability-report .report-finding[data-severity=critical] .severity-label, .vulnerability-report .report-finding[data-severity=high] .severity-label { color: #eb9a94; }
+.vulnerability-report .report-finding[data-severity=medium] .severity-label { color: #d7b580; }
+.vulnerability-report .report-finding[data-severity=info] .severity-label { color: var(--report-muted); }
+.vulnerability-report .finding-toggle { font: 400 20px/1 var(--body-font); text-align: center; color: var(--report-muted); }
+.vulnerability-report .report-finding[open] > summary .finding-toggle { transform: rotate(45deg); }
+.vulnerability-report .report-finding-body { padding: 0 120px 28px 96px; border: 0; min-width: 0; }
+.textmode-ui .vulnerability-report .report-finding-body h4 { font: 500 14px/1.5 var(--body-font); margin: 24px 0 8px; color: var(--ink); }
+.vulnerability-report .report-finding-body p { line-height: 1.7; font-size: 15px; }
+.vulnerability-report .report-finding-body .fine { font-size: 12px; color: var(--report-muted); }
+.vulnerability-report .report-finding-body .report-prose { max-width: 92ch; }
+.vulnerability-report .report-finding-body details { margin: 16px 0; font-size: 13px; }
+.vulnerability-report .report-finding-body details > summary { color: var(--report-muted); cursor: pointer; }
+.vulnerability-report .finding-proof { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: baseline; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--report-line); font-size: 12px; color: var(--report-muted); overflow-wrap: anywhere; }
+.vulnerability-report .finding-proof > span { min-width: 0; }
+.vulnerability-report .finding-proof .text-button { color: var(--accent); font: 400 13px/1.5 var(--body-font); }
+.vulnerability-report .report-findings-note { display: flex; justify-content: space-between; gap: 20px; margin-top: 16px; color: var(--report-muted); font-size: 12px; }
+.vulnerability-report .report-findings-note p { margin: 0; }
+.vulnerability-report .report-view-intro { color: var(--report-muted); font-size: 14px; line-height: 1.65; max-width: 92ch; margin: 0 0 20px; }
+.vulnerability-report .report-agents { display: grid; grid-template-columns: 1fr; gap: 0; }
+.vulnerability-report .report-agent { padding: 24px 16px; border: 0; border-top: 1px solid var(--report-line); background: transparent; min-width: 0; }
+.textmode-ui .vulnerability-report .report-agent h3 { font: 500 20px/1.4 var(--body-font); margin: 0; }
+.textmode-ui .vulnerability-report .report-agent .pill { padding: 0; color: var(--report-muted); background: transparent; font: 400 12px/1.5 var(--body-font); }
+.vulnerability-report .report-agent p { font-size: 14px; line-height: 1.65; }
+.vulnerability-report .report-agent details { font-size: 13px; }
+.vulnerability-report .report-agent details > summary { color: var(--report-muted); cursor: pointer; }
+.vulnerability-report .report-agent dl { display: flex; flex-wrap: wrap; gap: 24px 40px; margin: 24px 0; }
+.vulnerability-report .report-agent dt { font-size: 12px; color: var(--report-muted); }
+.vulnerability-report .report-agent dd { margin: 4px 0 0; font-size: 20px; font-variant-numeric: tabular-nums; }
+.vulnerability-report .report-agent ul { padding-left: 20px; font-size: 14px; }
+.vulnerability-report .report-agent li { margin: 8px 0; overflow-wrap: anywhere; }
+.vulnerability-report .report-agent li b { color: var(--report-muted); margin-right: 8px; font: 400 12px/1.5 var(--mono-font); }
+.vulnerability-report .report-coverage-method { margin: 20px 0; font-size: 13px; color: var(--report-muted); }
+.vulnerability-report .report-coverage-method p { max-width: 92ch; line-height: 1.65; }
+.vulnerability-report .report-tool-version { display: block; color: var(--report-muted); font-size: 12px; margin-top: 6px; overflow-wrap: anywhere; }
+.vulnerability-report .report-limitations article { border-top: 1px solid var(--report-line); margin-top: 24px; padding-top: 20px; }
+.vulnerability-report .report-limitations h4 { color: var(--ink); font-weight: 500; }
+.vulnerability-report .report-limitations li { overflow-wrap: anywhere; margin: 12px 0; font-size: 14px; line-height: 1.65; }
+.vulnerability-report .report-empty { border-block: 1px solid var(--report-line); padding: 24px 16px; color: var(--report-muted); }
+.vulnerability-report .report-checks article { overflow-wrap: anywhere; padding: 16px 0; border-bottom: 1px solid var(--report-line); }
+.vulnerability-report .report-checks h4 small { margin-left: 8px; color: var(--report-muted); font-weight: 400; }
+@media(max-width:1000px) {
+  .textmode-ui .vulnerability-report .report-overview { grid-template-columns: 1fr; }
+  .vulnerability-report .report-counts { gap: 40px; }
+  .vulnerability-report .report-toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .vulnerability-report .report-finding-body { padding-right: 40px; }
+}
+@media(max-width:640px) {
+  .textmode-ui .vulnerability-report .report-overview { padding: 20px 0; gap: 20px; }
+  .textmode-ui .vulnerability-report .report-overview h2 { font-size: 18px; }
+  .vulnerability-report .report-status { font-size: 12px; }
+  .vulnerability-report .report-overview p { font-size: 13px; }
+  .vulnerability-report .report-counts { justify-content: space-between; gap: 12px; }
+  .vulnerability-report .report-counts dt { font-size: 11px; }
+  .vulnerability-report .report-counts dd { font-size: 24px; }
+  .vulnerability-report .report-toolbar { flex-direction: column; align-items: stretch; gap: 16px; padding: 24px 0 20px; }
+  .textmode-ui .vulnerability-report .report-toolbar h3 { font-size: 21px; }
+  .vulnerability-report .report-view-controls { justify-content: space-between; align-items: flex-end; flex-wrap: nowrap; gap: 12px; }
+  .vulnerability-report .report-view-controls label { display: block; min-width: 0; font-size: 11px; }
+  .textmode-ui .vulnerability-report .report-view-controls select { display: block; max-width: 100%; margin-top: 4px; padding: 8px 24px 8px 8px; font-size: 12px; }
+  .vulnerability-report .report-ledger-heading { display: none; }
+  .textmode-ui .vulnerability-report .report-finding > summary { grid-template-columns: 36px minmax(0, 1fr) 16px; align-items: start; gap: 12px; padding: 20px 16px; }
+  .vulnerability-report .finding-ref { font-size: 11px; padding-top: 2px; }
+  .vulnerability-report .finding-name strong { font-size: 15px; }
+  .vulnerability-report .finding-name small { font-size: 12px; }
+  .vulnerability-report .finding-separator { margin-inline: 4px; }
+  .vulnerability-report .severity-label { grid-column: 2; grid-row: 2; text-align: left; margin-top: -4px; font-size: 11px; }
+  .vulnerability-report .finding-toggle { grid-column: 3; grid-row: 1; font-size: 18px; }
+  .vulnerability-report .report-finding-body { padding: 0 16px 24px; }
+  .vulnerability-report .report-finding-body p { font-size: 14px; }
+  .vulnerability-report .report-findings-note { flex-direction: column; gap: 8px; }
+  .vulnerability-report .report-agent { padding: 20px 16px; }
+  .vulnerability-report .report-agent dl { gap: 20px 24px; }
+}
+
 .report-download-main { display: flex; align-items: center; gap: 18px; margin: 22px 0; flex-wrap: wrap; }.textmode-ui .report-download-main .primary { font: 600 15px var(--body-font); padding: 14px 20px; min-height: 48px; }.report-download-main p { font-size: 13px; color: #aab9d6; margin: 0; }
 .tool-evidence article > details { margin: 12px 0; }.http-evidence .request-evidence { margin: 16px 0; }
-@media(max-width:640px) { .report-overview, .textmode-ui .report-overview { padding: 20px; }.report-counts { gap: 10px; }.report-counts dt { font-size: 11px; }.report-counts dd { font-size: 26px; }.report-section-heading { flex-direction: column; }.report-section-heading label { flex: auto; width: 100%; }.textmode-ui .report-tab-list button { padding: 13px 12px; font-size: 13px; }.textmode-ui .report-finding > summary { flex-wrap: wrap; padding: 16px; gap: 10px; }.finding-name { flex-basis: calc(100% - 54px); }.severity-label { margin-left: 43px; }.finding-toggle { margin-left: auto; }.report-finding-body { padding: 0 18px 22px; }.report-agent { padding: 18px; }.report-agent dl { gap: 24px; }.report-download-main > button { width: 100%; } }
-
-.report-checks article { overflow-wrap: anywhere; padding: 1rem 0; border-bottom: 1px solid var(--line, #303c4c); }
-.report-checks h4 small { margin-left: .6rem; color: var(--muted, #a4b0bf); font-weight: 400; }
+@media(max-width:640px) { .report-download-main > button { width: 100%; } }
 
 .report-prose { min-width: 0; max-width: 100%; }
 .report-prose p { line-height: 1.75; margin: .7rem 0 1.1rem; white-space: pre-wrap; overflow-wrap: anywhere; }

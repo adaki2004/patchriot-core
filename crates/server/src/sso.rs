@@ -169,7 +169,7 @@ pub(crate) async fn start(
     signed_out(&state, &headers).await?;
     let provider = Provider::parse(&name)?;
     let credentials = state.config.sso.get(provider)?;
-    access::public_rate(&state, peer, "oauth-start", 30, 900).await?;
+    access::public_rate(&state, &headers, peer, "oauth-start", 30, 900).await?;
     let state_value = auth::token()?;
     let browser = auth::token()?;
     let id_nonce = auth::token()?;
@@ -242,7 +242,7 @@ pub(crate) async fn callback(
 ) -> Response {
     // Fixed destinations erase the provider's code from the next URL. Neither
     // arbitrary next URLs nor provider error descriptions reach the browser.
-    let result = if access::public_rate(&state, peer, "oauth-callback", 60, 900)
+    let result = if access::public_rate(&state, &headers, peer, "oauth-callback", 60, 900)
         .await
         .is_err()
     {

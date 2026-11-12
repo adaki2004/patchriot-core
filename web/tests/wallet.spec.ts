@@ -4,7 +4,8 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import type { Deposit } from '../src/Checkout';
 import { ethereumTransfer, solanaTransfer, walletAsset } from '../src/wallet-transfer';
 
-const origin = 'http://127.0.0.1:5174';
+let origin: string;
+test.beforeEach(({baseURL}) => { origin = new URL(baseURL!).origin; });
 const order = '00000000-0000-4000-8000-000000000003';
 const sender = Wallet.createRandom().address;
 const recipient = Wallet.createRandom().address;
@@ -24,7 +25,7 @@ async function setup(context: BrowserContext, signedIn = true) {
     if(path===`/api/orders/${order}/quote`){state.quotes++;expect(route.request().method()).toBe('POST');expect(route.request().headers()['x-csrf-token']).toBe('test-csrf');return route.fulfill({json:state.quote});}
     if(path==='/api/auth/wallet/challenge'){
       expect(route.request().postDataJSON()).toEqual({network:'ethereum',address:sender});
-      return route.fulfill({json:{nonce:'b'.repeat(64),message:`127.0.0.1:5174 wants you to sign in with your Ethereum account:\n${sender}\n\nSign in to Patchriot. This does not authorize a payment.\n\nURI: ${origin}\nVersion: 1`,expires_at:new Date(Date.now()+300_000).toISOString()}});
+      return route.fulfill({json:{nonce:'b'.repeat(64),message:`${new URL(origin).host} wants you to sign in with your Ethereum account:\n${sender}\n\nSign in to Patchriot. This does not authorize a payment.\n\nURI: ${origin}\nVersion: 1`,expires_at:new Date(Date.now()+300_000).toISOString()}});
     }
     if(path==='/api/auth/wallet/verify'){state.verification++;expect(route.request().postDataJSON()).toEqual({nonce:'b'.repeat(64),signature:'0x'+'c'.repeat(130)});state.signedIn=true;return route.fulfill({json:{ok:true}});}
     if(path==='/api/analytics')return route.fulfill({json:{enabled:false}});

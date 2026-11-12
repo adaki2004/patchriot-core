@@ -2,13 +2,14 @@ import type { LiveWorkflow, LiveToolRun, WorkflowCheckId, WorkflowCheckState } f
 
 export const checkDefinitions: { id: WorkflowCheckId; title: string; tool: string; description: string }[] = [
   { id: 'public_baseline', title: 'Headers & config', tool: 'Patchriot baseline', description: 'Inspect public response headers, browser policies and exposed configuration without a signed-in session.' },
-  { id: 'public_mapping', title: 'Map routes', tool: 'Patchriot crawl', description: 'Map reachable public pages, links and forms within the approved origin.' },
+  { id: 'public_mapping', title: 'Map routes', tool: 'Link crawler', description: 'Follow public links and forms with a bounded crawler. This collects paths for later checks; it is separate from the agent’s browser exploration.' },
   { id: 'public_signatures', title: 'Known signatures', tool: 'Nuclei', description: 'Run the curated signature checks against public responses. Matches are leads to investigate.' },
   { id: 'public_fingerprints', title: 'Web fingerprints', tool: 'ARES-engine', description: 'Compare public technology and content fingerprints with missing-path controls.' },
-  { id: 'public_analysis', title: 'Deeper public checks', tool: 'Agentic security checks', description: 'Investigate the public attack surface within the saved scope and remaining limits.' },
+  { id: 'public_analysis', title: 'Web & API checks', tool: 'Structured checks', description: 'Run scoped route probes, ZAP checks and available API-schema tests against collected paths and browser requests. These tool results become evidence for the agent’s later vulnerability investigation.' },
+  { id: 'public_deep', title: 'Deep scan', tool: 'Patchriot deep pass', description: 'Opt-in deeper reads: script and route mining, access-control paths, header and cache probes, observed-parameter checks and cross-account objects. Leads still need a control.' },
   { id: 'authentication', title: 'Verify access', tool: 'Relay access proof', description: 'Establish the permitted account or disposable-wallet access and record an anonymous comparison.' },
   { id: 'authenticated_checks', title: 'Signed-in checks', tool: 'Signed-in investigation', description: 'Inspect signed-in resources under the saved permission, in addition to public checks. Recorded means requests were made with verified access; the evidence shows what was actually tested.' },
-  { id: 'evidence_review', title: 'Review & report', tool: 'Agent assessment', description: 'Review claims against evidence, retain uncertainty and produce this role’s assessment.' },
+  { id: 'evidence_review', title: 'Investigate & report', tool: 'Agent investigation', description: 'Use the collected evidence to choose possible vulnerabilities, test them with follow-up requests and compare controls. Then write findings and limitations. No findings is a valid result.' },
 ];
 
 export const workflowStateLabels: Record<WorkflowCheckState | 'not_recorded', string> = {
@@ -20,8 +21,8 @@ export const workflowAbsent = 'Structured checklist not recorded for this role.'
 const sourceRoles = { investigator: 'Scout', reproducer: 'Recon', challenger: 'Verifier' };
 /** Retain explicit gaps without inventing execution states for historical reports. */
 export function workflowRecordLines(workflow: LiveWorkflow | undefined): string[] {
-  if (workflow?.version !== 1) return [];
-  return checkDefinitions.flatMap(definition => {
+  if (!workflow || workflow.version < 1) return [];
+  return checkDefinitions.filter(definition => definition.id !== 'public_deep' || workflow.version >= 2).flatMap(definition => {
     const check = workflow.checks.find(check => check.id === definition.id);
     if (!check) return [`${definition.title} (${definition.tool}): Not recorded (no checklist entry)`];
     const state = check.state === 'running' ? 'Last reported running' : workflowStateLabels[check.state];
@@ -30,14 +31,15 @@ export function workflowRecordLines(workflow: LiveWorkflow | undefined): string[
 }
 
 export function workflowToolName(tool: string, record?: LiveToolRun) {
+  if (tool === 'patchriot-discovery') return 'Scoped discovery';
   if (record && combinedEngineAccess(record)) return 'Agentic security checks';
   if (tool === 'zap' && record?.arguments.includes('--engine-discoveries')) return 'ZAP · discovered inputs';
-  const names: Record<string, string> = { 'patchriot-controls': 'Access controls', 'patchriot-probes': 'HTTP controls', ffuf: 'Endpoint discovery', zap: 'ZAP web scanner', schemathesis: 'API schema checks', 'patchriot-coverage': 'Evidence coverage' };
+  const names: Record<string, string> = { 'patchriot-controls': 'Access controls', 'patchriot-probes': 'HTTP controls', ffuf: 'ffuf · endpoint discovery', zap: 'ZAP web scanner', schemathesis: 'Schemathesis · API checks', 'patchriot-coverage': 'Evidence coverage', 'patchriot-deep': 'Deep scan', 'patchriot-surface': 'Client surface', 'patchriot-bypass': 'Access-control paths', 'patchriot-headers': 'Header and cache probes', 'patchriot-inputs': 'Input probes', 'patchriot-cross-account': 'Cross-account objects' };
   if (names[tool]) return names[tool];
-  return tool === 'artex-engine' ? 'Agentic security checks' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
+  return ['artex-engine', 'patchriot-discovery'].includes(tool) ? 'Agentic security checks' : tool === 'ares-web-surface' ? 'ARES-engine' : tool;
 }
 export function combinedEngineAccess(tool: LiveToolRun): { anonymous: number; authenticated: number } | undefined {
-  if (tool.tool !== 'artex-engine') return undefined;
+  if (!['patchriot-deep', 'artex-engine', 'patchriot-discovery'].includes(tool.tool)) return undefined;
   try {
     const receipt = JSON.parse(tool.output_excerpt);
     const counts = [receipt.anonymous_evidence_count, receipt.authenticated_evidence_count];
@@ -66,7 +68,7 @@ export function toolCoverageDetail(tool: LiveToolRun): string | undefined {
     } catch { /* Keep unstructured failures explicit. */ }
     return undefined;
   }
-  if (tool.tool !== 'artex-engine') return undefined;
+  if (!['patchriot-deep', 'artex-engine', 'patchriot-discovery'].includes(tool.tool)) return undefined;
   try {
     const receipt = JSON.parse(tool.output_excerpt);
     if (receipt.receipt_schema !== 1 || receipt.coverage_complete !== false) return undefined;
@@ -76,6 +78,7 @@ export function toolCoverageDetail(tool: LiveToolRun): string | undefined {
     if (gaps.includes('access_context_untested'))
       return 'The engine did not retain requests for every required public and signed-in context. Combined coverage remains incomplete.';
     const reasons: Record<string, string> = {
+      checks_incomplete: 'One or more scoped tools or account contexts did not finish. Inspect the individual tool receipts; saved requests remain available.',
       target_request_budget: 'Reached this tool’s request limit. Deeper public coverage remains incomplete.',
       time_budget: 'Reached this tool’s time limit. Deeper public coverage remains incomplete.',
       model_budget: 'Reached this tool’s model budget. Deeper public coverage remains incomplete.',

@@ -124,6 +124,7 @@ pub async fn evidence(
     Path(id): Path<Uuid>,
 ) -> Result<Response, ApiError> {
     let session = auth::require_session(&headers, &state).await?;
+    let permit = crate::response_budget::acquire(&state)?;
     let Json(snapshot): Json<WebsiteSnapshot> = gateway::request_with_limit::<(), _>(
         &state,
         Method::GET,
@@ -139,20 +140,23 @@ pub async fn evidence(
             "evidence_encoding_failed",
         )
     })?;
-    Ok((
-        [
-            (
-                header::CONTENT_TYPE,
-                "application/json; charset=utf-8".to_owned(),
-            ),
-            (
-                header::CONTENT_DISPOSITION,
-                format!("attachment; filename=\"patchriot-site-{id}.json\""),
-            ),
-        ],
-        bytes,
-    )
-        .into_response())
+    Ok(crate::response_budget::deliver(
+        (
+            [
+                (
+                    header::CONTENT_TYPE,
+                    "application/json; charset=utf-8".to_owned(),
+                ),
+                (
+                    header::CONTENT_DISPOSITION,
+                    format!("attachment; filename=\"patchriot-site-{id}.json\""),
+                ),
+            ],
+            bytes,
+        )
+            .into_response(),
+        permit,
+    ))
 }
 
 pub async fn review_plan(

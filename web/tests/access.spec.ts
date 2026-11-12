@@ -8,7 +8,6 @@ const admin = { id: '00000000-0000-4000-8000-000000000001', display_name: 'Owner
 const member = { ...admin, id: '00000000-0000-4000-8000-000000000002', display_name: 'Judge', role: 'member' };
 const invitation = 'a'.repeat(64);
 const coupon = { id: '00000000-0000-4000-8000-000000000003', code: `pr-${'b'.repeat(64)}`, expires_at: '2027-01-08T12:00:00Z' };
-const grant = { account_id: member.id, invitation, expires_at: '2027-01-02T12:00:00Z', coupon };
 
 async function setup(page: Page, account: typeof admin | null = null) {
   await page.route('**/api/session', route => route.fulfill({ json: { account, csrf_token: account ? 'test-csrf' : null } }));
@@ -77,7 +76,7 @@ test('SSO replaces public registration while pilot sign-in stays available', asy
   await expect(dialog.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(dialog.getByLabel('Username', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('Your name')).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'Existing pilot account' }).click();
+  await dialog.getByRole('button', { name: 'Existing password account' }).click();
   await expect(dialog.getByLabel('Username', { exact: true })).toBeVisible();
 });
 
@@ -113,30 +112,29 @@ test('rejects an unexpected OAuth destination and clears generic callback failur
   await expect(dialog.getByRole('button', { name: 'Continue with GitHub' })).toBeEnabled();
 });
 
-test('admin can approve access and share an account-specific setup link and coupon', async ({ page }) => {
+test('admin approves coupon requests without invitations and can still give a coupon', async ({ page }, info) => {
   await setup(page, admin);
   let approved = false;
-  await page.route('**/api/admin/access', route => route.fulfill({ json: {
-    requests: [{ id: member.id, display_name: 'Judge', email: 'judge@example.com', note: 'Review my project.', status: approved ? 'approved' : 'pending', created_at: '2026-11-01T10:00:00Z', account_id: approved ? member.id : null }],
-    accounts: [{ ...admin, contact_email: null, username: 'owner_example', disabled: false, unused_coupons: 0 }, ...(approved ? [{ ...member, contact_email: 'judge@example.com', username: null, disabled: false, unused_coupons: 1 }] : [])],
-  } }));
-  await page.route(`**/api/admin/access/${member.id}/decision`, route => {
-    expect(route.request().postDataJSON()).toEqual({ decision: 'approve', with_coupon: true });
+  await page.route('**/api/admin/access', route => route.fulfill({ json: { requests: [], accounts: [{ ...member, contact_email: 'judge@example.com', username: null, auth_method: 'github', disabled: false, unused_coupons: approved ? 1 : 0 }] } }));
+  await page.route('**/api/admin/coupons/requests', route => route.fulfill({ json: approved ? [] : [{ id: member.id, account_id: member.id, display_name: 'Judge', note: 'Review my project.', status: 'pending', created_at: '2026-11-01T10:00:00Z' }] }));
+  await page.route(`**/api/admin/coupons/requests/${member.id}/decision`, route => {
+    expect(route.request().postDataJSON()).toEqual({ decision: 'approve' });
     expect(route.request().headers()['x-csrf-token']).toBe('test-csrf'); approved = true;
-    return route.fulfill({ json: grant });
+    return route.fulfill({ json: {status: 'approved'} });
   });
+  await page.route(`**/api/admin/accounts/${member.id}/coupon`,route=>route.fulfill({json:coupon}));
   await page.goto('/#/access-desk');
-  await page.getByRole('button', { name: 'Approve Judge', exact: true }).click();
-  const details = page.getByLabel('Private access details', { exact: true });
-  await expect(details).toContainText(`/activate#${invitation}`);
-  await expect(details).toContainText(coupon.code);
-  await page.getByRole('button', { name: 'Close private access details' }).click();
+  await expect(page.getByRole('button', {name:'Create invitation'})).toHaveCount(0);
+  await expect(page.getByRole('button', {name:'Renew setup link'})).toHaveCount(0);
+  await page.screenshot({path:info.outputPath('coupon-requests.png'),fullPage:true});
+  await page.getByRole('button', { name: 'Grant one audit to Judge', exact: true }).click();
   await expect(page.getByText('No pending requests.')).toBeVisible();
-  await expect(page.getByText('Password not set', { exact: true })).toBeVisible();
+  await page.getByRole('button',{name:'Issue coupon',exact:true}).click();
+  const details=page.getByLabel('Private access details',{exact:true});
+  await expect(details).toContainText(coupon.code);await expect(details).not.toContainText('/activate');
+  await page.getByRole('button', { name: 'Close private access details' }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.reload();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.getByText(coupon.code, { exact: false })).toHaveCount(0);
+  await page.reload();await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
 test('member bookmarks cannot open the access desk or fetch its contents', async ({ page }) => {
@@ -158,7 +156,7 @@ test('a pending provider redirect cannot race a password sign-in or close the di
   try {
     await page.goto('/'); await page.locator('header').getByRole('button', { name: 'App' }).click();
     const dialog = page.getByRole('dialog', { name: 'Sign in', exact: true });
-    await dialog.getByRole('button', { name: 'Existing pilot account' }).click();
+    await dialog.getByRole('button', { name: 'Existing password account' }).click();
     await dialog.getByRole('button', { name: 'Continue with GitHub' }).click();
     await expect.poll(() => started).toBe(true);
     await expect(dialog.getByLabel('Username', { exact: true })).toBeDisabled();
