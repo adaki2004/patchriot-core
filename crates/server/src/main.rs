@@ -155,6 +155,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     // Workspace analytics is an explicit deployment opt-in, separate from each
     // user's consent. Old measurement settings alone must not turn it on.
+    let workspace_counts_enabled = std::env::var("PATCHRIOT_WORKSPACE_COUNTS_ENABLED")
+        .unwrap_or_else(|_| "false".into())
+        .parse::<bool>()
+        .map_err(|_| "PATCHRIOT_WORKSPACE_COUNTS_ENABLED must be true or false")?;
     let analytics_enabled = std::env::var("PATCHRIOT_ANALYTICS_ENABLED")
         .unwrap_or_else(|_| "false".into())
         .parse::<bool>()
@@ -184,6 +188,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_client_ip_source(&client_ip_source)?
             .with_relay_origin(relay_origin)?
             .with_contact_email(contact_email)?
+            .with_workspace_counts(workspace_counts_enabled)
             .with_ga_measurement_id(ga_measurement_id)?
             .with_analytics_origin(analytics_origin)?
             .with_sso(patchriot_core::SsoConfig::from_env()?)

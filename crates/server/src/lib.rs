@@ -22,6 +22,7 @@ mod sources;
 mod sso;
 mod trials;
 mod wallet;
+mod workspace_counts;
 
 use axum::{
     Json, Router,
@@ -65,12 +66,18 @@ pub struct Config {
     pub contact_email: Option<String>,
     pub ga_measurement_id: Option<String>,
     pub analytics_origin: Option<String>,
+    pub workspace_counts_enabled: bool,
     pub sso: SsoConfig,
     pub wallet_project_id: Option<String>,
     pub(crate) trust_client_ip_header: bool,
 }
 
 impl Config {
+    pub fn with_workspace_counts(mut self, enabled: bool) -> Self {
+        self.workspace_counts_enabled = enabled;
+        self
+    }
+
     pub fn with_client_ip_source(mut self, value: &str) -> Result<Self, &'static str> {
         self.trust_client_ip_header = match value {
             "peer" => false,
@@ -194,6 +201,7 @@ impl Config {
             contact_email: None,
             ga_measurement_id: None,
             analytics_origin: None,
+            workspace_counts_enabled: false,
             sso: SsoConfig::default(),
             wallet_project_id: None,
             trust_client_ip_header: false,
@@ -290,6 +298,11 @@ pub fn router(state: AppState) -> Router {
         .route("/login", get(login_page::page).post(login_page::submit))
         .route("/login.css", get(login_page::styles))
         .route("/api/analytics", get(analytics::settings))
+        .route("/api/analytics/activity", post(workspace_counts::record))
+        .route(
+            "/api/admin/workspace-counts",
+            get(workspace_counts::summary),
+        )
         .route("/api/analytics/frame/{page}", get(analytics::frame))
         .route("/api/contact", get(contact::details).post(contact::create))
         .route("/api/admin/inquiries", get(contact::inbox))

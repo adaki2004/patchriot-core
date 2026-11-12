@@ -254,7 +254,7 @@ function App() {
       {adminView && account && !isAdmin && <section className="panel empty"><h1 className="page-title">Administrator access required.</h1><p>This account cannot open the admin desk.</p></section>}
       {openingWorkspace && !privateView && <section className="private-entry" role="status"><div><p className="eyebrow">YOUR WORKSPACE</p><h1>Opening your workspace…</h1></div></section>}
       {!openingWorkspace && (view === 'home' || (view === 'overview' && !account)) && <Landing fleet={fleet.data} error={fleet.error} onRetry={fleet.refresh} signedIn={Boolean(account)} onAccess={openAccess} onApp={() => setView('overview')} onRequest={requestWork} onDocs={() => navigate('docs', 'start')} />}
-      {!openingWorkspace && view === 'overview' && account && <><Dashboard csrf={session?.csrf_token ?? ''} key={account.id} name={account.display_name} fleet={fleet.data} onOpen={navigate} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}</>}
+      {!openingWorkspace && view === 'overview' && account && <><Dashboard admin={isAdmin} csrf={session?.csrf_token ?? ''} key={account.id} name={account.display_name} fleet={fleet.data} onOpen={navigate} />{fleet.error && <Notice error>{fleet.error} <button className="inline" onClick={fleet.refresh}>Retry</button></Notice>}</>}
       {view === 'audits' && account && <Audits key={account.id} onOpen={navigate} />}
       {view === 'audit-desk' && isAdmin && <Audits key={`admin:${account.id}`} admin csrf={session?.csrf_token ?? undefined} onOpen={navigate} />}
       {['sites', 'sources', 'reviews'].includes(view) && account && <div className="audit-breadcrumb"><button className="text-button" onClick={() => setView('audits')}>← Your audits</button><span>{view === 'sites' ? 'Website snapshots' : view === 'sources' ? 'Source uploads' : 'Reports'}</span></div>}
@@ -287,7 +287,7 @@ function App() {
       {view === 'contact-inbox' && isAdmin && session?.csrf_token && <ContactInbox key={account?.id} csrf={session.csrf_token} />}
       </div>
     </main>
-    <Analytics page={analyticsPage} />
+    <Analytics key={account?.id ?? "signed-out"} page={analyticsPage} csrf={session?.csrf_token ?? ""} />
     <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><div className="footer-community"><span>Inspect the code. Question the evidence.</span><div aria-label="Patchriot community"><a href="https://x.com/patchriot_net" target="_blank" rel="noopener noreferrer">X / Twitter</a><a href="https://github.com/adaki2004/patchriot-core" target="_blank" rel="noopener noreferrer">GitHub</a></div></div></footer>
     <WalletHost/>
     {!account && accessOpen && <AccessDialog initialCode={initialCode} onLogin={signedIn} onClose={closeAccess} />}

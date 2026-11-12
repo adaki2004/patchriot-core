@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLive } from './useLive';
 
 const key = 'patchriot.workspace-analytics-choice.v2';
@@ -23,8 +23,26 @@ function isolatedOrigin(value?: string | null): string | null {
 /** The frame receives only one of fixed workspace page names. Destroying it
  * removes third-party code on sign-out or public navigation; removing a script tag
  * from the application document would not unload that script's listeners. */
-export function Analytics({ page }: { page: 'dashboard' | 'audits' | 'setup' | 'report' | 'account' | 'orders' | 'agents' | null }) {
-  const config = useLive<{ enabled: boolean; frame_origin?: string | null }>('/analytics', page !== null, 60_000, noPolling);
+export function Analytics({ page, csrf }: { csrf: string; page: 'dashboard' | 'audits' | 'setup' | 'report' | 'account' | 'orders' | 'agents' | null }) {
+  const config = useLive<{ enabled: boolean; frame_origin?: string | null; workspace_counts_enabled?: boolean }>('/analytics', page !== null, 60_000, noPolling);
+  const countActivity = page !== null && config.data?.workspace_counts_enabled === true;
+  useEffect(() => {
+    if (!countActivity || !csrf) return;
+    const controller = new AbortController();
+    let lastSent = 0;
+    const record = () => {
+      if (document.hidden || Date.now() - lastSent < 60_000) return;
+      lastSent = Date.now();
+      // Best effort: analytics failure never expires a session or blocks work.
+      void fetch('/api/analytics/activity', { method: 'POST', credentials: 'same-origin',
+        headers: { 'x-csrf-token': csrf }, signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)])
+      }).catch(() => {});
+    };
+    record();
+    const timer = window.setInterval(record, 60_000);
+    document.addEventListener('visibilitychange', record);
+    return () => { controller.abort(); window.clearInterval(timer); document.removeEventListener('visibilitychange', record); };
+  }, [countActivity, csrf]);
   const [choice, setChoice] = useState<Choice>(savedChoice);
   const [settings, setSettings] = useState(false);
   function choose(value: Exclude<Choice, null>) {

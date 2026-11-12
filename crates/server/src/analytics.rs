@@ -49,7 +49,7 @@ pub(crate) async fn settings(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     auth::require_session(&headers, &state).await?;
     Ok(Json(
-        serde_json::json!({"enabled":state.config.ga_measurement_id.is_some() && state.config.analytics_origin.is_some(), "frame_origin":state.config.analytics_origin}),
+        serde_json::json!({"enabled":state.config.ga_measurement_id.is_some() && state.config.analytics_origin.is_some(), "frame_origin":state.config.analytics_origin, "workspace_counts_enabled":state.config.workspace_counts_enabled}),
     ))
 }
 
