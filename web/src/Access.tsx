@@ -8,6 +8,7 @@ import { Button } from './components/ui/button';
 import { Input } from './components/ui/input';
 import { useLive } from './useLive';
 import { CouponRequests } from './Coupons';
+import { UIIcon } from './UIIcon';
 
 type LoginMode = 'password' | 'activate' | 'legacy';
 
@@ -63,7 +64,7 @@ export function AccessPanel({ initialCode = '', onLogin, onBusyChange }: { initi
       <p className="eyebrow">YOUR PRIVATE WORKSPACE</p><h2>Sign in to Patchriot.</h2>
       <p>Everyone can sign in. Verify your web application before any testing starts.</p>
       {!providers && <p role="status">Loading sign-in options…</p>}
-      {enabled ? <><div className="sso-buttons">{(['github', 'google'] as const).filter(provider => providers?.[provider]).map(provider => <Button className="quiet full" key={provider} disabled={busy} onClick={() => void start(provider)}><ProviderIcon provider={provider} />Continue with {provider === 'github' ? 'GitHub' : 'Google'} <span aria-hidden="true">↗</span></Button>)}{providers?.wallet && <Button className="quiet full" disabled={busy} onClick={() => void walletSignIn()}>{walletAccepted ? 'Open my workspace' : 'Connect wallet'}</Button>}</div><p className="fine">Google/GitHub share your verified profile, not repository access. Wallet sign-in uses a signed message.</p></> : providers && <p className="fine">Google and GitHub sign-in are being configured. Existing password accounts can sign in below.</p>}
+      {enabled ? <><div className="sso-buttons">{(['github', 'google'] as const).filter(provider => providers?.[provider]).map(provider => <Button className="quiet full" key={provider} disabled={busy} onClick={() => void start(provider)}><ProviderIcon provider={provider} />Continue with {provider === 'github' ? 'GitHub' : 'Google'} <span aria-hidden="true">↗</span></Button>)}{providers?.wallet && <Button className="quiet full" disabled={busy} onClick={() => void walletSignIn()}><UIIcon name="wallet" className="signin-provider-icon" />{walletAccepted ? 'Open my workspace' : 'Connect wallet'}</Button>}</div><p className="fine">Google/GitHub share your verified profile, not repository access. Wallet sign-in uses a signed message.</p></> : providers && <p className="fine">Google and GitHub sign-in are being configured. Existing password accounts can sign in below.</p>}
       {error && <p className="notice error" role="alert">{error}</p>}
       <Button className="text-button legacy-toggle" disabled={busy} aria-expanded={showLegacy} onClick={() => setLegacyOpen(!showLegacy)}>Existing password account</Button>
     </div>
