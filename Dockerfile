@@ -19,6 +19,7 @@ FROM alpine:3.23@sha256:ff7f0c727dd796aa36787bfcd9a64bf35a6ce72a73451b3359fde849
 RUN apk add --no-cache ca-certificates
 COPY --from=rust /source/target/release/patchriot-core /usr/local/bin/patchriot-core
 COPY --from=web /source/web/dist /app/web
+RUN chmod -R a+rX /app/web
 COPY --chmod=755 deploy/start-core.sh /app/start-core.sh
 USER 65534:65534
 ENV PATCHRIOT_WEB_ROOT=/app/web
