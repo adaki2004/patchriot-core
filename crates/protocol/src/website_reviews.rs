@@ -158,6 +158,8 @@ pub struct WebsiteAssignment {
 #[serde(deny_unknown_fields)]
 pub struct ReadWorkEvidence {
     pub lease_id: Uuid,
+    /// A fresh random ID for each download attempt, signed with the request.
+    pub nonce: Uuid,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

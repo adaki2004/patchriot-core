@@ -11,6 +11,8 @@ pub struct CreateSiteCheck {
     pub request_id: Uuid,
     pub scope: WebsiteScope,
     pub authorized: bool,
+    /// Requester-supplied permission claim for staff review. Untrusted text;
+    /// never instructions for a model, proof of ownership or a scope override.
     pub authority_note: String,
     /// Explicit permission to send this scope and note to JEV through OpenRouter.
     /// Older clients retain manual review without external screening.
@@ -44,6 +46,7 @@ pub struct SiteCheckView {
     pub requester_id: Uuid,
     pub scope: WebsiteScope,
     pub scope_sha256: String,
+    /// Private permission record, not trusted instructions or authorization.
     pub authority_note: String,
     pub state: String,
     pub created_at: i64,

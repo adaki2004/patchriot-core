@@ -205,6 +205,19 @@ pub async fn redeem(
         return Err(ApiError::bad("invalid_or_expired_invite"));
     }
     let mut tx = state.pool.begin().await?;
+    // Match credential activation's account -> invite lock order. Concurrent
+    // logins and revocation must not race or deadlock while pruning sessions.
+    let account: Uuid = sqlx::query_scalar(
+        "SELECT account_id FROM invites WHERE token_hash=$1 AND purpose='login'",
+    )
+    .bind(hash(&input.code))
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or_else(|| ApiError::bad("invalid_or_expired_invite"))?;
+    sqlx::query("SELECT id FROM accounts WHERE id=$1 FOR UPDATE")
+        .bind(account)
+        .execute(&mut *tx)
+        .await?;
     let invite: Option<(Uuid, DateTime<Utc>, Option<DateTime<Utc>>)> = sqlx::query_as(
         "SELECT account_id, expires_at, redeemed_at FROM invites WHERE token_hash = $1 AND purpose = 'login' FOR UPDATE",
     )
@@ -237,6 +250,18 @@ pub(crate) async fn new_session(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     account: Uuid,
 ) -> Result<String, ApiError> {
+    // All login methods share this lock and five-session limit. Recheck disabled
+    // here too: an identity-provider reply may arrive after account revocation.
+    let enabled: bool =
+        sqlx::query_scalar("SELECT NOT disabled FROM accounts WHERE id=$1 FOR UPDATE")
+            .bind(account)
+            .fetch_one(&mut **tx)
+            .await?;
+    if !enabled {
+        return Err(ApiError::new(StatusCode::FORBIDDEN, "account_disabled"));
+    }
+    sqlx::query("DELETE FROM sessions WHERE account_id=$1 AND (expires_at<=now() OR token_hash IN (SELECT token_hash FROM sessions WHERE account_id=$1 AND expires_at>now() ORDER BY created_at DESC,token_hash DESC OFFSET 4))")
+        .bind(account).execute(&mut **tx).await?;
     let bearer = token()?;
     let csrf = token()?;
     sqlx::query("INSERT INTO sessions (token_hash, account_id, csrf_token, expires_at) VALUES ($1,$2,$3,now() + interval '12 hours')")

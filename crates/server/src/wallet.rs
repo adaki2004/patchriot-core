@@ -220,7 +220,7 @@ pub(crate) async fn verify(
     .await?;
     let account = if let Some(id) = existing {
         let disabled: bool =
-            sqlx::query_scalar("SELECT disabled FROM accounts WHERE id=$1 FOR SHARE")
+            sqlx::query_scalar("SELECT disabled FROM accounts WHERE id=$1 FOR UPDATE")
                 .bind(id)
                 .fetch_one(&mut *tx)
                 .await?;

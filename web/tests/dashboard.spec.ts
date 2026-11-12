@@ -465,20 +465,20 @@ test('a pending device decision stays visible and an error leaves its reason edi
     await page.getByRole('button', { name: 'Allow private reviews', exact: true }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByLabel('What did you check?', { exact: true }).fill('Reviewed this operator and isolated example execution.');
-    await dialog.getByRole('checkbox').check();
+    await dialog.getByRole('checkbox', { name: 'I reviewed this operator and the isolated runtime for this private pilot.' }).check();
     await dialog.getByRole('button', { name: 'Allow private reviews', exact: true }).click();
     await expect.poll(() => submissions.length).toBe(1);
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Close decision', exact: true })).toBeDisabled();
     await expect(dialog.getByRole('textbox')).toBeDisabled();
-    await expect(dialog.getByRole('checkbox')).toBeDisabled();
+    await expect(dialog.getByRole('checkbox', { name: 'I reviewed this operator and the isolated runtime for this private pilot.' })).toBeDisabled();
     release();
     await expect(dialog.getByRole('alert')).toContainText('dispatcher is unavailable');
     await expect(dialog.getByRole('textbox')).toBeEditable();
-    await expect(dialog.getByRole('checkbox')).toBeEnabled();
+    await expect(dialog.getByRole('checkbox', { name: 'I reviewed this operator and the isolated runtime for this private pilot.' })).toBeEnabled();
     await expect(dialog.getByRole('button', { name: 'Close decision', exact: true })).toBeEnabled();
-    expect(submissions).toEqual([{ action: 'approve_private', reason: 'Reviewed this operator and isolated example execution.' }]);
+    expect(submissions).toEqual([{ action: 'approve_private', reason: 'Reviewed this operator and isolated example execution.', capabilities: { website_reviews: false, source_reviews: false, live_tests: false, live_tools: [] } }]);
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
   } finally { release(); }
@@ -645,4 +645,34 @@ for (const [primary, secondary, primaryName, backupName] of [
   await page.route('**/api/agents', route => route.fulfill({ json: [{ id: 'fixture-route', runtime: 'hermes', declared_model: primary, state: 'online', system: { os_name: 'Kali', os_version: null, architecture: 'x86_64', relay_version: 'fixture', secondary_model: primary } }] }));
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(card.locator('dt').filter({ hasText: /^Backup$/ }).locator('+ dd')).toHaveText('Not reported');
+});
+
+test('staff capability approval keeps saved choices separate from worker claims', async ({ page }) => {
+  await setup(page, true, 'admin');
+  const device = {
+    id: '00000000-0000-4000-8000-000000000099', operator_id: account.id,
+    operator_name: account.display_name, label: 'Checked relay', runtime: 'hermes',
+    runtime_version: 'fixture', declared_model: 'fixture-model', compute_group: 'fixture-host',
+    approval: 'approved', private_work_approved: true, state: 'online', last_seen_at: null,
+    live_tests: true, live_tools: ['scoped_discovery_v1', 'deep_checks_v1'],
+    approved_capabilities: { website_reviews: false, source_reviews: false, live_tests: true, live_tools: ['scoped_discovery_v1'] },
+  };
+  await page.route('**/api/devices', route => route.fulfill({ json: [device] }));
+  let submitted: any;
+  await page.route('**/api/devices/*/decision', route => {
+    submitted = route.request().postDataJSON();
+    return route.fulfill({ json: device });
+  });
+  await page.goto('/#/devices');
+  await page.getByRole('button', { name: 'Review capabilities', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('checkbox', { name: 'Web and API checks', exact: true })).toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: 'Deep checks', exact: true })).not.toBeChecked();
+  await dialog.getByRole('checkbox', { name: 'Deep checks', exact: true }).check();
+  await dialog.getByLabel('What did you check?', { exact: true }).fill('Reviewed the isolated discovery and deep-check fixtures.');
+  await dialog.getByRole('checkbox', { name: 'I reviewed this operator and the isolated runtime for this private pilot.' }).check();
+  await dialog.getByRole('button', { name: 'Review capabilities', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(submitted.action).toBe('set_capabilities');
+  expect(submitted.capabilities).toEqual({ website_reviews: false, source_reviews: false, live_tests: true, live_tools: ['scoped_discovery_v1', 'deep_checks_v1'] });
 });

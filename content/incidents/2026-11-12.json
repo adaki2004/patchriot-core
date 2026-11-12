@@ -1,0 +1,978 @@
+{
+  "reviewed_on": "2026-11-12",
+  "note": "Public research for the incident desk, not findings from Patchriot assessments. The report’s 40 list entries are combined into 28 distinct cases. Sources were checked on 12 November; the newer Cisco BroadWorks exploitation acknowledgement is included. Advisory dates refer to disclosure or listing, not an inferred attack date. Testing perspectives are editorial assessments, not guarantees that Patchriot would detect or prevent a breach. This file is not loaded or published automatically. Refresh existing PHP2Shell, Railway, LiteLLM, Brotli, Cisco ASA/FTD and eMudhra records rather than publishing duplicate entries; preserve other earlier catalogue records.",
+  "source_report": {
+    "label": "IMD research, 12 November 2026",
+    "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+  },
+  "entries": [
+    {
+      "title": "PHP2Shell request-state memory corruption",
+      "occurred_on": "2026-10-21",
+      "evidence": "advisory",
+      "summary": "CVE-2026-109618 and CVE-2026-109619 let malformed request handling corrupt PHP memory before application checks can protect it. Unauthenticated server code execution is possible.",
+      "takeaway": "Install PHP 8.2.35, 8.3.36, 8.4.27 or 8.5.12, or a later supported fix or verified vendor backport; restart affected workers.",
+      "sources": [
+        {
+          "label": "PHP security releases",
+          "url": "https://www.php.net/archive/2026.php"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "PHP2Shell request-state memory corruption",
+        "qualifying": "Disclosure: 21 Oct; CISA exploitation listing: 26 Oct.",
+        "category": "Exploited vulnerabilities",
+        "fix": "Install PHP 8.2.35, 8.3.36, 8.4.27 or 8.5.12, or a later supported fix or verified vendor backport; restart affected workers.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Affected web-serving PHP runtimes include PHP-FPM and mod_php. A vulnerable installation is not proof of compromise; the cited sources provide no aggregate victim or loss total."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: dependency review helps identify known exposure. Discovering the original memory defect needs specialist fuzzing or source review; ordinary website checks cannot promise it."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Ivanti Connect Secure zero-day chain",
+      "occurred_on": "2026-10-03",
+      "evidence": "reported",
+      "summary": "Volexity reconstructed a chain crossing authentication, file-handling and privilege boundaries on a then-patched VPN appliance. The attackers sought directory credentials and recovery keys and removed logs.",
+      "takeaway": "Apply current Ivanti chain fixes and investigate suspected compromise. Volexity links the 29 October privilege-escalation patch; do not rely on a clean integrity check alone.",
+      "sources": [
+        {
+          "label": "Volexity investigation and patch update",
+          "url": "https://www.volexity.com/blog/2026/10/13/a-series-of-unauthenticated-events-chained-exploitation-of-ivanti-connect-secure-zero-days/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Ivanti Connect Secure zero-day chain",
+        "qualifying": "Activity from 3 Oct; report: 13 Oct; patch update: 29 Oct.",
+        "category": "Observed appliance compromise",
+        "fix": "Apply current Ivanti chain fixes and investigate suspected compromise. Volexity links the 29 October privilege-escalation patch; do not rely on a clean integrity check alone.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Observed on Connect Secure 22.8R2.4. CVE-2026-104935 covers the entry flaws; CVE-2026-111357 covers the later privilege-escalation fix. Wider victim counts remain unknown."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: request-routing and authorization review are relevant, but reproducing an appliance exploit chain requires specialist scope and investigation."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Plex media-server takeover chain",
+      "occurred_on": "2026-10-19",
+      "evidence": "reported",
+      "summary": "Plex reports active attacks combining SSRF, internal API access, owner-token exposure and file writing. The chain permits execution as the media-server process; miners and traffic proxies were observed.",
+      "takeaway": "Update to 1.43.3.10861 or later. If compromise is suspected, rebuild cleanly, invalidate sessions and change the account password.",
+      "sources": [
+        {
+          "label": "Plex exploitation and remediation notice",
+          "url": "https://forums.plex.tv/t/important-security-update-for-plex-media-server-v1-43-2-and-earlier/942319/3"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Plex media-server takeover chain",
+        "qualifying": "Exploitation update: 19 Oct; public proof of concept: 16 Oct.",
+        "category": "Vendor-reported exploitation",
+        "fix": "Update to 1.43.3.10861 or later. If compromise is suspected, rebuild cleanly, invalidate sessions and change the account password.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Internet-reachable servers before the fixed build are at risk. The vendor gives no infected-host count or total financial loss."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: internal-service access and token boundaries merit review. A scoped read-only website assessment does not reproduce the file-write or execution stages."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Zeabur cloud and customer-secret compromise",
+      "occurred_on": "2026-10-14",
+      "evidence": "reported",
+      "summary": "Zeabur says stolen internal credentials opened access to clusters, customer servers and a platform database. How the attacker first acquired those credentials remains unconfirmed.",
+      "takeaway": "Rotate exposed credentials and inspect or rebuild affected hosts. Remove public administrative access and shorten credential lifetimes.",
+      "sources": [
+        {
+          "label": "Zeabur preliminary incident report",
+          "url": "https://zeabur.com/blogs/october-2026-security-incident"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Zeabur cloud and customer-secret compromise",
+        "qualifying": "Activity: 14–15 Oct; preliminary report: 19 Oct.",
+        "category": "Vendor-reported cloud incident",
+        "fix": "Rotate exposed credentials and inspect or rebuild affected hosts. Remove public administrative access and shorten credential lifetimes.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The vendor records root sign-ins to 101 GCP servers and access to environment-variable records. Machines, accounts and records are different measures; they must not be added as one victim count."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: cloud IAM and internal-network separation need a broader review than a public URL test. No claim is made that Patchriot would have prevented the breach."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Railway environment-secret exposure",
+      "occurred_on": "2026-10-20",
+      "evidence": "reported",
+      "summary": "Railway describes unauthorized internal access and exposure of encrypted environment secrets, with some decrypted. Detailed exploit mechanics and the final customer-specific scope were not disclosed in the preliminary account.",
+      "takeaway": "Follow Railway’s rotation guidance, replace affected variables and tokens, and review account and registry activity.",
+      "sources": [
+        {
+          "label": "Railway preliminary report",
+          "url": "https://blog.railway.com/p/preliminary-report-october-security-incident"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Railway environment-secret exposure",
+        "qualifying": "Activity: 20–22 Oct; preliminary report: 22 Oct.",
+        "category": "Vendor-reported cloud incident",
+        "fix": "Follow Railway’s rotation guidance, replace affected variables and tokens, and review account and registry activity.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Railway estimated possible variable exposure in at most 1.85% of workspaces, about 100,000. Precautionary provider-key resets affected more users; a reset alone does not prove theft."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: review internal service permissions and secret boundaries. These are infrastructure controls beyond a normal external website assessment."
+          }
+        ]
+      }
+    },
+    {
+      "title": "LiteLLM malicious release artifacts",
+      "occurred_on": "2026-10-21",
+      "evidence": "reported",
+      "summary": "An exposed administrative key remained valid and led to theft of an organization-owner GitHub token. Attackers changed publishing workflows and released credential-stealing LiteLLM 1.107.0 artifacts.",
+      "takeaway": "Rebuild affected environments from verified clean artifacts, rotate accessible secrets and verify the vendor’s replacement signing keys and digests.",
+      "sources": [
+        {
+          "label": "LiteLLM canonical attack chain",
+          "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026-attack-chain"
+        },
+        {
+          "label": "LiteLLM artifact and recovery guidance",
+          "url": "https://docs.litellm.ai/blog/security-incident-oct-21-2026"
+        }
+      ],
+      "catalogue": {
+        "short_name": "LiteLLM malicious release artifacts",
+        "qualifying": "Malicious release: 21 Oct; canonical attack account: 23 Oct.",
+        "category": "Software supply-chain compromise",
+        "fix": "Rebuild affected environments from verified clean artifacts, rotate accessible secrets and verify the vendor’s replacement signing keys and digests.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Affected packages and container images are described by the vendor. A clean source tag does not establish that published binaries were clean. No confirmed infected-host total is supplied."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: release provenance, least-privilege CI tokens and actual key revocation matter. Public website checks cannot establish build-pipeline integrity."
+          }
+        ]
+      }
+    },
+    {
+      "title": "PingCAP internal data and source-code exposure",
+      "occurred_on": "2026-09-09",
+      "evidence": "reported",
+      "summary": "PingCAP says stolen service-account credentials enabled copying internal records and source code. Exposed material included SQL-editor text, account associations and encrypted API-key values.",
+      "takeaway": "Follow customer-specific notifications and review exposed credentials and access. PingCAP reports revoking identified credentials and closing access paths by 14 October.",
+      "sources": [
+        {
+          "label": "PingCAP incident report",
+          "url": "https://www.pingcap.com/trust-hub/security/security-update-october-2026/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "PingCAP internal data and source-code exposure",
+        "qualifying": "Activity: 9 Sep–7 Oct; disclosure: 19 Oct.",
+        "category": "Vendor-reported credential compromise",
+        "fix": "Follow customer-specific notifications and review exposed credentials and access. PingCAP reports revoking identified credentials and closing access paths by 14 October.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The vendor reported no evidence that data stored in TiDB was impacted. That finding does not negate the separate internal-data exposure; individual customer scope remained under investigation."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: service-account permissions and cloud separation require infrastructure access to examine properly. No actual loss total is established here."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Collabora built-in CODE command injection",
+      "occurred_on": "2026-10-14",
+      "evidence": "advisory",
+      "summary": "CVE-2026-110447 allows unauthenticated commands through the Nextcloud built-in CODE proxy while its server is stopped, including restart or crash windows.",
+      "takeaway": "Upgrade richdocumentscode to 26.4.303 or later, or remove it. Disabling the app alone is insufficient.",
+      "sources": [
+        {
+          "label": "Collabora maintainer advisory",
+          "url": "https://github.com/CollaboraOnline/online/security/advisories/GHSA-g3vx-3m76-fghh"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Collabora built-in CODE command injection",
+        "qualifying": "Advisory: 14 Oct; CISA exploitation listing: 23 Oct.",
+        "category": "Exploited vulnerability",
+        "fix": "Upgrade richdocumentscode to 26.4.303 or later, or remove it. Disabling the app alone is insufficient.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The affected component is Nextcloud’s built-in CODE app. Standalone Collabora Online is excluded. Neither the advisory nor the exploitation listing gives a victim total."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: lifecycle states matter. Testing only a healthy running application can miss a failure path; source review complements runtime checks."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Brotli decoder memory corruption in Node.js",
+      "occurred_on": "2026-10-21",
+      "evidence": "advisory",
+      "summary": "CVE-2026-111497 lets malformed compressed input corrupt decoder memory. Applications processing attacker-controlled Brotli data may crash, disclose memory or execute code.",
+      "takeaway": "Use Node.js 22.23.4, 24.22.1 or 26.12.1, or newer supported fixes. Check other runtimes that bundle Brotli separately.",
+      "sources": [
+        {
+          "label": "Node.js security release",
+          "url": "https://nodejs.org/en/blog/vulnerability/october-2026-security-releases"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Brotli decoder memory corruption in Node.js",
+        "qualifying": "Node.js release: 21 Oct; CISA listing: 27 Oct.",
+        "category": "Exploited component vulnerability",
+        "fix": "Use Node.js 22.23.4, 24.22.1 or 26.12.1, or newer supported fixes. Check other runtimes that bundle Brotli separately.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Node.js 22, 24 and 26 were affected. Known exploitation of the component does not establish that every Node.js application was attacked."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: dependency inventory and decoder fuzzing are relevant. Ordinary external HTTP checks cannot prove a native-memory parser is safe."
+          }
+        ]
+      }
+    },
+    {
+      "title": "GPUStack loopback trust bypass",
+      "occurred_on": "2026-11-09",
+      "evidence": "advisory",
+      "summary": "CVE-2026-102895 treats requests appearing to come from loopback as administrator requests. A local reverse proxy or spoofed real-IP header can expose administrative APIs without credentials.",
+      "takeaway": "Upgrade beyond 2.2.0; use 2.2.2 or newer to cover the separate SAML flaw too. Inspect unexpected administrator keys and worker changes.",
+      "sources": [
+        {
+          "label": "GPUStack loopback advisory",
+          "url": "https://github.com/advisories/GHSA-gj9m-f8ph-pmhr"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "GPUStack loopback trust bypass",
+        "qualifying": "CISA exploitation listing: 9 Nov.",
+        "category": "Exploited authentication bypass",
+        "fix": "Upgrade beyond 2.2.0; use 2.2.2 or newer to cover the separate SAML flaw too. Inspect unexpected administrator keys and worker changes.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The maintainer records exploitation of a 2.1.1 deployment. Administrator access can expose provider secrets and permit worker execution; wider victim counts are unknown."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: check authorization through the deployed proxy path. A trusted network location must not substitute for authenticated identity."
+          }
+        ]
+      }
+    },
+    {
+      "title": "IBM Aspera Faspex privilege escalation",
+      "occurred_on": "2026-11-07",
+      "evidence": "advisory",
+      "summary": "CVE-2026-123218 allows a crafted application message to bypass authorization and obtain administrator privileges in Faspex 5.0.0–5.0.19.",
+      "takeaway": "Install 5.0.19 PL1 and verify faspex-core build 1ce4b13, Fix Pack 1. IBM lists no workaround.",
+      "sources": [
+        {
+          "label": "IBM security bulletin",
+          "url": "https://www.ibm.com/support/pages/node/7295921"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "IBM Aspera Faspex privilege escalation",
+        "qualifying": "IBM bulletin: 7 Nov; CISA listing: 9 Nov.",
+        "category": "Exploited authorization bypass",
+        "fix": "Install 5.0.19 PL1 and verify faspex-core build 1ce4b13, Fix Pack 1. IBM lists no workaround.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "IBM’s prose requires an authenticated user, while its score vector says otherwise. This entry follows the prose and CISA description; confirmed victim totals are unavailable."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: compare ordinary-user and administrator access to the same operations, including permission-changing fields."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Cisco ASA and FTD SSL VPN denial of service",
+      "occurred_on": "2026-10-28",
+      "evidence": "advisory",
+      "summary": "CVE-2026-76418 can reload affected appliances through unauthenticated SSL VPN input when the relevant secondary-authentication configuration is present.",
+      "takeaway": "Use Cisco’s branch-specific fixed-release table. Do not weaken secondary authentication as a permanent substitute for patching.",
+      "sources": [
+        {
+          "label": "Cisco ASA/FTD advisory",
+          "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-tunnel-dos-s6mgkb75"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Cisco ASA and FTD SSL VPN denial of service",
+        "qualifying": "Advisory: 28 Oct; CISA listing: 29 Oct.",
+        "category": "Exploited availability vulnerability",
+        "fix": "Use Cisco’s branch-specific fixed-release table. Do not weaken secondary authentication as a permanent substitute for patching.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The established effect is service disruption, not demonstrated data theft or code execution. Exposure depends on the VPN and tunnel-group settings."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: configuration and version review are appropriate. Deliberately crashing a live VPN is outside a non-destructive website assessment."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Cisco BroadWorks XML file disclosure",
+      "occurred_on": "2026-08-19",
+      "evidence": "advisory",
+      "summary": "CVE-2026-20320 lets unauthenticated OCI-P XML requests make the parser resolve external entities and disclose files readable by the BroadWorks service.",
+      "takeaway": "Upgrade affected BroadWorks components to RI.2026.07 or later. Cisco lists no workaround.",
+      "sources": [
+        {
+          "label": "Cisco advisory, updated 12 November",
+          "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-bworks-xxe-uwUd7CEt"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Cisco BroadWorks XML file disclosure",
+        "qualifying": "Disclosure: 19 Aug; KEV: 10 Nov; Cisco confirms exploitation: 12 Nov.",
+        "category": "Exploited XML parser vulnerability",
+        "fix": "Upgrade affected BroadWorks components to RI.2026.07 or later. Cisco lists no workaround.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Application Delivery Platform, Application Server, Profile Server and Xtended Services Platform are listed. Cisco’s 12 November update supersedes its earlier no-known-exploitation statement."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: review XML parser configuration and authorization. The update confirms exploitation, but gives no victim count or loss total."
+          }
+        ]
+      }
+    },
+    {
+      "title": "eMudhra weak intermediate certificate keys",
+      "occurred_on": "2026-10-17",
+      "evidence": "reported",
+      "summary": "Google corroborated weak randomness in keys for eight subordinate CA certificates. A client still trusting those keys could accept a forged HTTPS identity.",
+      "takeaway": "Ensure trust stores, browser protections and bundled certificate validators receive current vendor updates; check each application’s actual validation path.",
+      "sources": [
+        {
+          "label": "Google Chrome and Android response",
+          "url": "https://blog.google/security/protecting-chrome-and-android-users-from-compromised-emudhra-intermediate-ca-certificates/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "eMudhra weak intermediate certificate keys",
+        "qualifying": "Reported to Google: 17 Oct; response: 20 Oct; update: 4 Nov.",
+        "category": "Certificate trust failure",
+        "fix": "Ensure trust stores, browser protections and bundled certificate validators receive current vendor updates; check each application’s actual validation path.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Google found no CT-logged certificates chaining to the six TLS intermediates before blocking them. This limits demonstrated impact against CT-enforcing clients; it is not a count of compromised endpoints."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: a website check cannot establish the integrity of an external CA’s private-key generation. Client trust-store maintenance is a separate responsibility."
+          }
+        ]
+      }
+    },
+    {
+      "title": "GPUStack unverified SAML identities",
+      "occurred_on": "2026-11-10",
+      "evidence": "advisory",
+      "summary": "CVE-2026-102894 issues sessions from SAML identities without validating the response. The callback can remain reachable even when SAML is not configured.",
+      "takeaway": "Upgrade to 2.2.2 or later. Block the callback temporarily if upgrading is delayed; disabling SAML alone does not address the vulnerable route.",
+      "sources": [
+        {
+          "label": "GPUStack SAML advisory",
+          "url": "https://github.com/advisories/GHSA-62m9-f875-rqw6"
+        }
+      ],
+      "catalogue": {
+        "short_name": "GPUStack unverified SAML identities",
+        "qualifying": "GitHub advisory listing: 10 Nov.",
+        "category": "Disclosed authentication vulnerability",
+        "fix": "Upgrade to 2.2.2 or later. Block the callback temporarily if upgrading is delayed; disabling SAML alone does not address the vulnerable route.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "GPUStack versions from 0.7.1 to before 2.2.2 are affected. Existing administrator identities may be impersonated; the cited advisory does not establish malicious exploitation."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: verify signatures, replay handling and disabled-provider routes. This is distinct from the loopback authentication flaw."
+          }
+        ]
+      }
+    },
+    {
+      "title": "GitLab regular-expression compiler RCE",
+      "occurred_on": "2026-10-21",
+      "evidence": "advisory",
+      "summary": "CVE-2026-110264 is an integer overflow reached while compiling a crafted regular expression. Under affected conditions, an unauthenticated caller may execute code on GitLab.",
+      "takeaway": "Install the applicable fixed GitLab branch: 18.11.13, 19.0.10, 19.1.9, 19.2.9, 19.3.6, 19.4.3 or 19.5.1, or a later supported release.",
+      "sources": [
+        {
+          "label": "GitLab critical patch release",
+          "url": "https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "GitLab regular-expression compiler RCE",
+        "qualifying": "Critical patch release: 21 Oct.",
+        "category": "Disclosed runtime vulnerability",
+        "fix": "Install the applicable fixed GitLab branch: 18.11.13, 19.0.10, 19.1.9, 19.2.9, 19.3.6, 19.4.3 or 19.5.1, or a later supported release.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The advisory supplies affected ranges for CE and EE. Published detection rules do not by themselves establish a successful malicious compromise."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: source-assisted fuzzing and dependency review are relevant; routine web checks cannot promise discovery of native compiler memory bugs."
+          }
+        ]
+      }
+    },
+    {
+      "title": "React Server Components payload handling",
+      "occurred_on": "2026-11-10",
+      "evidence": "advisory",
+      "summary": "CVE-2026-126187 can permit server execution in rare response paths combining multiple typed arrays with attacker-controlled data. React applications without RSC support are excluded.",
+      "takeaway": "Upgrade the affected react-server-dom packages to 19.0.9, 19.1.10, 19.2.9 or 19.3.1 on the appropriate branch and redeploy.",
+      "sources": [
+        {
+          "label": "React advisory and patched ranges",
+          "url": "https://github.com/advisories/GHSA-xqc2-xf4c-x3h3"
+        }
+      ],
+      "catalogue": {
+        "short_name": "React Server Components payload handling",
+        "qualifying": "GitHub advisory listing: 10 Nov.",
+        "category": "Disclosed server runtime vulnerability",
+        "fix": "Upgrade the affected react-server-dom packages to 19.0.9, 19.1.10, 19.2.9 or 19.3.1 on the appropriate branch and redeploy.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The affected transports are webpack, parcel and turbopack. The cited advisory establishes exposure, not observed malicious attacks or a victim total."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: review actual server serialization paths and dependencies. A client-only React site must not be labelled vulnerable just because it uses React."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Kubeflow shared-pipeline upload authorization",
+      "occurred_on": "2026-11-09",
+      "evidence": "advisory",
+      "summary": "CVE-2026-77596 omits authorization for empty-namespace HTTP uploads in multi-user Pipelines. A low-privilege caller can inject shared pipeline versions that other tenants may later execute.",
+      "takeaway": "Apply the maintainer’s fixed release and matching manifests, including commit 62516d8c525f. Inspect shared pipeline versions and scheduled runs.",
+      "sources": [
+        {
+          "label": "Kubeflow advisory and remediation",
+          "url": "https://github.com/advisories/GHSA-rjr3-43j3-4q8g"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Kubeflow shared-pipeline upload authorization",
+        "qualifying": "GitHub advisory listing: 9 Nov; upstream fix: 9 Sep.",
+        "category": "Disclosed cross-tenant vulnerability",
+        "fix": "Apply the maintainer’s fixed release and matching manifests, including commit 62516d8c525f. Inspect shared pipeline versions and scheduled runs.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The fixed Go module revision is 0.0.0-20260909234119-62516d8c525f. Direct API exposure can widen access. No malicious victim total is established."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: compare HTTP and gRPC authorization and check empty or omitted namespaces. Triggering another tenant’s workload is not part of ordinary read-only testing."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Mongoose count-query selector injection",
+      "occurred_on": "2026-11-10",
+      "evidence": "advisory",
+      "summary": "CVE-2026-125120 leaves countDocuments queries outside sanitizeFilter protection. User-influenced count filters can change query meaning and reveal information, depending on application use.",
+      "takeaway": "Update to Mongoose 6.13.11, 7.8.12, 8.24.3 or 9.9.2 on the respective branch, or a newer supported fix.",
+      "sources": [
+        {
+          "label": "Mongoose advisory",
+          "url": "https://github.com/advisories/GHSA-pcrw-h46h-c93h"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Mongoose count-query selector injection",
+        "qualifying": "GitHub advisory listing: 10 Nov.",
+        "category": "Disclosed query sanitization vulnerability",
+        "fix": "Update to Mongoose 6.13.11, 7.8.12, 8.24.3 or 9.9.2 on the respective branch, or a newer supported fix.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The application must expose a relevant filter path. The advisory does not establish remote code execution, known victims or a financial-loss figure."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: compare count and retrieval behavior under account boundaries. A library version alone does not demonstrate a reachable application vulnerability."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Tor relay hosts altered to intercept SSH",
+      "occurred_on": "2026-10-05",
+      "evidence": "reported",
+      "summary": "Tor operators reported compromised Linux hosts whose configurations were changed to intercept SSH traffic, including turning non-exit relays into exits. The initial host-entry path remained under investigation.",
+      "takeaway": "Review relay configuration and host evidence. Follow Tor’s recovery guidance, rebuild compromised hosts and replace exposed identities and credentials.",
+      "sources": [
+        {
+          "label": "Tor Project operator warning",
+          "url": "https://forum.torproject.org/t/tor-relays-security-incident-affecting-some-relay-operators/22231"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Tor relay hosts altered to intercept SSH",
+        "qualifying": "Tor Project warning: 5 Oct.",
+        "category": "Operator-reported host compromise",
+        "fix": "Review relay configuration and host evidence. Follow Tor’s recovery guidance, rebuild compromised hosts and replace exposed identities and credentials.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Tor reports rejecting affected relays. The notice does not establish a Tor protocol flaw or publish a compromised-host total."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: this needs host and network investigation. A public web application assessment cannot validate relay-host integrity."
+          }
+        ]
+      }
+    },
+    {
+      "title": "SharePoint deserialization and authentication chain",
+      "occurred_on": "2026-07-23",
+      "evidence": "advisory",
+      "summary": "CERT-EU describes active exploitation of CVE-2026-50522 within a series of SharePoint flaws involving deserialization and authentication. Published accounts disagree on whether authentication is required for that entry.",
+      "takeaway": "Apply the relevant Microsoft security updates, investigate exposed servers and rotate potentially exposed credentials.",
+      "sources": [
+        {
+          "label": "CERT-EU advisory and Microsoft references",
+          "url": "https://cert.europa.eu/publications/security-advisories/2026-009"
+        }
+      ],
+      "catalogue": {
+        "short_name": "SharePoint deserialization and authentication chain",
+        "qualifying": "CERT-EU July exploitation advisory, released 23 Jul.",
+        "category": "Reported exploited vulnerabilities",
+        "fix": "Apply the relevant Microsoft security updates, investigate exposed servers and rotate potentially exposed credentials.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Affected on-premises products include Subscription Edition, Server 2019 and Enterprise Server 2016. This is not a blanket statement about SharePoint Online."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: appliance-specific source review and known-flaw validation complement web testing. The cited notice does not establish a complete victim inventory."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Oracle PeopleTools management RCE",
+      "occurred_on": "2026-06-10",
+      "evidence": "advisory",
+      "summary": "CVE-2026-35273 affects the HTTP Updates Environment Management component and can permit remote execution without credentials.",
+      "takeaway": "Follow Oracle’s PeopleSoft patch-availability guidance for the affected branch. Detailed patch installation information requires Oracle Support access.",
+      "sources": [
+        {
+          "label": "Oracle PeopleSoft security alert",
+          "url": "https://www.oracle.com/security-alerts/alert-cve-2026-35273.html"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Oracle PeopleTools management RCE",
+        "qualifying": "Oracle security alert: 10 Jun.",
+        "category": "Disclosed management-interface vulnerability",
+        "fix": "Follow Oracle’s PeopleSoft patch-availability guidance for the affected branch. Detailed patch installation information requires Oracle Support access.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "PeopleTools 8.61 and 8.62 are listed. Oracle did not test unsupported releases; absence from the table does not make them safe. The alert does not establish malicious exploitation."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: check exposure of management interfaces and applicable versions. Discovery of the underlying execution flaw can require deeper research."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Atlassian Data Center file disclosure",
+      "occurred_on": "2026-10-05",
+      "evidence": "advisory",
+      "summary": "CVE-2026-21589 lets unauthenticated callers read specific known-path files inside affected web roots. It does not provide general directory listing.",
+      "takeaway": "Apply the product-specific patched release in Atlassian’s table; investigate exposure of sensitive files in the application root.",
+      "sources": [
+        {
+          "label": "Atlassian affected and fixed versions",
+          "url": "https://confluence.atlassian.com/security/cve-2026-21589-arbitrary-file-access-vulnerability-impacts-multiple-products-1870495748.html"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Atlassian Data Center file disclosure",
+        "qualifying": "Disclosure: 5 Oct; CISA exploitation listing: 15 Oct.",
+        "category": "Exploited file-access vulnerability",
+        "fix": "Apply the product-specific patched release in Atlassian’s table; investigate exposure of sensitive files in the application root.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Affected server products include Jira, Confluence, Bitbucket, Bamboo, Crowd, Crucible and Fisheye. Atlassian says Cloud was patched and its investigation found no Cloud exploitation evidence."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: review path normalization and access to known sensitive resources. Do not infer that all filesystem paths or every Atlassian deployment were exposed."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Adobe Commerce and Magento authorization bypass",
+      "occurred_on": "2026-08-11",
+      "evidence": "advisory",
+      "summary": "CVE-2026-71362 can grant elevated access to sensitive resources without authentication. The affected and fixed versions vary across Commerce and Magento branches.",
+      "takeaway": "Install the corresponding August 2026 security build from APSB26-92 or a later supported fix.",
+      "sources": [
+        {
+          "label": "Adobe APSB26-92",
+          "url": "https://www.adobe.com/trust/security/products/commerce/apsb26-92.html"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Adobe Commerce and Magento authorization bypass",
+        "qualifying": "Bulletin: 11 Aug; CISA exploitation listing: 24 Sep.",
+        "category": "Exploited authorization vulnerability",
+        "fix": "Install the corresponding August 2026 security build from APSB26-92 or a later supported fix.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "The earlier vendor statement about no known attacks predates CISA’s listing. Neither source provides a total of compromised stores or losses."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: compare anonymous, customer and administrator permissions at application endpoints. Avoid assuming a visible storefront reveals the authorization of its backend."
+          }
+        ]
+      }
+    },
+    {
+      "title": "WSO2 JWT authentication bypass",
+      "occurred_on": "2026-05-03",
+      "evidence": "advisory",
+      "summary": "The vendor describes CVE-2026-5430 as accepting JWTs signed with unsupported algorithms, permitting account or administrator takeover.",
+      "takeaway": "Apply the public fixes or the appropriate supported update level for the listed WSO2 product and branch.",
+      "sources": [
+        {
+          "label": "WSO2 vendor advisory",
+          "url": "https://security.docs.wso2.com/en/latest/security-announcements/security-advisories/2026/WSO2-2026-5328/"
+        },
+        {
+          "label": "CISA known exploited vulnerabilities",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "catalogue": {
+        "short_name": "WSO2 JWT authentication bypass",
+        "qualifying": "Vendor disclosure: 3 May; later CISA listing: 24 Sep.",
+        "category": "Disclosed flaw with later exploitation notice",
+        "fix": "Apply the public fixes or the appropriate supported update level for the listed WSO2 product and branch.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "API Manager and listed Control Plane, Traffic Manager and Universal Gateway releases are affected. CISA’s mechanism description conflicts with the vendor; this entry follows the vendor for the flaw and CISA only for listing status."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: verify token algorithms and signatures across protected routes. The older disclosure is included for the later exploitation notice, not presented as a new November discovery."
+          }
+        ]
+      }
+    },
+    {
+      "title": "Pocket ID stale email-verification token",
+      "occurred_on": "2026-11-09",
+      "evidence": "advisory",
+      "summary": "CVE-2026-115770 allows an old verification token to mark a changed email address as verified. Downstream takeover depends on applications trusting email-based account linking.",
+      "takeaway": "Upgrade the backend to revision 0.0.0-20260727180059-43aaccd5bfac or a later fix; invalidate tokens when their bound address changes.",
+      "sources": [
+        {
+          "label": "Pocket ID advisory and fixed revision",
+          "url": "https://github.com/advisories/GHSA-rm8c-2cv8-jwf6"
+        }
+      ],
+      "catalogue": {
+        "short_name": "Pocket ID stale email-verification token",
+        "qualifying": "GitHub advisory listing: 9 Nov.",
+        "category": "Disclosed identity lifecycle vulnerability",
+        "fix": "Upgrade the backend to revision 0.0.0-20260727180059-43aaccd5bfac or a later fix; invalidate tokens when their bound address changes.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "An ordinary account and the relevant account-edit settings are required. Applications linking solely by stable OIDC subject are excluded from the downstream email-linking consequence."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: review account changes and relying-party identity links, not only the login form. No malicious victim count is established by the advisory."
+          }
+        ]
+      }
+    },
+    {
+      "title": "GitLab group SAML account takeover",
+      "occurred_on": "2026-06-10",
+      "evidence": "advisory",
+      "summary": "CVE-2026-6552 could let a GitLab EE group Owner take over another group member’s account through SAML identity management.",
+      "takeaway": "Install GitLab 18.10.8, 18.11.5 or 19.0.2, or a later supported fix.",
+      "sources": [
+        {
+          "label": "GitLab June patch release",
+          "url": "https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-0-2-released/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "GitLab group SAML account takeover",
+        "qualifying": "Patch release: 10 Jun.",
+        "category": "Disclosed identity authorization vulnerability",
+        "fix": "Install GitLab 18.10.8, 18.11.5 or 19.0.2, or a later supported fix.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Group Owner privileges are a precondition. The release does not establish malicious exploitation."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: group administration should not grant control of members’ personal identities."
+          }
+        ]
+      }
+    },
+    {
+      "title": "GitLab Analytics Dashboard stored XSS",
+      "occurred_on": "2026-06-10",
+      "evidence": "advisory",
+      "summary": "CVE-2026-10087 lets a developer-role GitLab EE user inject dashboard content that executes as a targeted viewer.",
+      "takeaway": "Install GitLab 18.10.8, 18.11.5 or 19.0.2, or a later supported fix.",
+      "sources": [
+        {
+          "label": "GitLab June patch release",
+          "url": "https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-0-2-released/"
+        }
+      ],
+      "catalogue": {
+        "short_name": "GitLab Analytics Dashboard stored XSS",
+        "qualifying": "Patch release: 10 Jun.",
+        "category": "Disclosed browser-code vulnerability",
+        "fix": "Install GitLab 18.10.8, 18.11.5 or 19.0.2, or a later supported fix.",
+        "report": {
+          "label": "IMD research, 12 November 2026",
+          "url": "https://github.com/Identity-md/research/blob/427a2db61dcb4d175e9ee9011670e57e133d9125/jobs/acddd883-6cd6-47e8-b4bc-6bde358abf01/files/artifacts/report.md"
+        },
+        "sections": [
+          {
+            "label": "Affected systems and evidence",
+            "body": "Victim interaction is required. The release supplies no confirmed victim total."
+          },
+          {
+            "label": "Testing perspective",
+            "body": "Our assessment: examine stored content across contributor and viewer roles. This differs from the separate SAML identity flaw."
+          }
+        ]
+      }
+    }
+  ]
+}
