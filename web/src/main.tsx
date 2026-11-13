@@ -214,8 +214,10 @@ function App() {
   }
   const access = <AccessPanel initialCode={initialCode} onLogin={signedIn} />;
   const auditView = ['audits', 'sites', 'pentests', 'sources', 'reviews', 'request'].includes(view);
-  const analyticsPage = account && !accessOpen && !initialCode && window.location.pathname === '/' ? (
-    view==='overview' ? 'dashboard' : view==='audits' ? 'audits' : ['request','pentests'].includes(view) ? 'setup' : view==='reviews' ? 'report' : view==='account' ? 'account' : view==='orders' ? 'orders' : view==='agents' ? 'agents' : null
+  const analyticsPage = session && !accessOpen && !initialCode && window.location.pathname === '/' ? (
+    view==='home' ? 'home' : view==='docs' ? 'docs' : view==='incidents' ? 'incidents' : view==='contact' ? 'contact' :
+    view==='overview' ? (account ? 'dashboard' : 'home') : !account ? null :
+    view==='audits' ? 'audits' : ['request','pentests'].includes(view) ? 'setup' : view==='reviews' ? 'report' : view==='account' ? 'account' : view==='orders' ? 'orders' : view==='agents' ? 'agents' : null
   ) : null;
   // OAuth returns to overview before the session request resolves. Keep the
   // handoff neutral until we know whether to resume a draft or open the app.
@@ -287,7 +289,7 @@ function App() {
       {view === 'contact-inbox' && isAdmin && session?.csrf_token && <ContactInbox key={account?.id} csrf={session.csrf_token} />}
       </div>
     </main>
-    <Analytics key={account?.id ?? "signed-out"} page={analyticsPage} csrf={session?.csrf_token ?? ""} />
+    <Analytics page={analyticsPage} csrf={session?.csrf_token ?? ""} />
     <footer><span>patchriot. <span className="subtle">Shared intelligence. Practical defence.</span></span><div className="footer-community"><span>Inspect the code. Question the evidence.</span><div aria-label="Patchriot community"><a href="https://x.com/patchriot_net" target="_blank" rel="noopener noreferrer">X / Twitter</a><a href="https://github.com/adaki2004/patchriot-core" target="_blank" rel="noopener noreferrer">GitHub</a></div></div></footer>
     <WalletHost/>
     {!account && accessOpen && <AccessDialog initialCode={initialCode} onLogin={signedIn} onClose={closeAccess} />}

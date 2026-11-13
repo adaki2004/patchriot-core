@@ -109,19 +109,13 @@ impl Config {
         Ok(self)
     }
     pub fn with_analytics_origin(mut self, value: Option<String>) -> Result<Self, &'static str> {
-        if self.ga_measurement_id.is_some() != value.is_some() {
-            return Err(
-                "set both PATCHRIOT_GA_MEASUREMENT_ID and PATCHRIOT_ANALYTICS_ORIGIN, or neither",
-            );
-        }
         self.analytics_origin = value
             .map(|value| {
                 let analytics = Self::origin(&value, false)?;
                 let public = Self::origin(&self.public_origin, false)?;
-                // Cookies are shared across ports. A different port alone does not
-                // isolate the app's login cookie from third-party script.
+                // This legacy host is reserved and returns 404. Never reserve the app itself.
                 if analytics.host() == public.host() {
-                    return Err("analytics requires a different hostname from the application");
+                    return Err("legacy analytics hostname must differ from the application");
                 }
                 Ok(analytics.origin().ascii_serialization())
             })
@@ -282,9 +276,18 @@ pub async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
 }
 
 pub fn router(state: AppState) -> Router {
-    let frame_origin = state.config.analytics_origin.as_deref().unwrap_or("'none'");
-    let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src {frame_origin}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
-        .expect("validated analytics origin");
+    let google_scripts = if state.config.ga_measurement_id.is_some() {
+        " https://www.googletagmanager.com"
+    } else {
+        ""
+    };
+    let google_requests = if state.config.ga_measurement_id.is_some() {
+        " https://www.google-analytics.com https://region1.google-analytics.com"
+    } else {
+        ""
+    };
+    let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'{google_scripts}; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:{google_requests}; connect-src 'self'{google_requests}; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
+        .expect("fixed analytics origins");
     let mut routes = Router::new()
         .route(
             "/api/health",
@@ -303,7 +306,6 @@ pub fn router(state: AppState) -> Router {
             "/api/admin/workspace-counts",
             get(workspace_counts::summary),
         )
-        .route("/api/analytics/frame/{page}", get(analytics::frame))
         .route("/api/contact", get(contact::details).post(contact::create))
         .route("/api/admin/inquiries", get(contact::inbox))
         .route("/api/admin/inquiries/{id}", post(contact::decide))
@@ -507,8 +509,7 @@ pub fn router(state: AppState) -> Router {
             ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
         );
     }
-    // The analytics frame and explicit wallet page have narrower-purpose policies.
-    // The console keeps self-only connections and no third-party scripts.
+    // Wallet pages retain their own policy. The Google tag is allowed only when configured.
     routes
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

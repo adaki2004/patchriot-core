@@ -287,12 +287,6 @@ header { min-height: 86px; }
 .earnings-history details, .treasury-desk details { padding: .75rem 0; }
 
 /* Optional public-page measurement stays out of the application document. */
-.analytics-frame { position: absolute; width: 0; height: 0; border: 0; pointer-events: none; }
-.analytics-choice { margin: 1rem 5vw; font-size: .8rem; }
-.analytics-consent { position: fixed; z-index: 80; left: 1rem; right: 1rem; bottom: 1rem; max-width: 56rem; margin: 0 auto; padding: 1.25rem; display: flex; gap: 1.5rem; align-items: center; background: #141820; border: 1px solid #596473; box-shadow: 0 8px 40px #0009; }
-.analytics-consent p { color: #c4cbd3; font-size: .85rem; line-height: 1.5; margin: .5rem 0 0; }
-.analytics-actions { display: flex; align-items: center; gap: .75rem; flex-shrink: 0; }
-@media (max-width: 700px) { .analytics-consent { flex-direction: column; align-items: stretch; gap: 1rem; } .analytics-actions { justify-content: space-between; flex-wrap: wrap; } }
 
 .deposit-amount { position:relative; display:flex; align-items:center; gap:9px; }
 .payment-warning { position:static; display:inline-flex; }

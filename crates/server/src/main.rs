@@ -153,8 +153,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("invalid PATCHRIOT_CONTACT_EMAIL".into()),
     };
-    // Workspace analytics is an explicit deployment opt-in, separate from each
-    // user's consent. Old measurement settings alone must not turn it on.
+    // Both counters require explicit deployment opt-in. A saved measurement ID alone
+    // must not turn on the browser's Google tag.
     let workspace_counts_enabled = std::env::var("PATCHRIOT_WORKSPACE_COUNTS_ENABLED")
         .unwrap_or_else(|_| "false".into())
         .parse::<bool>()
