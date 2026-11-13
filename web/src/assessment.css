@@ -43,6 +43,10 @@
 .assessment-actions { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-top: 26px; padding-top: 22px; border-top: 1px solid var(--line); }
 .assessment-actions > p { font-size: 14px; line-height: 1.5; margin: 0; color: var(--muted); max-width: 40ch; }
 .assessment-actions .primary { flex-shrink: 0; }
+.checkout-consent-hint { display: flex; align-items: flex-start; gap: 10px; margin-top: 20px; padding: 12px 14px; border-left: 2px solid #d9b566; background: rgb(217 181 102 / 7%); color: var(--text); }
+.checkout-consent-hint > svg { flex-shrink: 0; margin-top: 3px; color: #d9b566; }
+.checkout-consent-hint p { margin: 0; font-size: 14px; line-height: 1.5; }
+.checkout-consent-hint button { padding: 0; height: auto; margin-top: 6px; color: #e5c885; text-align: left; white-space: normal; }
 .textmode-ui .pentests-page .assessment-disclosure { font-size: 14px; margin: 20px 0; color: var(--muted); }
 .assessment-disclosure summary { cursor: pointer; padding: 9px 0; color: #c4d3f4; font-weight: 600; }
 .assessment-disclosure p { margin: 10px 0; max-width: 68ch; }

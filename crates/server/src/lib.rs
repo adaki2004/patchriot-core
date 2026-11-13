@@ -22,6 +22,7 @@ mod sources;
 mod sso;
 mod trials;
 mod wallet;
+mod workspace_counts;
 
 use axum::{
     Json, Router,
@@ -65,12 +66,18 @@ pub struct Config {
     pub contact_email: Option<String>,
     pub ga_measurement_id: Option<String>,
     pub analytics_origin: Option<String>,
+    pub workspace_counts_enabled: bool,
     pub sso: SsoConfig,
     pub wallet_project_id: Option<String>,
     pub(crate) trust_client_ip_header: bool,
 }
 
 impl Config {
+    pub fn with_workspace_counts(mut self, enabled: bool) -> Self {
+        self.workspace_counts_enabled = enabled;
+        self
+    }
+
     pub fn with_client_ip_source(mut self, value: &str) -> Result<Self, &'static str> {
         self.trust_client_ip_header = match value {
             "peer" => false,
@@ -102,19 +109,13 @@ impl Config {
         Ok(self)
     }
     pub fn with_analytics_origin(mut self, value: Option<String>) -> Result<Self, &'static str> {
-        if self.ga_measurement_id.is_some() != value.is_some() {
-            return Err(
-                "set both PATCHRIOT_GA_MEASUREMENT_ID and PATCHRIOT_ANALYTICS_ORIGIN, or neither",
-            );
-        }
         self.analytics_origin = value
             .map(|value| {
                 let analytics = Self::origin(&value, false)?;
                 let public = Self::origin(&self.public_origin, false)?;
-                // Cookies are shared across ports. A different port alone does not
-                // isolate the app's login cookie from third-party script.
+                // This legacy host is reserved and returns 404. Never reserve the app itself.
                 if analytics.host() == public.host() {
-                    return Err("analytics requires a different hostname from the application");
+                    return Err("legacy analytics hostname must differ from the application");
                 }
                 Ok(analytics.origin().ascii_serialization())
             })
@@ -194,6 +195,7 @@ impl Config {
             contact_email: None,
             ga_measurement_id: None,
             analytics_origin: None,
+            workspace_counts_enabled: false,
             sso: SsoConfig::default(),
             wallet_project_id: None,
             trust_client_ip_header: false,
@@ -274,9 +276,10 @@ pub async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
 }
 
 pub fn router(state: AppState) -> Router {
-    let frame_origin = state.config.analytics_origin.as_deref().unwrap_or("'none'");
-    let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src {frame_origin}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
-        .expect("validated analytics origin");
+    let (google_scripts, google_requests) =
+        analytics::csp_sources(state.config.ga_measurement_id.is_some());
+    let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'{google_scripts}; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:{google_requests}; connect-src 'self'{google_requests}; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
+        .expect("fixed analytics origins");
     let mut routes = Router::new()
         .route(
             "/api/health",
@@ -290,7 +293,11 @@ pub fn router(state: AppState) -> Router {
         .route("/login", get(login_page::page).post(login_page::submit))
         .route("/login.css", get(login_page::styles))
         .route("/api/analytics", get(analytics::settings))
-        .route("/api/analytics/frame/{page}", get(analytics::frame))
+        .route("/api/analytics/activity", post(workspace_counts::record))
+        .route(
+            "/api/admin/workspace-counts",
+            get(workspace_counts::summary),
+        )
         .route("/api/contact", get(contact::details).post(contact::create))
         .route("/api/admin/inquiries", get(contact::inbox))
         .route("/api/admin/inquiries/{id}", post(contact::decide))
@@ -494,8 +501,7 @@ pub fn router(state: AppState) -> Router {
             ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
         );
     }
-    // The analytics frame and explicit wallet page have narrower-purpose policies.
-    // The console keeps self-only connections and no third-party scripts.
+    // Wallet pages retain their own policy. The Google tag is allowed only when configured.
     routes
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

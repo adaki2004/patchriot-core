@@ -151,7 +151,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   const method = (options.method ?? 'GET').toUpperCase();
   // Only these GET responses contain no account-specific data. An old write
   // may already have completed on the server; discard its reply, not the work.
-  const publicRead = method === 'GET' && ['/fleet', '/incidents', '/contact', '/auth/providers'].includes(path);
+  const publicRead = method === 'GET' && ['/fleet', '/incidents', '/contact', '/auth/providers', '/analytics'].includes(path);
   const checkSession = () => { if (!publicRead && revision !== sessionRevision) throw new SessionChangedError(); };
   const signal = options.signal ?? AbortSignal.timeout(12_000);
   let response: Response;
