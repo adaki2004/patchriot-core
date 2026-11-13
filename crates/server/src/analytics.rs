@@ -16,6 +16,18 @@ pub(crate) fn valid_id(id: &str) -> bool {
             .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
 }
 
+/// Fixed Google origins shared by the normal shell and its wallet-enabled policy.
+pub(crate) fn csp_sources(enabled: bool) -> (&'static str, &'static str) {
+    if enabled {
+        (
+            " https://www.googletagmanager.com",
+            " https://www.google-analytics.com https://region1.google-analytics.com",
+        )
+    } else {
+        ("", "")
+    }
+}
+
 fn legacy_host(headers: &HeaderMap, state: &AppState) -> bool {
     state
         .config
@@ -56,6 +68,10 @@ mod tests {
     use tower::ServiceExt;
 
     fn app(id: Option<&str>, legacy_host: bool) -> axum::Router {
+        app_with_wallet(id, legacy_host, false)
+    }
+
+    fn app_with_wallet(id: Option<&str>, legacy_host: bool, wallet: bool) -> axum::Router {
         let config = crate::Config::new(
             "https://patchriot.example".into(),
             "http://127.0.0.1:1".into(),
@@ -66,11 +82,44 @@ mod tests {
         .with_ga_measurement_id(id.map(str::to_owned))
         .unwrap()
         .with_analytics_origin(legacy_host.then(|| "https://counts.example".to_owned()))
+        .unwrap()
+        .with_wallet_project_id(wallet.then(|| "a".repeat(32)))
         .unwrap();
         let pool = sqlx::postgres::PgPoolOptions::new()
             .connect_lazy("postgres://localhost/unused")
             .unwrap();
         crate::router(AppState::new(pool, config).unwrap())
+    }
+
+    #[tokio::test]
+    async fn wallet_enabled_home_keeps_google_policy_but_wallet_login_stays_isolated() {
+        for id in [None, Some("G-EXAMPLE123")] {
+            for path in ["/", "/wallet"] {
+                let response = app_with_wallet(id, false, true)
+                    .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                    .await
+                    .unwrap();
+                let policy = response.headers()[header::CONTENT_SECURITY_POLICY]
+                    .to_str()
+                    .unwrap();
+                let google_allowed = path == "/" && id.is_some();
+                assert_eq!(
+                    policy.contains("https://www.googletagmanager.com"),
+                    google_allowed
+                );
+                assert_eq!(
+                    policy.contains("https://www.google-analytics.com"),
+                    google_allowed
+                );
+                assert_eq!(
+                    policy.contains("https://region1.google-analytics.com"),
+                    google_allowed
+                );
+                assert!(policy.contains("wss://relay.walletconnect.com"));
+                assert!(!policy.contains("script-src 'self' 'unsafe-inline'"));
+                assert!(!policy.contains("unsafe-eval"));
+            }
+        }
     }
 
     #[tokio::test]

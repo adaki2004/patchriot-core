@@ -260,7 +260,8 @@ mod tests;
 
 /// Wallet code loads only after an explicit user action. The application shell
 /// allows the fixed Reown transport endpoints when wallet access is configured;
-/// external scripts and arbitrary RPC hosts remain blocked.
+/// arbitrary RPC hosts remain blocked. The home page retains configured analytics;
+/// the dedicated wallet login page never allows the Google tag.
 pub(crate) async fn page_policy(
     State(state): State<AppState>,
     request: axum::extract::Request,
@@ -268,9 +269,12 @@ pub(crate) async fn page_policy(
 ) -> Response {
     let wallet_page =
         matches!(request.uri().path(), "/" | "/wallet") && state.config.wallet_project_id.is_some();
+    let (google_scripts, google_requests) = crate::analytics::csp_sources(
+        request.uri().path() == "/" && state.config.ga_measurement_id.is_some(),
+    );
     let mut response = next.run(request).await;
     if wallet_page {
-        response.headers_mut().insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com https://api.mainnet-beta.solana.com; frame-src https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com {}; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",state.config.analytics_origin.as_deref().unwrap_or(""))).expect("validated wallet origins"));
+        response.headers_mut().insert(header::CONTENT_SECURITY_POLICY,HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'{google_scripts}; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:{google_requests}; connect-src 'self'{google_requests} https://rpc.walletconnect.com https://rpc.walletconnect.org https://relay.walletconnect.com https://relay.walletconnect.org wss://relay.walletconnect.com wss://relay.walletconnect.org https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com https://api.mainnet-beta.solana.com; frame-src https://verify.walletconnect.com https://verify.walletconnect.org https://verify.reown.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")).expect("fixed wallet and analytics origins"));
     }
     response
 }

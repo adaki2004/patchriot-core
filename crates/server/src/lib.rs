@@ -276,16 +276,8 @@ pub async fn connect(url: &str) -> Result<PgPool, sqlx::Error> {
 }
 
 pub fn router(state: AppState) -> Router {
-    let google_scripts = if state.config.ga_measurement_id.is_some() {
-        " https://www.googletagmanager.com"
-    } else {
-        ""
-    };
-    let google_requests = if state.config.ga_measurement_id.is_some() {
-        " https://www.google-analytics.com https://region1.google-analytics.com"
-    } else {
-        ""
-    };
+    let (google_scripts, google_requests) =
+        analytics::csp_sources(state.config.ga_measurement_id.is_some());
     let page_policy = HeaderValue::from_str(&format!("default-src 'self'; script-src 'self'{google_scripts}; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:{google_requests}; connect-src 'self'{google_requests}; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"))
         .expect("fixed analytics origins");
     let mut routes = Router::new()
