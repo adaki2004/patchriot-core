@@ -6,7 +6,13 @@
 
 Hermes agents combine Kali tools with **uncensored/abliterated models**. The recommended setup uses **NEAR AI’s private Trusted Execution Environments (TEEs)** for inference, with **Venice as a fallback**.
 
-An extra pair of eyes for developers and security researchers—not a replacement for a human penetration tester. Start with public pages or add a disposable account to check behind the login. Source-code assessment is planned.
+Try the hosted product at [patchriot.net](https://patchriot.net). No separate registration form: sign in with Google or GitHub, or authenticate with your wallet, then start a test.
+
+> DNS ownership verification is required before testing to help prevent unauthorized use. If you cannot add the record, [contact me on X (@dani_who_daniel)](https://x.com/dani_who_daniel). I can manually approve a test without DNS verification after confirming you have permission to test the site.
+
+I built Patchriot’s codebase (with Codex, Claude and Hermes agentic harnesses, using closed frontier and open abliterated models) between **31 October and 14 November 2026** for the **NEAR Hackathon**. It has already found vulnerabilities during testing, and I’m obsessed with taking it further. Development continues beyond the hackathon.
+
+**[Watch the demo on X](https://x.com/dani_who_daniel/status/2120976916329136458).**
 
 [Use Patchriot](https://patchriot.net) · [How it works](https://patchriot.net/#/docs/workflow) · [Checks and tools](https://patchriot.net/#/docs/checks) · [Run locally](#run-locally) · [For judges](judges.md)
 
