@@ -20,6 +20,7 @@ mod review_target;
 mod sites;
 mod sources;
 mod sso;
+mod static_assets;
 mod trials;
 mod wallet;
 mod workspace_counts;
@@ -498,7 +499,11 @@ pub fn router(state: AppState) -> Router {
     routes = routes.layer(axum::middleware::from_fn(diagnostics::response_time));
     if let Some(root) = &state.config.web_root {
         routes = routes.fallback_service(
-            ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
+            Router::new()
+                .fallback_service(
+                    ServeDir::new(root).not_found_service(ServeFile::new(root.join("index.html"))),
+                )
+                .layer(axum::middleware::from_fn(static_assets::mark_versioned)),
         );
     }
     // Wallet pages retain their own policy. The Google tag is allowed only when configured.
@@ -510,7 +515,7 @@ pub fn router(state: AppState) -> Router {
         .layer(DefaultBodyLimit::max(16 * 1024))
         .layer(SetResponseHeaderLayer::overriding(
             header::CACHE_CONTROL,
-            HeaderValue::from_static("no-store"),
+            static_assets::cache_control,
         ))
         .layer(SetResponseHeaderLayer::overriding(
             header::X_CONTENT_TYPE_OPTIONS,
