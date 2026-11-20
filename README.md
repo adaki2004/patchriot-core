@@ -16,6 +16,8 @@ I built Patchriot’s codebase (with Codex, Claude and Hermes agentic harnesses,
 
 [Use Patchriot](https://patchriot.net) · [How it works](https://patchriot.net/#/docs/workflow) · [Checks and tools](https://patchriot.net/#/docs/checks) · [Run locally](#run-locally) · [For judges](judges.md)
 
+> Development continued further, on private repositories. The deloyed product reflects that.
+
 ### Choose your starting point
 
 <table width="100%">
